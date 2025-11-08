@@ -289,13 +289,30 @@ fi
 # ===== PM2 INSTALLATION =====
 echo ""
 echo "═══════════════════════════════════════════════════════════════"
-echo "Möchtest du PM2 für Prozess-Management installieren? (empfohlen)"
-echo "PM2 bietet: Auto-Restart, Log-Management, Monitoring"
-echo "═══════════════════════════════════════════════════════════════"
-read -p "PM2 installieren? (j/n) [Standard: j]: " install_pm2
-install_pm2=${install_pm2:-j}
 
 PM2_INSTALLED=false
+
+# Prüfe ob PM2 bereits installiert ist
+if command -v pm2 &> /dev/null; then
+    PM2_VERSION=$(pm2 --version)
+    echo "✓ PM2 ist bereits installiert (Version: $PM2_VERSION)"
+    echo "═══════════════════════════════════════════════════════════════"
+    read -p "PM2 neu installieren/aktualisieren? (j/n) [Standard: n]: " reinstall_pm2
+    reinstall_pm2=${reinstall_pm2:-n}
+
+    if [[ "$reinstall_pm2" =~ ^[Jj]$ ]]; then
+        install_pm2="j"
+    else
+        install_pm2="n"
+        PM2_INSTALLED=true
+    fi
+else
+    echo "Möchtest du PM2 für Prozess-Management installieren? (empfohlen)"
+    echo "PM2 bietet: Auto-Restart, Log-Management, Monitoring"
+    echo "═══════════════════════════════════════════════════════════════"
+    read -p "PM2 installieren? (j/n) [Standard: j]: " install_pm2
+    install_pm2=${install_pm2:-j}
+fi
 
 if [[ "$install_pm2" =~ ^[Jj]$ ]]; then
     echo ""
@@ -389,7 +406,24 @@ echo ""
 if [ "$PM2_INSTALLED" = true ] && [[ "$start_pm2" =~ ^[Jj]$ ]]; then
     echo "✨ Das System läuft bereits mit PM2!"
     echo ""
-    echo "🌐 Web-Dashboard: http://localhost:8080"
+
+    # Zeige Server IPs
+    echo "🌐 Web-Dashboard erreichbar unter:"
+    echo "   http://localhost:8080"
+
+    # Hole alle IP-Adressen des Servers
+    if command -v hostname &> /dev/null; then
+        SERVER_IPS=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -v '^$' || ip addr show | grep "inet " | grep -v "127.0.0.1" | awk '{print $2}' | cut -d/ -f1)
+
+        if [ -n "$SERVER_IPS" ]; then
+            echo ""
+            echo "   Oder im Netzwerk:"
+            for ip in $SERVER_IPS; do
+                echo "   http://$ip:8080"
+            done
+        fi
+    fi
+
     echo ""
     echo "📋 Nützliche PM2 Befehle:"
     echo "   pm2 list           # Status anzeigen"
@@ -422,7 +456,22 @@ else
     echo "   source venv/bin/activate"
     echo "   python main.py web --host 0.0.0.0 --port 8080"
     echo ""
-    echo "🌐 Zugriff: http://localhost:8080"
+    echo "🌐 Web-Dashboard wird erreichbar sein unter:"
+    echo "   http://localhost:8080"
+
+    # Zeige auch Server IPs
+    if command -v hostname &> /dev/null; then
+        SERVER_IPS=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -v '^$' || ip addr show | grep "inet " | grep -v "127.0.0.1" | awk '{print $2}' | cut -d/ -f1)
+
+        if [ -n "$SERVER_IPS" ]; then
+            echo ""
+            echo "   Oder im Netzwerk:"
+            for ip in $SERVER_IPS; do
+                echo "   http://$ip:8080"
+            done
+        fi
+    fi
+
     echo ""
 fi
 
