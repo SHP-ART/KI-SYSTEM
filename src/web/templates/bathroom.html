@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+
+{% block title %}Badezimmer Automatisierung - KI Smart Home{% endblock %}
+
+{% block content %}
+<div class="bathroom-automation">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <div>
+            <h2>🚿 Badezimmer Automatisierung</h2>
+            <p class="subtitle">Intelligente Steuerung von Luftentfeuchter und Heizung</p>
+        </div>
+        <a href="/bathroom/analytics" class="btn btn-primary" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+            📊 Analytics & Lernsystem
+        </a>
+    </div>
+
+    <!-- Status Card -->
+    <div class="card status-card">
+        <h3>Aktueller Status</h3>
+        <div class="status-grid">
+            <div class="status-item">
+                <span class="status-icon" id="shower-status-icon">⏸️</span>
+                <div>
+                    <div class="status-label">Dusche erkannt</div>
+                    <div class="status-value" id="shower-status">Nein</div>
+                </div>
+            </div>
+            <div class="status-item">
+                <span class="status-icon" id="dehumidifier-status-icon">⏸️</span>
+                <div>
+                    <div class="status-label">Luftentfeuchter</div>
+                    <div class="status-value" id="dehumidifier-status">Aus</div>
+                </div>
+            </div>
+            <div class="status-item">
+                <span class="status-icon">💧</span>
+                <div>
+                    <div class="status-label">Luftfeuchtigkeit</div>
+                    <div class="status-value" id="current-humidity">--%</div>
+                </div>
+            </div>
+            <div class="status-item">
+                <span class="status-icon">🌡️</span>
+                <div>
+                    <div class="status-label">Temperatur</div>
+                    <div class="status-value" id="current-temperature">--°C</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Konfiguration -->
+    <div class="card config-card">
+        <h3>⚙️ Konfiguration</h3>
+
+        <div class="form-group">
+            <label class="toggle-label">
+                <input type="checkbox" id="bathroom-enabled" class="toggle-checkbox">
+                <span class="toggle-switch"></span>
+                Badezimmer-Automatisierung aktivieren
+            </label>
+        </div>
+
+        <div class="form-section">
+            <h4>Geräte zuweisen</h4>
+
+            <div class="form-group">
+                <label>Raum auswählen</label>
+                <select id="room-filter" class="form-select">
+                    <option value="">-- Alle Räume --</option>
+                </select>
+                <small style="color: #6b7280; margin-top: 4px; display: block;">
+                    Wählen Sie einen Raum aus, um nur Geräte aus diesem Raum anzuzeigen
+                </small>
+            </div>
+
+            <div class="form-group">
+                <label>Luftfeuchtigkeit-Sensor *</label>
+                <select id="humidity-sensor" class="form-select">
+                    <option value="">-- Sensor auswählen --</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Temperatur-Sensor *</label>
+                <select id="temperature-sensor" class="form-select">
+                    <option value="">-- Sensor auswählen --</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Luftentfeuchter *</label>
+                <select id="dehumidifier" class="form-select">
+                    <option value="">-- Gerät auswählen --</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Heizung/Thermostat</label>
+                <select id="heater" class="form-select">
+                    <option value="">-- Optional --</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Bewegungssensor (Optional)</label>
+                <select id="motion-sensor" class="form-select">
+                    <option value="">-- Optional --</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Tür-Sensor (Optional)</label>
+                <select id="door-sensor" class="form-select">
+                    <option value="">-- Optional --</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h4>Schwellwerte</h4>
+
+            <div class="form-group">
+                <label>Hohe Luftfeuchtigkeit (Luftentfeuchter EIN)</label>
+                <div class="slider-group">
+                    <input type="range" id="humidity-high" min="50" max="90" value="70" class="slider">
+                    <span class="slider-value" id="humidity-high-value">70%</span>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Niedrige Luftfeuchtigkeit (Luftentfeuchter AUS)</label>
+                <div class="slider-group">
+                    <input type="range" id="humidity-low" min="40" max="80" value="60" class="slider">
+                    <span class="slider-value" id="humidity-low-value">60%</span>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Ziel-Temperatur</label>
+                <div class="slider-group">
+                    <input type="range" id="target-temperature" min="18" max="26" value="22" step="0.5" class="slider">
+                    <span class="slider-value" id="target-temperature-value">22°C</span>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Verzögerung vor Ausschalten (Minuten)</label>
+                <div class="slider-group">
+                    <input type="range" id="dehumidifier-delay" min="0" max="30" value="5" class="slider">
+                    <span class="slider-value" id="dehumidifier-delay-value">5 Min</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <button id="save-bathroom-config" class="btn btn-primary">💾 Konfiguration speichern</button>
+            <button id="test-bathroom" class="btn btn-secondary">🧪 Test ausführen</button>
+        </div>
+    </div>
+
+    <!-- Erklärung -->
+    <div class="card info-card">
+        <h3>ℹ️ Wie funktioniert's?</h3>
+        <div class="info-content">
+            <div class="info-item">
+                <strong>🚿 Duschen-Erkennung:</strong>
+                <p>Das System erkennt automatisch, wenn geduscht wird: Luftfeuchtigkeit steigt über den eingestellten Schwellwert (Standard: 70%)</p>
+            </div>
+            <div class="info-item">
+                <strong>💨 Luftentfeuchter-Steuerung:</strong>
+                <p>Schaltet automatisch EIN wenn Luftfeuchtigkeit zu hoch ist, und AUS wenn sie wieder normal ist (Standard: 60%)</p>
+            </div>
+            <div class="info-item">
+                <strong>⏱️ Intelligente Verzögerung:</strong>
+                <p>Nach der letzten Bewegung wartet das System 5 Minuten bevor der Luftentfeuchter ausgeschaltet wird</p>
+            </div>
+            <div class="info-item">
+                <strong>🌡️ Heizungs-Optimierung:</strong>
+                <p>Während der Entfeuchtung wird die Heizung um 1°C erhöht, um die Trocknung zu beschleunigen</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/bathroom.js') }}"></script>
+{% endblock %}

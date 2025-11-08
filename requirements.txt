@@ -1,0 +1,33 @@
+# Core Dependencies
+python-dotenv==1.0.0
+pyyaml==6.0.1
+requests==2.31.0
+
+# Machine Learning
+scikit-learn==1.3.2
+numpy==1.26.2
+pandas==2.1.4
+joblib==1.3.2
+
+# Data Storage: sqlite3 ist in Python eingebaut, keine Installation nötig
+
+# Optional: Wetter API (wenn du Wetterintegration nutzen willst)
+python-weather==1.0.0
+pytz==2023.3
+
+# Utilities
+schedule==1.2.0
+loguru==0.7.2
+
+# Web Interface
+flask==3.0.0
+flask-cors==4.0.0
+
+# Development & Type Checking (optional)
+# mypy==1.7.1  # Type checking
+# black==23.11.0  # Code formatting
+# flake8==6.1.0  # Linting
+
+# Optional Dependencies (nicht standardmäßig nötig):
+# tensorflow==2.15.0  # Nur für advanced ML models
+# homeassistant-api==4.1.4  # Nur als Alternative zu REST API

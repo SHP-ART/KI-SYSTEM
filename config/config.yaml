@@ -1,0 +1,110 @@
+# KI-System Konfiguration
+
+# Smart Home Platform Auswahl
+# Unterstützt: "homeassistant" oder "homey"
+platform:
+  type: "homeassistant"  # oder "homey" für Homey Pro
+
+# Home Assistant Verbindung
+# Nur relevant wenn platform.type = "homeassistant"
+home_assistant:
+  url: "http://homeassistant.local:8123"
+  token: "YOUR_LONG_LIVED_ACCESS_TOKEN"
+
+# Homey Pro Verbindung
+# Nur relevant wenn platform.type = "homey"
+homey:
+  url: "https://api.athom.com"  # Cloud API oder lokale IP (z.B. http://192.168.1.50)
+  token: "YOUR_HOMEY_BEARER_TOKEN"
+
+# Datensammlung
+data_collection:
+  interval_seconds: 300  # Alle 5 Minuten
+  sensors:
+    temperature:
+      - sensor.living_room_temperature
+      - sensor.bedroom_temperature
+      - sensor.kitchen_temperature
+    light:
+      - sensor.living_room_brightness
+      - sensor.bedroom_brightness
+    motion:
+      - binary_sensor.living_room_motion
+      - binary_sensor.bedroom_motion
+    power:
+      - sensor.total_power_consumption
+
+# Externe Datenquellen
+external_data:
+  weather:
+    enabled: true
+    location: "Berlin, DE"  # Deine Stadt
+    api_key: "YOUR_WEATHER_API_KEY"  # Optional, abhängig vom Service
+
+  energy_prices:
+    enabled: false  # Auf true setzen wenn du dynamische Strompreise nutzen willst
+    provider: "awattar"  # oder "tibber"
+    api_key: ""  # Optional: Nur wenn enabled=true
+
+# ML-Modell Konfiguration
+models:
+  lighting:
+    type: "random_forest"
+    retrain_interval_hours: 24
+    min_training_samples: 100
+    features:
+      - hour_of_day
+      - day_of_week
+      - brightness
+      - motion
+      - presence
+      - weather_condition
+
+  heating:
+    type: "gradient_boosting"
+    retrain_interval_hours: 24
+    min_training_samples: 200
+    features:
+      - hour_of_day
+      - day_of_week
+      - outdoor_temperature
+      - current_temperature
+      - target_temperature
+      - presence
+      - energy_price
+
+  energy_optimizer:
+    type: "optimization"
+    target: "minimize_cost"  # oder "minimize_consumption", "balance"
+    constraints:
+      min_temperature: 18
+      max_temperature: 23
+      comfort_priority: 0.7  # 0-1, höher = mehr Komfort
+
+# Entscheidungs-Engine
+decision_engine:
+  mode: "auto"  # auto, manual, learning
+  confidence_threshold: 0.7
+  safety_checks: true
+
+  rules:
+    # Sicherheitsregeln, die immer gelten
+    - name: "no_heating_when_windows_open"
+      condition: "window_sensor == open"
+      action: "heating == off"
+
+    - name: "presence_override"
+      condition: "away_mode == true"
+      action: "eco_mode == true"
+
+# Datenbank
+database:
+  type: "sqlite"
+  path: "data/ki_system.db"
+  retention_days: 90
+
+# Logging
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  path: "logs/ki_system.log"
+  max_size_mb: 100

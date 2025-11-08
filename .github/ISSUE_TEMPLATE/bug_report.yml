@@ -1,0 +1,79 @@
+name: Bug Report
+description: Melde einen Bug oder Fehler
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Danke dass du einen Bug meldest! Bitte fülle das Formular aus.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Beschreibung des Problems
+      description: Was ist passiert? Was hast du erwartet?
+      placeholder: Das System...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Schritte zur Reproduktion
+      description: Wie können wir den Fehler nachstellen?
+      placeholder: |
+        1. Gehe zu '...'
+        2. Führe aus '...'
+        3. Siehe Fehler
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Bitte füge relevante Logs ein (aus logs/ki_system.log)
+      render: shell
+      placeholder: |
+        Paste hier die Logs...
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Smart Home Platform
+      description: Welche Platform nutzt du?
+      options:
+        - Home Assistant
+        - Homey Pro
+        - Andere
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Python Version
+      description: Output von `python --version`
+      placeholder: "Python 3.10.5"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Betriebssystem
+      description: Welches OS nutzt du?
+      placeholder: "Ubuntu 22.04 / Debian 11 / Raspberry Pi OS"
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Zusätzliche Informationen
+      description: Weitere relevante Infos
+      placeholder: |
+        - Config-Details
+        - Besonderheiten
+        - Screenshots (optional)

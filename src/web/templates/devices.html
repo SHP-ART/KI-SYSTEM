@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+
+{% block title %}Geräte - KI Smart Home{% endblock %}
+
+{% block content %}
+<div class="devices-page">
+    <h2>Geräte-Übersicht</h2>
+
+    <!-- Statistiken -->
+    <div class="card">
+        <h3>📊 Geräte-Statistiken</h3>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="total-devices">0</div>
+                <div class="stat-label">Geräte gesamt</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="lights-count">0</div>
+                <div class="stat-label">💡 Lichter</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="switches-count">0</div>
+                <div class="stat-label">🔌 Schalter</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="climate-count">0</div>
+                <div class="stat-label">🌡️ Klima</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="sensors-count">0</div>
+                <div class="stat-label">📊 Sensoren</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Suche und Filter -->
+    <div class="card">
+        <h3>🔍 Suche & Filter</h3>
+        <div class="search-filter-section">
+            <input type="text" id="device-search" placeholder="Gerät suchen (Name, Raum, Typ)..." class="search-input">
+
+            <div class="filter-controls">
+                <label>Nach Typ filtern:</label>
+                <div class="filter-buttons">
+                    <button class="filter-btn active" data-filter="all">Alle</button>
+                    <button class="filter-btn" data-filter="light">💡 Licht</button>
+                    <button class="filter-btn" data-filter="climate">🌡️ Klima</button>
+                    <button class="filter-btn" data-filter="switch">🔌 Schalter</button>
+                    <button class="filter-btn" data-filter="sensor">📊 Sensoren</button>
+                </div>
+            </div>
+
+            <div class="view-toggle">
+                <label>Ansicht:</label>
+                <button class="view-btn active" data-view="grid">
+                    <span>🔲 Kacheln</span>
+                </button>
+                <button class="view-btn" data-view="list">
+                    <span>📋 Liste</span>
+                </button>
+                <button class="view-btn" data-view="rooms">
+                    <span>🏠 Nach Räumen</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Geräte-Anzeige -->
+    <div class="card">
+        <div class="card-header-with-actions">
+            <h3 id="devices-section-title">Alle Geräte</h3>
+            <button class="btn btn-small btn-secondary" id="refresh-devices">🔄 Aktualisieren</button>
+        </div>
+
+        <div id="devices-container" class="devices-display">
+            <!-- Geräte werden hier dynamisch geladen -->
+            <div class="loading">Lade Geräte...</div>
+        </div>
+    </div>
+
+    <!-- Schnellaktionen -->
+    <div class="card">
+        <h3>⚡ Schnellaktionen</h3>
+        <div class="quick-actions">
+            <button class="btn btn-primary" id="all-lights-on">💡 Alle Lichter Ein</button>
+            <button class="btn btn-secondary" id="all-lights-off">Alle Lichter Aus</button>
+            <button class="btn btn-secondary" id="all-switches-off">🔌 Alle Schalter Aus</button>
+        </div>
+        <div id="quick-action-result" class="action-result"></div>
+    </div>
+</div>
+
+<!-- Device Control Modal -->
+<div id="device-modal" class="modal">
+    <div class="modal-content modal-large">
+        <span class="close">&times;</span>
+        <div class="device-modal-header">
+            <h3 id="modal-device-name">Gerät</h3>
+            <div class="device-modal-meta">
+                <span id="modal-device-type" class="badge"></span>
+                <span id="modal-device-zone" class="device-zone"></span>
+            </div>
+        </div>
+        <div class="device-modal-body">
+            <div class="device-current-state">
+                <h4>Aktueller Status</h4>
+                <div id="modal-device-state"></div>
+            </div>
+            <div class="device-controls-section">
+                <h4>Steuerung</h4>
+                <div id="modal-device-controls"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/devices.js') }}"></script>
+{% endblock %}

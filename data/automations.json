@@ -1,0 +1,10 @@
+{
+  "device_config": {
+    "automation": [],
+    "control": [],
+    "learning": [
+      "09b5e812-b313-4d41-a8a8-a767f5cdd9a3"
+    ]
+  },
+  "automation_rules": {}
+}

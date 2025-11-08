@@ -1,0 +1,257 @@
+"""Machine Learning Modell für intelligente Beleuchtungssteuerung"""
+
+import numpy as np
+import pandas as pd
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, classification_report
+from datetime import datetime
+import joblib
+from pathlib import Path
+from typing import Dict, List, Tuple, Optional
+from loguru import logger
+
+
+class LightingModel:
+    """
+    ML-Modell zur Vorhersage, ob Licht an oder aus sein sollte
+    Lernt aus Verhaltensmustern und Umgebungsbedingungen
+    """
+
+    def __init__(self, model_type: str = "random_forest"):
+        self.model_type = model_type
+        self.model = None
+        self.feature_columns = [
+            'hour_of_day',
+            'day_of_week',
+            'brightness',
+            'motion_detected',
+            'presence_home',
+            'weather_condition_clear',
+            'weather_condition_cloudy',
+            'weather_condition_rainy',
+            'is_weekend',
+            'is_evening',
+            'is_night'
+        ]
+        self.model_version = "1.0.0"
+
+    def _create_features(self, data: pd.DataFrame) -> pd.DataFrame:
+        """
+        Erstellt Features aus Rohdaten
+        """
+        features = pd.DataFrame()
+
+        # Zeit-basierte Features
+        if 'timestamp' in data.columns:
+            data['timestamp'] = pd.to_datetime(data['timestamp'])
+            features['hour_of_day'] = data['timestamp'].dt.hour
+            features['day_of_week'] = data['timestamp'].dt.dayofweek
+            features['is_weekend'] = (data['timestamp'].dt.dayofweek >= 5).astype(int)
+            features['is_evening'] = ((data['timestamp'].dt.hour >= 18) &
+                                     (data['timestamp'].dt.hour < 23)).astype(int)
+            features['is_night'] = ((data['timestamp'].dt.hour >= 23) |
+                                   (data['timestamp'].dt.hour < 6)).astype(int)
+
+        # Sensor-Features
+        features['brightness'] = data.get('brightness', 0)
+        features['motion_detected'] = data.get('motion_detected', 0).astype(int)
+        features['presence_home'] = data.get('presence_home', 1).astype(int)
+
+        # Wetter-Features (One-Hot Encoding)
+        weather = data.get('weather_condition', 'clear').str.lower()
+        features['weather_condition_clear'] = (weather == 'clear').astype(int)
+        features['weather_condition_cloudy'] = (weather == 'clouds').astype(int)
+        features['weather_condition_rainy'] = (weather == 'rain').astype(int)
+
+        return features
+
+    def prepare_training_data(self, sensor_data: List[Dict],
+                            light_states: List[Dict]) -> Tuple[pd.DataFrame, pd.Series]:
+        """
+        Bereitet Trainingsdaten vor
+
+        Args:
+            sensor_data: Liste von Sensor-Readings
+            light_states: Liste von tatsächlichen Lichtzuständen (Labels)
+        """
+        # Konvertiere zu DataFrames
+        df_sensors = pd.DataFrame(sensor_data)
+        df_lights = pd.DataFrame(light_states)
+
+        # Merge basierend auf Zeitstempel (mit Toleranz)
+        df_sensors['timestamp'] = pd.to_datetime(df_sensors['timestamp'])
+        df_lights['timestamp'] = pd.to_datetime(df_lights['timestamp'])
+
+        # Sortiere nach Zeit
+        df_sensors = df_sensors.sort_values('timestamp')
+        df_lights = df_lights.sort_values('timestamp')
+
+        # Merge mit nearest timestamp
+        merged = pd.merge_asof(
+            df_sensors,
+            df_lights[['timestamp', 'light_state']],
+            on='timestamp',
+            direction='nearest',
+            tolerance=pd.Timedelta('5min')
+        )
+
+        # Entferne NaN-Werte
+        merged = merged.dropna()
+
+        # Erstelle Features
+        X = self._create_features(merged)
+        y = merged['light_state'].astype(int)
+
+        return X, y
+
+    def train(self, X: pd.DataFrame, y: pd.Series) -> Dict:
+        """
+        Trainiert das Modell
+
+        Returns:
+            Metriken als Dictionary
+        """
+        if len(X) < 50:
+            logger.warning(f"Not enough training data: {len(X)} samples")
+            return {'error': 'insufficient_data', 'samples': len(X)}
+
+        # Train-Test Split
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42
+        )
+
+        # Modell erstellen
+        if self.model_type == "random_forest":
+            self.model = RandomForestClassifier(
+                n_estimators=100,
+                max_depth=10,
+                min_samples_split=5,
+                random_state=42
+            )
+        elif self.model_type == "gradient_boosting":
+            self.model = GradientBoostingClassifier(
+                n_estimators=100,
+                max_depth=5,
+                learning_rate=0.1,
+                random_state=42
+            )
+        else:
+            raise ValueError(f"Unknown model type: {self.model_type}")
+
+        # Training
+        logger.info(f"Training {self.model_type} with {len(X_train)} samples")
+        self.model.fit(X_train, y_train)
+
+        # Evaluation
+        y_pred = self.model.predict(X_test)
+        accuracy = accuracy_score(y_test, y_pred)
+
+        # Feature Importance
+        feature_importance = dict(zip(
+            self.feature_columns,
+            self.model.feature_importances_
+        ))
+
+        logger.info(f"Model trained with accuracy: {accuracy:.2%}")
+
+        return {
+            'accuracy': float(accuracy),
+            'samples_train': len(X_train),
+            'samples_test': len(X_test),
+            'feature_importance': feature_importance,
+            'model_type': self.model_type,
+            'version': self.model_version
+        }
+
+    def predict(self, current_conditions: Dict) -> Tuple[int, float]:
+        """
+        Vorhersage ob Licht an sein sollte
+
+        Args:
+            current_conditions: Aktuelle Bedingungen (Sensordaten)
+
+        Returns:
+            (prediction, confidence): (0=aus, 1=an), confidence (0-1)
+        """
+        if self.model is None:
+            raise ValueError("Model not trained yet")
+
+        # Erstelle Feature-DataFrame
+        df = pd.DataFrame([current_conditions])
+        X = self._create_features(df)
+
+        # Stelle sicher, dass alle Features vorhanden sind
+        for col in self.feature_columns:
+            if col not in X.columns:
+                X[col] = 0
+
+        X = X[self.feature_columns]
+
+        # Vorhersage
+        prediction = self.model.predict(X)[0]
+        probabilities = self.model.predict_proba(X)[0]
+        confidence = probabilities[prediction]
+
+        return int(prediction), float(confidence)
+
+    def save(self, path: str = "models/lighting_model.pkl"):
+        """Speichert das trainierte Modell"""
+        if self.model is None:
+            raise ValueError("No model to save")
+
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+
+        model_data = {
+            'model': self.model,
+            'model_type': self.model_type,
+            'feature_columns': self.feature_columns,
+            'version': self.model_version,
+            'trained_at': datetime.now().isoformat()
+        }
+
+        joblib.dump(model_data, path)
+        logger.info(f"Model saved to {path}")
+
+    def load(self, path: str = "models/lighting_model.pkl"):
+        """Lädt ein trainiertes Modell"""
+        if not Path(path).exists():
+            raise FileNotFoundError(f"Model file not found: {path}")
+
+        model_data = joblib.load(path)
+
+        self.model = model_data['model']
+        self.model_type = model_data['model_type']
+        self.feature_columns = model_data['feature_columns']
+        self.model_version = model_data['version']
+
+        logger.info(f"Model loaded from {path}")
+
+    def explain_prediction(self, current_conditions: Dict) -> Dict:
+        """
+        Erklärt eine Vorhersage durch Feature-Importance
+        """
+        prediction, confidence = self.predict(current_conditions)
+
+        # Hol Feature-Importance
+        feature_importance = dict(zip(
+            self.feature_columns,
+            self.model.feature_importances_
+        ))
+
+        # Sortiere nach Wichtigkeit
+        sorted_features = sorted(
+            feature_importance.items(),
+            key=lambda x: x[1],
+            reverse=True
+        )[:5]
+
+        return {
+            'prediction': 'ON' if prediction == 1 else 'OFF',
+            'confidence': confidence,
+            'top_factors': [
+                {'feature': feat, 'importance': imp}
+                for feat, imp in sorted_features
+            ],
+            'current_conditions': current_conditions
+        }

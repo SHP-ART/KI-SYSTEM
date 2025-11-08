@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block title %}Einstellungen - KI Smart Home{% endblock %}
+
+{% block content %}
+<div class="settings-page">
+    <h2>Einstellungen</h2>
+
+    <div class="settings-sections">
+        <!-- Platform Settings -->
+        <div class="card settings-card">
+            <h3>Smart Home Platform</h3>
+            <form class="settings-form">
+                <div class="form-group">
+                    <label for="platform-type">Platform Typ:</label>
+                    <select id="platform-type" disabled>
+                        <option value="homeassistant">Home Assistant</option>
+                        <option value="homey">Homey Pro</option>
+                    </select>
+                    <small>Platform-Typ kann nur in config.yaml geändert werden</small>
+                </div>
+            </form>
+        </div>
+
+        <!-- Sensor Configuration -->
+        <div class="card settings-card">
+            <h3>🌡️ Indoor-Sensor Konfiguration</h3>
+            <p class="card-description">
+                Wähle welche Sensoren für die Indoor-Temperatur und Luftfeuchtigkeit verwendet werden sollen.
+                <strong>Standard:</strong> Alle Sensoren werden automatisch verwendet.
+            </p>
+
+            <div class="form-group">
+                <h4>Temperatur-Sensoren</h4>
+                <p class="small-text">Durchschnitt aller ausgewählten Sensoren wird als Indoor-Temperatur verwendet</p>
+                <div id="temp-sensors-list" class="sensors-list">
+                    <div class="loading">Lade Sensoren...</div>
+                </div>
+                <button class="btn btn-small btn-secondary" id="select-all-temp">Alle auswählen</button>
+                <button class="btn btn-small btn-secondary" id="deselect-all-temp">Alle abwählen</button>
+            </div>
+
+            <div class="form-group">
+                <h4>Luftfeuchtigkeit-Sensoren</h4>
+                <div id="humidity-sensors-list" class="sensors-list">
+                    <div class="loading">Lade Sensoren...</div>
+                </div>
+                <button class="btn btn-small btn-secondary" id="select-all-humidity">Alle auswählen</button>
+                <button class="btn btn-small btn-secondary" id="deselect-all-humidity">Alle abwählen</button>
+            </div>
+
+            <button class="btn btn-primary" id="save-sensor-config">Sensor-Konfiguration speichern</button>
+            <div id="sensor-save-result" class="action-result"></div>
+        </div>
+
+        <!-- Data Collection Settings -->
+        <div class="card settings-card">
+            <h3>Datensammlung</h3>
+            <form class="settings-form">
+                <div class="form-group">
+                    <label for="collection-interval">Sammel-Intervall (Sekunden):</label>
+                    <input type="number" id="collection-interval" min="60" max="3600" step="60" value="300">
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="enable-weather" checked>
+                        Wetter-Integration aktivieren
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="enable-energy-prices">
+                        Energie-Preise Integration
+                    </label>
+                </div>
+            </form>
+        </div>
+
+        <!-- Decision Engine Settings -->
+        <div class="card settings-card">
+            <h3>Entscheidungs-Engine</h3>
+            <form class="settings-form">
+                <div class="form-group">
+                    <label for="decision-mode">Modus:</label>
+                    <select id="decision-mode">
+                        <option value="auto">Automatisch</option>
+                        <option value="learning">Nur Lernen</option>
+                        <option value="manual">Manuell</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="confidence-threshold">Konfidenz-Schwellwert:</label>
+                    <input type="range" id="confidence-threshold" min="0" max="1" step="0.05" value="0.7">
+                    <span id="confidence-value">0.7</span>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="safety-checks" checked disabled>
+                        Sicherheitschecks aktiviert
+                    </label>
+                    <small>Kann nicht deaktiviert werden</small>
+                </div>
+            </form>
+        </div>
+
+        <!-- System Info -->
+        <div class="card settings-card">
+            <h3>System-Information</h3>
+            <div class="system-info">
+                <div class="info-row">
+                    <span class="label">Datenbank:</span>
+                    <span id="db-path">data/ki_system.db</span>
+                </div>
+                <div class="info-row">
+                    <span class="label">Log-Level:</span>
+                    <span id="log-level">INFO</span>
+                </div>
+                <div class="info-row">
+                    <span class="label">Trainierte Modelle:</span>
+                    <span id="trained-models">0</span>
+                </div>
+                <div class="info-row">
+                    <span class="label">Gespeicherte Datenpunkte:</span>
+                    <span id="data-points">--</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="card settings-card">
+            <h3>Aktionen</h3>
+            <div class="action-buttons">
+                <button class="btn btn-primary" id="test-connection">Verbindung testen</button>
+                <button class="btn btn-secondary" id="retrain-models">Modelle neu trainieren</button>
+                <button class="btn btn-danger" id="clear-data">Daten löschen</button>
+            </div>
+            <div id="action-result" class="action-result"></div>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/settings.js') }}"></script>
+{% endblock %}

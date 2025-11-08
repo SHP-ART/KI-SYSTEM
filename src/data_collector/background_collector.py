@@ -1,0 +1,257 @@
+"""Background Service für kontinuierliche Datensammlung"""
+
+import time
+import threading
+from datetime import datetime
+from typing import Optional
+from loguru import logger
+
+from ..utils.database import Database
+from .base_collector import SmartHomeCollector
+
+
+class BackgroundDataCollector:
+    """
+    Sammelt kontinuierlich Daten von der Smart Home Platform
+    und speichert sie in der Datenbank für ML-Training
+    """
+
+    def __init__(self, platform: SmartHomeCollector, database: Database,
+                 interval_seconds: int = 300):
+        """
+        Args:
+            platform: Smart Home Platform Collector
+            database: Database Instanz
+            interval_seconds: Sammel-Intervall in Sekunden (default: 5 Minuten)
+        """
+        self.platform = platform
+        self.db = database
+        self.interval = interval_seconds
+        self.running = False
+        self.thread: Optional[threading.Thread] = None
+
+        logger.info(f"Background Collector initialized (interval: {interval_seconds}s)")
+
+    def _collect_sensor_data(self):
+        """Sammelt alle Sensor-Daten und speichert sie"""
+        try:
+            timestamp = datetime.now()
+
+            # Hole alle Devices
+            all_devices = self.platform.get_states()
+
+            if not all_devices:
+                logger.warning("No devices found")
+                return
+
+            collected_count = 0
+
+            for device_id, state in all_devices.items():
+                # Extrahiere relevante Daten
+                attributes = state.get('attributes', {})
+                capabilities = attributes.get('capabilities', {})
+
+                # Speichere verschiedene Sensor-Typen
+
+                # Temperatur
+                if 'measure_temperature' in capabilities:
+                    temp_value = capabilities['measure_temperature'].get('value')
+                    if temp_value is not None:
+                        self.db.insert_sensor_data(
+                            timestamp=timestamp,
+                            sensor_id=device_id,
+                            sensor_type='temperature',
+                            value=float(temp_value),
+                            unit='°C',
+                            metadata={'zone': attributes.get('zone'), 'name': attributes.get('friendly_name')}
+                        )
+                        collected_count += 1
+
+                # Luftfeuchtigkeit
+                if 'measure_humidity' in capabilities:
+                    humid_value = capabilities['measure_humidity'].get('value')
+                    if humid_value is not None:
+                        self.db.insert_sensor_data(
+                            timestamp=timestamp,
+                            sensor_id=device_id,
+                            sensor_type='humidity',
+                            value=float(humid_value),
+                            unit='%',
+                            metadata={'zone': attributes.get('zone'), 'name': attributes.get('friendly_name')}
+                        )
+                        collected_count += 1
+
+                # Helligkeit
+                if 'measure_luminance' in capabilities:
+                    lux_value = capabilities['measure_luminance'].get('value')
+                    if lux_value is not None:
+                        self.db.insert_sensor_data(
+                            timestamp=timestamp,
+                            sensor_id=device_id,
+                            sensor_type='brightness',
+                            value=float(lux_value),
+                            unit='lux',
+                            metadata={'zone': attributes.get('zone'), 'name': attributes.get('friendly_name')}
+                        )
+                        collected_count += 1
+
+                # Bewegung (Binary Sensor)
+                if 'alarm_motion' in capabilities:
+                    motion_value = capabilities['alarm_motion'].get('value')
+                    if motion_value is not None:
+                        self.db.insert_sensor_data(
+                            timestamp=timestamp,
+                            sensor_id=device_id,
+                            sensor_type='motion',
+                            value=1.0 if motion_value else 0.0,
+                            unit='binary',
+                            metadata={'zone': attributes.get('zone'), 'name': attributes.get('friendly_name')}
+                        )
+                        collected_count += 1
+
+                # Lichter (für ML-Training)
+                if 'onoff' in capabilities:
+                    device_class = attributes.get('device_class', '').lower()
+                    if device_class == 'light' or 'light' in device_id.lower():
+                        light_state = capabilities['onoff'].get('value')
+                        brightness = None
+
+                        # Helligkeit wenn verfügbar
+                        if 'dim' in capabilities:
+                            brightness = capabilities['dim'].get('value', 0) * 255  # Homey: 0-1, Standard: 0-255
+
+                        self.db.insert_sensor_data(
+                            timestamp=timestamp,
+                            sensor_id=device_id,
+                            sensor_type='light_state',
+                            value=1.0 if light_state else 0.0,
+                            unit='binary',
+                            metadata={
+                                'zone': attributes.get('zone'),
+                                'name': attributes.get('friendly_name'),
+                                'brightness': brightness
+                            }
+                        )
+                        collected_count += 1
+
+                # Heizung (für ML-Training)
+                if 'target_temperature' in capabilities:
+                    target_temp = capabilities['target_temperature'].get('value')
+                    if target_temp is not None:
+                        self.db.insert_sensor_data(
+                            timestamp=timestamp,
+                            sensor_id=device_id,
+                            sensor_type='target_temperature',
+                            value=float(target_temp),
+                            unit='°C',
+                            metadata={'zone': attributes.get('zone'), 'name': attributes.get('friendly_name')}
+                        )
+                        collected_count += 1
+
+            logger.info(f"Collected {collected_count} sensor readings from {len(all_devices)} devices")
+
+        except Exception as e:
+            logger.error(f"Error collecting sensor data: {e}")
+
+    def _collect_external_data(self):
+        """Sammelt externe Daten (Wetter, Energie-Preise)"""
+        try:
+            timestamp = datetime.now()
+
+            # Wetterdaten (falls verfügbar)
+            if hasattr(self.platform, 'get_weather_data'):
+                try:
+                    weather = self.platform.get_weather_data()
+                    if weather:
+                        self.db.insert_external_data(
+                            timestamp=timestamp,
+                            data_type='weather',
+                            data=weather
+                        )
+                        logger.debug("Weather data collected")
+                except Exception as e:
+                    logger.warning(f"Could not collect weather data: {e}")
+
+            # Präsenz-Daten
+            if hasattr(self.platform, 'get_presence_status'):
+                try:
+                    presence = self.platform.get_presence_status()
+                    if presence:
+                        self.db.insert_external_data(
+                            timestamp=timestamp,
+                            data_type='presence',
+                            data=presence
+                        )
+                        logger.debug("Presence data collected")
+                except Exception as e:
+                    logger.warning(f"Could not collect presence data: {e}")
+
+        except Exception as e:
+            logger.error(f"Error collecting external data: {e}")
+
+    def _run_loop(self):
+        """Main collection loop"""
+        logger.info("Background data collection started")
+
+        while self.running:
+            try:
+                # Sammle Daten
+                self._collect_sensor_data()
+                self._collect_external_data()
+
+                # Warte bis zum nächsten Intervall
+                time.sleep(self.interval)
+
+            except Exception as e:
+                logger.error(f"Error in collection loop: {e}")
+                time.sleep(60)  # Bei Fehler: 1 Minute warten
+
+        logger.info("Background data collection stopped")
+
+    def start(self):
+        """Startet die Datensammlung im Hintergrund"""
+        if self.running:
+            logger.warning("Background collector already running")
+            return
+
+        self.running = True
+        self.thread = threading.Thread(target=self._run_loop, daemon=True)
+        self.thread.start()
+
+        logger.info("Background data collector started")
+
+    def stop(self):
+        """Stoppt die Datensammlung"""
+        if not self.running:
+            return
+
+        self.running = False
+
+        if self.thread:
+            self.thread.join(timeout=10)
+
+        logger.info("Background data collector stopped")
+
+    def get_stats(self) -> dict:
+        """Gibt Statistiken über gesammelte Daten zurück"""
+        try:
+            # Zähle Datensätze
+            total_sensors = self.db.get_sensor_data_count()
+            total_external = self.db.get_external_data_count()
+
+            # Letzte Sammlung
+            last_collection = self.db.get_latest_sensor_timestamp()
+
+            return {
+                'running': self.running,
+                'interval': self.interval,
+                'total_sensor_readings': total_sensors,
+                'total_external_data': total_external,
+                'last_collection': last_collection.isoformat() if last_collection else None
+            }
+        except Exception as e:
+            logger.error(f"Error getting stats: {e}")
+            return {
+                'running': self.running,
+                'error': str(e)
+            }

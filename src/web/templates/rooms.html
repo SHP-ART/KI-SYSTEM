@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+
+{% block title %}Räume & Zonen - KI Smart Home{% endblock %}
+
+{% block content %}
+<div class="rooms-page">
+    <h2>Räume & Zonen</h2>
+
+    <!-- Sync mit Homey -->
+    <div class="card">
+        <div class="sync-header">
+            <div>
+                <h3>Homey Zonen synchronisieren</h3>
+                <p>Importieren Sie Ihre Räume/Zonen direkt aus Homey Pro</p>
+            </div>
+            <div class="sync-buttons">
+                <button class="btn btn-primary" id="sync-zones">
+                    🔄 Zonen aktualisieren
+                </button>
+                <button class="btn btn-primary" id="sync-device-assignments">
+                    📱 Geräte-Zuordnungen importieren
+                </button>
+            </div>
+        </div>
+        <div id="sync-status" class="sync-status"></div>
+    </div>
+
+    <!-- Räume-Übersicht -->
+    <div class="card">
+        <h3>Ihre Räume</h3>
+        <div id="rooms-grid" class="rooms-grid">
+            <div class="loading">Lade Räume...</div>
+        </div>
+    </div>
+
+    <!-- Raum hinzufügen -->
+    <div class="card">
+        <h3>Neuen Raum hinzufügen</h3>
+        <form id="add-room-form" class="room-form">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Raum-Name:</label>
+                    <input type="text" id="new-room-name" placeholder="z.B. Wohnzimmer" required>
+                </div>
+                <div class="form-group">
+                    <label>Icon:</label>
+                    <select id="new-room-icon">
+                        <option value="🏠">🏠 Wohnzimmer</option>
+                        <option value="🛏️">🛏️ Schlafzimmer</option>
+                        <option value="🍳">🍳 Küche</option>
+                        <option value="🚿">🚿 Badezimmer</option>
+                        <option value="🚪">🚪 Flur</option>
+                        <option value="🏢">🏢 Büro</option>
+                        <option value="🎮">🎮 Gaming-Zimmer</option>
+                        <option value="🌳">🌳 Garten</option>
+                        <option value="🚗">🚗 Garage</option>
+                        <option value="📦">📦 Keller</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary">Raum hinzufügen</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Geräte-Zuordnung -->
+    <div class="card">
+        <h3>Geräte zu Räumen zuordnen</h3>
+        <p>Wählen Sie einen Raum aus, um Geräte zuzuordnen:</p>
+
+        <div class="room-selector">
+            <select id="room-select" class="room-select">
+                <option value="">Raum wählen...</option>
+            </select>
+            <span id="device-count-badge" class="badge"></span>
+        </div>
+
+        <div id="room-devices-container" class="room-devices-container hidden">
+            <h4>Geräte in <span id="selected-room-name"></span>:</h4>
+
+            <!-- Aktuell zugeordnete Geräte -->
+            <div class="assigned-devices">
+                <h5>Zugeordnete Geräte:</h5>
+                <div id="assigned-devices-list" class="devices-list"></div>
+            </div>
+
+            <!-- Verfügbare Geräte -->
+            <div class="available-devices">
+                <h5>Verfügbare Geräte hinzufügen:</h5>
+                <input type="text" id="device-search" placeholder="Gerät suchen..." class="search-input">
+                <div id="available-devices-list" class="devices-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Raumbasierte Automatisierungen -->
+    <div class="card">
+        <h3>Raumbasierte Automatisierungen</h3>
+        <p>Erstellen Sie Regeln für einzelne Räume:</p>
+
+        <div id="room-automations" class="room-automations">
+            <!-- Wird dynamisch gefüllt -->
+        </div>
+
+        <button class="btn btn-secondary" id="add-room-automation">
+            ➕ Neue Raum-Regel hinzufügen
+        </button>
+    </div>
+</div>
+
+<!-- Raum-Details Modal -->
+<div id="room-modal" class="modal">
+    <div class="modal-content modal-large">
+        <span class="close">&times;</span>
+        <h3 id="modal-room-title">Raum Details</h3>
+
+        <div class="room-details">
+            <div class="room-info">
+                <div class="room-icon-large" id="modal-room-icon">🏠</div>
+                <div>
+                    <p><strong>Raum-ID:</strong> <span id="modal-room-id"></span></p>
+                    <p><strong>Geräte:</strong> <span id="modal-room-device-count"></span></p>
+                </div>
+            </div>
+
+            <div class="room-stats">
+                <h4>Statistiken</h4>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="room-lights-count">0</div>
+                        <div class="stat-label">💡 Lichter</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="room-sensors-count">0</div>
+                        <div class="stat-label">📊 Sensoren</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="room-switches-count">0</div>
+                        <div class="stat-label">🔌 Schalter</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="room-climate-count">0</div>
+                        <div class="stat-label">🌡️ Klima</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="room-actions">
+                <button class="btn btn-primary" id="room-all-lights-on">Alle Lichter AN</button>
+                <button class="btn btn-secondary" id="room-all-lights-off">Alle Lichter AUS</button>
+                <button class="btn btn-warning" id="edit-room">✏️ Raum bearbeiten</button>
+                <button class="btn btn-danger" id="delete-room">Raum löschen</button>
+            </div>
+
+            <!-- Edit Form (hidden by default) -->
+            <div id="edit-room-form" class="edit-room-form" style="display: none;">
+                <h4>Raum bearbeiten</h4>
+                <div class="form-group">
+                    <label>Name:</label>
+                    <input type="text" id="edit-room-name" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Icon:</label>
+                    <select id="edit-room-icon" class="form-control">
+                        <option value="🏠">🏠 Standard</option>
+                        <option value="🛋️">🛋️ Wohnzimmer</option>
+                        <option value="🛏️">🛏️ Schlafzimmer</option>
+                        <option value="🍳">🍳 Küche</option>
+                        <option value="🚿">🚿 Badezimmer</option>
+                        <option value="🚪">🚪 Flur</option>
+                        <option value="💼">💼 Büro</option>
+                        <option value="🎮">🎮 Gaming-Zimmer</option>
+                        <option value="🌳">🌳 Garten</option>
+                        <option value="🚗">🚗 Garage</option>
+                        <option value="📦">📦 Keller</option>
+                        <option value="💡">💡 Lichtbereich</option>
+                        <option value="🏡">🏡 Terrasse</option>
+                        <option value="🧺">🧺 Waschküche</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary" id="save-room-edit">💾 Speichern</button>
+                    <button class="btn btn-secondary" id="cancel-room-edit">Abbrechen</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/rooms.js') }}"></script>
+{% endblock %}

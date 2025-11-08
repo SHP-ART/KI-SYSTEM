@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - KI Smart Home{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <h2>System Dashboard</h2>
+
+    <!-- Status-Karten -->
+    <div class="status-cards">
+        <div class="card" id="temperature-card">
+            <h3>Temperatur</h3>
+            <div class="card-content">
+                <div class="metric">
+                    <span class="label">Innen:</span>
+                    <span class="value" id="temp-indoor">--°C</span>
+                </div>
+                <div class="metric">
+                    <span class="label">Außen:</span>
+                    <span class="value" id="temp-outdoor">--°C</span>
+                </div>
+                <div class="metric">
+                    <span class="label">Luftfeuchtigkeit:</span>
+                    <span class="value" id="humidity">--%</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" id="environment-card">
+            <h3>Umgebung</h3>
+            <div class="card-content">
+                <div class="metric">
+                    <span class="label">Helligkeit:</span>
+                    <span class="value" id="brightness">-- lux</span>
+                </div>
+                <div class="metric">
+                    <span class="label">Bewegung:</span>
+                    <span class="value" id="motion">--</span>
+                </div>
+                <div class="metric">
+                    <span class="label">Wetter:</span>
+                    <span class="value" id="weather">--</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" id="weather-card">
+            <h3>Wetter Details</h3>
+            <div class="card-content">
+                <div class="metric">
+                    <span class="label">Gefühlt:</span>
+                    <span class="value" id="feels-like">--°C</span>
+                </div>
+                <div class="metric">
+                    <span class="label">Wind:</span>
+                    <span class="value" id="wind-speed">-- m/s</span>
+                </div>
+                <div class="metric">
+                    <span class="label">Luftdruck:</span>
+                    <span class="value" id="pressure">-- hPa</span>
+                </div>
+                <div class="metric">
+                    <span class="label">Bewölkung:</span>
+                    <span class="value" id="clouds">--%</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" id="energy-card">
+            <h3>Energie</h3>
+            <div class="card-content">
+                <div class="metric">
+                    <span class="label">Strompreis:</span>
+                    <span class="value" id="energy-price">-- EUR/kWh</span>
+                </div>
+                <div class="metric">
+                    <span class="label">Verbrauch:</span>
+                    <span class="value" id="power-consumption">-- W</span>
+                </div>
+                <div class="metric">
+                    <span class="label">Preis-Level:</span>
+                    <span class="value" id="price-level">--</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" id="presence-card">
+            <h3>Präsenz-Status</h3>
+            <div class="card-content">
+                <div class="presence-status">
+                    <span class="presence-dot" id="presence-dot-dash"></span>
+                    <span class="value" id="presence-text-dash">--</span>
+                </div>
+                <div class="metric">
+                    <span class="label">Personen:</span>
+                    <span class="value" id="presence-count-dash">--</span>
+                </div>
+                <div class="metric">
+                    <span class="label">Modus:</span>
+                    <span class="value" id="presence-mode-dash">Automatisch</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Wettervorhersage -->
+    <div class="weather-forecast-section">
+        <h2>Wettervorhersage (24h)</h2>
+        <div id="forecast-container" class="forecast-grid">
+            <!-- Vorhersage wird dynamisch geladen -->
+        </div>
+    </div>
+
+    <!-- KI-Vorhersagen -->
+    <div class="predictions-section">
+        <h2>KI-Vorhersagen & Empfehlungen</h2>
+
+        <div class="predictions-grid">
+            <div class="card prediction-card">
+                <h3>💡 Beleuchtung</h3>
+                <div class="prediction-content">
+                    <div class="confidence-bar">
+                        <div class="confidence-fill" id="lighting-confidence" style="width: 0%"></div>
+                    </div>
+                    <p class="confidence-text">Konfidenz: <span id="lighting-conf-text">0%</span></p>
+                    <div id="lighting-suggestions" class="suggestions"></div>
+                    <p class="reasoning" id="lighting-reasoning"></p>
+                </div>
+            </div>
+
+            <div class="card prediction-card">
+                <h3>🌡️ Heizung</h3>
+                <div class="prediction-content">
+                    <div class="confidence-bar">
+                        <div class="confidence-fill" id="heating-confidence" style="width: 0%"></div>
+                    </div>
+                    <p class="confidence-text">Konfidenz: <span id="heating-conf-text">0%</span></p>
+                    <div id="heating-suggestions" class="suggestions"></div>
+                    <p class="reasoning" id="heating-reasoning"></p>
+                </div>
+            </div>
+
+            <div class="card prediction-card">
+                <h3>⚡ Energie-Optimierung</h3>
+                <div class="prediction-content">
+                    <div class="confidence-bar">
+                        <div class="confidence-fill" id="energy-confidence" style="width: 0%"></div>
+                    </div>
+                    <p class="confidence-text">Konfidenz: <span id="energy-conf-text">0%</span></p>
+                    <p class="energy-optimization" id="energy-optimization"></p>
+                    <p class="savings">Einsparpotenzial: <span id="savings-potential">0%</span></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Verbindungsstatus -->
+    <div class="connection-status">
+        <h3>Verbindungsstatus</h3>
+        <div id="connection-indicators" class="indicators">
+            <div class="indicator">
+                <span class="status-dot" id="status-platform"></span>
+                <span>Smart Home Platform</span>
+            </div>
+            <div class="indicator">
+                <span class="status-dot" id="status-weather"></span>
+                <span>Wetter API</span>
+            </div>
+            <div class="indicator">
+                <span class="status-dot" id="status-db"></span>
+                <span>Datenbank</span>
+            </div>
+            <div class="indicator">
+                <span class="status-dot" id="status-energy"></span>
+                <span>Energie Preise</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+{% endblock %}

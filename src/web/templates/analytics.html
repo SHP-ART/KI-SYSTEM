@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}Analytics - KI Smart Home{% endblock %}
+
+{% block content %}
+<div class="analytics-page">
+    <h2>Analytics & Statistiken</h2>
+
+    <!-- Collector Status Card -->
+    <div class="card collector-status-card">
+        <h3>Datensammlung Status</h3>
+        <div class="card-content">
+            <div class="metric">
+                <span class="label">Status:</span>
+                <span class="value" id="collector-status">--</span>
+            </div>
+            <div class="metric">
+                <span class="label">Gesammelte Datensätze:</span>
+                <span class="value" id="total-readings">--</span>
+            </div>
+            <div class="metric">
+                <span class="label">Letzte Sammlung:</span>
+                <span class="value" id="last-collection">--</span>
+            </div>
+            <div class="metric">
+                <span class="label">Intervall:</span>
+                <span class="value" id="collection-interval">--</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Time Range Selector -->
+    <div class="time-range-selector">
+        <label>Zeitraum:</label>
+        <select id="time-range" class="time-range-select">
+            <option value="24">24 Stunden</option>
+            <option value="48">48 Stunden</option>
+            <option value="168" selected>7 Tage</option>
+            <option value="336">14 Tage</option>
+            <option value="720">30 Tage</option>
+        </select>
+        <button id="refresh-charts" class="btn btn-primary">Aktualisieren</button>
+    </div>
+
+    <!-- Charts Grid -->
+    <div class="charts-grid">
+        <!-- Temperature Chart -->
+        <div class="card chart-card">
+            <h3>🌡️ Temperatur-Verlauf</h3>
+            <div class="chart-container">
+                <canvas id="temperature-chart"></canvas>
+            </div>
+            <div class="chart-stats">
+                <div class="stat">
+                    <span class="stat-label">Durchschnitt:</span>
+                    <span class="stat-value" id="temp-avg">--°C</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Min:</span>
+                    <span class="stat-value" id="temp-min">--°C</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Max:</span>
+                    <span class="stat-value" id="temp-max">--°C</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Humidity Chart -->
+        <div class="card chart-card">
+            <h3>💧 Luftfeuchtigkeit-Verlauf</h3>
+            <div class="chart-container">
+                <canvas id="humidity-chart"></canvas>
+            </div>
+            <div class="chart-stats">
+                <div class="stat">
+                    <span class="stat-label">Durchschnitt:</span>
+                    <span class="stat-value" id="humid-avg">--%</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Min:</span>
+                    <span class="stat-value" id="humid-min">--%</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Max:</span>
+                    <span class="stat-value" id="humid-max">--%</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Info wenn keine Daten -->
+    <div id="no-data-message" class="no-data-message hidden">
+        <div class="info-box">
+            <h3>⏳ Noch keine Daten verfügbar</h3>
+            <p>Das System sammelt gerade Daten. Nach einigen Minuten werden hier Verlaufs-Graphen angezeigt.</p>
+            <p>Die Datensammlung läuft alle <strong>5 Minuten</strong>.</p>
+        </div>
+    </div>
+</div>
+
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="{{ url_for('static', filename='js/analytics.js') }}"></script>
+{% endblock %}

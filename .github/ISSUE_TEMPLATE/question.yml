@@ -1,0 +1,48 @@
+name: Frage / Hilfe
+description: Stelle eine Frage oder bitte um Hilfe
+title: "[Frage]: "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Stelle deine Frage! Wir helfen gerne. 💬
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Deine Frage
+      description: Was möchtest du wissen?
+      placeholder: Wie kann ich...?
+    validations:
+      required: true
+
+  - type: textarea
+    id: tried
+    attributes:
+      label: Was hast du bereits versucht?
+      description: Hast du schon die Dokumentation geprüft?
+      placeholder: |
+        - README.md gelesen
+        - TESTING.md durchgearbeitet
+        - Logs geprüft
+
+  - type: dropdown
+    id: docs
+    attributes:
+      label: Dokumentation geprüft?
+      options:
+        - "Ja, habe ich"
+        - "Nein, wusste nicht wo"
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Zusätzlicher Kontext
+      description: Weitere hilfreiche Infos
+      placeholder: |
+        - Setup-Details
+        - Was funktioniert bereits
+        - Spezifische Anforderungen
