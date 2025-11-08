@@ -1,10 +1,10 @@
 {
   "enabled": false,
-  "humidity_sensor_id": "10aa83e8-3f8e-40b3-91f6-32d8b765f185",
-  "temperature_sensor_id": "10aa83e8-3f8e-40b3-91f6-32d8b765f185",
+  "humidity_sensor_id": "40cf21f8-e419-410d-ac7b-28f11de88ba8",
+  "temperature_sensor_id": "40cf21f8-e419-410d-ac7b-28f11de88ba8",
   "dehumidifier_id": "fc3d7dcc-bbc9-45b3-bcf8-2e9fd39d7470",
   "heater_id": "78aba55b-98ed-4838-bbff-47527a46d69b",
-  "motion_sensor_id": "7d9ab64b-9795-47f3-a60b-ff3e4cbc35cb",
+  "motion_sensor_id": "77d4986b-8a6a-4ff6-a064-3ac518c288b4",
   "door_sensor_id": "f35f92a1-fc3a-456e-8d0d-67ddb6118a55",
   "humidity_threshold_high": 70,
   "humidity_threshold_low": 60,

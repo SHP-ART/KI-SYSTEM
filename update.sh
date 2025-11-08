@@ -98,28 +98,60 @@ echo "╔═══════════════════════�
 echo "║  Update abgeschlossen!                   ║"
 echo "╚═══════════════════════════════════════════╝"
 echo ""
-echo "Das System wird in 3 Sekunden neu gestartet..."
-sleep 3
 
-# Finde und stoppe laufende Instanz
-echo "🔄 Stoppe laufende Instanz..."
-pkill -f "python.*main.py.*web" || true
-sleep 2
+# Prüfe ob PM2 installiert ist
+if command -v pm2 &> /dev/null; then
+    echo "🔄 Starte System mit PM2 neu..."
 
-# Starte neu im Hintergrund
-echo "🚀 Starte System neu..."
-nohup python main.py web --host 0.0.0.0 --port 8080 > logs/update.log 2>&1 &
-sleep 2
+    # Prüfe ob App in PM2 läuft
+    if pm2 list | grep -q "ki-smart-home"; then
+        pm2 restart ki-smart-home
+        pm2 save
+        echo "✓ System mit PM2 neu gestartet!"
+    else
+        # Stoppe alte Instanz falls vorhanden
+        pkill -f "python.*main.py.*web" || true
+        sleep 2
 
-# Prüfe ob Server läuft
-if lsof -i :8080 >/dev/null 2>&1; then
-    echo "✓ System erfolgreich gestartet!"
+        # Starte mit PM2
+        pm2 start ecosystem.config.js
+        pm2 save
+        echo "✓ System mit PM2 gestartet!"
+    fi
+
     echo ""
-    echo "🌐 Web-Dashboard: http://localhost:8080"
+    echo "📊 PM2 Status:"
+    pm2 list
+    echo ""
+    echo "💡 Nützliche PM2 Befehle:"
+    echo "   pm2 logs           # Logs anzeigen"
+    echo "   pm2 monit          # Monitoring"
+    echo "   pm2 restart all    # Neustart"
+    echo "   pm2 stop all       # Stoppen"
 else
-    echo "⚠️  System konnte nicht automatisch gestartet werden."
-    echo "Bitte manuell starten mit: python main.py web"
+    echo "Das System wird in 3 Sekunden neu gestartet..."
+    sleep 3
+
+    # Finde und stoppe laufende Instanz
+    echo "🔄 Stoppe laufende Instanz..."
+    pkill -f "python.*main.py.*web" || true
+    sleep 2
+
+    # Starte neu im Hintergrund
+    echo "🚀 Starte System neu..."
+    nohup python main.py web --host 0.0.0.0 --port 8080 > logs/update.log 2>&1 &
+    sleep 2
+
+    # Prüfe ob Server läuft
+    if lsof -i :8080 >/dev/null 2>&1; then
+        echo "✓ System erfolgreich gestartet!"
+    else
+        echo "⚠️  System konnte nicht automatisch gestartet werden."
+        echo "Bitte manuell starten mit: python main.py web"
+    fi
 fi
 
+echo ""
+echo "🌐 Web-Dashboard: http://localhost:8080"
 echo ""
 echo "✨ Update erfolgreich abgeschlossen!"

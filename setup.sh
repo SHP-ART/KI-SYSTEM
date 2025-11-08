@@ -66,6 +66,64 @@ echo "✓ Verzeichnisse erstellt"
 # Mache main.py ausführbar
 chmod +x main.py
 
+# PM2 Installation (optional)
+echo ""
+echo "═══════════════════════════════════════════════════════════════"
+echo "Möchtest du PM2 für Prozess-Management installieren? (empfohlen)"
+echo "PM2 bietet: Auto-Restart, Log-Management, Monitoring"
+echo "═══════════════════════════════════════════════════════════════"
+read -p "PM2 installieren? (j/n) [Standard: j]: " install_pm2
+install_pm2=${install_pm2:-j}
+
+if [[ "$install_pm2" =~ ^[Jj]$ ]]; then
+    echo ""
+    echo "📦 Installiere PM2..."
+
+    # Prüfe ob Node.js/npm installiert ist
+    if ! command -v npm &> /dev/null; then
+        echo "⚠️  Node.js/npm nicht gefunden. Installiere Node.js..."
+
+        # macOS
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            if command -v brew &> /dev/null; then
+                brew install node
+            else
+                echo "❌ Homebrew nicht gefunden. Bitte installiere Node.js manuell:"
+                echo "   https://nodejs.org/"
+                install_pm2="n"
+            fi
+        # Linux
+        elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+            if command -v apt-get &> /dev/null; then
+                sudo apt-get update
+                sudo apt-get install -y nodejs npm
+            elif command -v yum &> /dev/null; then
+                sudo yum install -y nodejs npm
+            else
+                echo "❌ Paketmanager nicht gefunden. Bitte installiere Node.js manuell:"
+                echo "   https://nodejs.org/"
+                install_pm2="n"
+            fi
+        fi
+    fi
+
+    # Installiere PM2 wenn Node.js verfügbar
+    if [[ "$install_pm2" =~ ^[Jj]$ ]] && command -v npm &> /dev/null; then
+        npm install -g pm2
+        echo "✓ PM2 installiert"
+
+        # PM2 Startup konfigurieren
+        echo ""
+        read -p "PM2 beim System-Start automatisch starten? (j/n) [Standard: j]: " pm2_startup
+        pm2_startup=${pm2_startup:-j}
+
+        if [[ "$pm2_startup" =~ ^[Jj]$ ]]; then
+            pm2 startup
+            echo "ℹ️  Führe den oben angezeigten Befehl aus, um PM2 Autostart zu aktivieren"
+        fi
+    fi
+fi
+
 echo ""
 echo "╔═══════════════════════════════════════════════════════════════╗"
 echo "║            Setup erfolgreich abgeschlossen! ✓                ║"
@@ -84,11 +142,18 @@ echo "   source venv/bin/activate"
 echo "   python main.py test"
 echo ""
 echo "4️⃣  Starte das Web-Dashboard (NEU in v0.8):"
+echo ""
+if command -v pm2 &> /dev/null; then
+    echo "   Mit PM2 (empfohlen):"
+    echo "   pm2 start ecosystem.config.js"
+    echo "   pm2 save              # Speichert Konfiguration"
+    echo "   pm2 logs              # Zeigt Logs"
+    echo "   pm2 monit             # Monitoring"
+    echo ""
+    echo "   Oder manuell:"
+fi
 echo "   python main.py web --host 0.0.0.0 --port 8080"
 echo "   Zugriff: http://localhost:8080"
-echo ""
-echo "   ODER starte im Daemon-Modus:"
-echo "   python main.py daemon"
 echo ""
 echo "🚿 Features in v0.8:"
 echo "   • Modernes Web-Dashboard"
