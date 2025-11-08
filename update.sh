@@ -1,0 +1,125 @@
+#!/bin/bash
+# Update-Script für KI-System
+# Lädt die neueste Version von GitHub und startet neu
+
+set -e
+
+echo "╔═══════════════════════════════════════════╗"
+echo "║   KI Smart Home System - Update          ║"
+echo "╚═══════════════════════════════════════════╝"
+echo ""
+
+# Prüfe ob Git-Repository vorhanden
+if [ ! -d ".git" ]; then
+    echo "❌ FEHLER: Kein Git-Repository gefunden!"
+    echo "Bitte führe 'git init' und 'git remote add origin <URL>' aus."
+    exit 1
+fi
+
+# Zeige aktuelle Version
+echo "📌 Aktuelle Version:"
+git log -1 --oneline
+echo ""
+
+# Prüfe auf ungespeicherte Änderungen (nur für wichtige Dateien)
+if git diff --quiet HEAD -- '*.py' '*.html' '*.css' '*.js' '*.sh' '*.md' 'requirements.txt' 'config/config.yaml'; then
+    echo "✓ Keine Code-Änderungen gefunden"
+else
+    echo "⚠️  Warnung: Ungespeicherte Code-Änderungen gefunden!"
+    echo "Diese werden überschrieben. Fortfahren? (j/n)"
+    read -r response
+    if [[ ! "$response" =~ ^[Jj]$ ]]; then
+        echo "Update abgebrochen."
+        exit 0
+    fi
+fi
+
+# Sichere Datenbank und Konfiguration (falls nicht in .gitignore)
+echo ""
+echo "🔒 Sichere wichtige Dateien..."
+mkdir -p .backup
+if [ -f ".env" ]; then
+    cp .env .backup/.env.bak
+    echo "  ✓ .env gesichert"
+fi
+if [ -d "data" ]; then
+    cp -r data .backup/data_bak 2>/dev/null || true
+    echo "  ✓ Datenbank gesichert"
+fi
+
+# Hole Updates von GitHub
+echo ""
+echo "📥 Lade Updates von GitHub..."
+git fetch origin
+
+# Zeige verfügbare Updates
+COMMITS_BEHIND=$(git rev-list HEAD..origin/main --count 2>/dev/null || echo "0")
+if [ "$COMMITS_BEHIND" -eq 0 ]; then
+    echo "✓ System ist bereits auf dem neuesten Stand!"
+    rm -rf .backup
+    exit 0
+fi
+
+echo "📊 $COMMITS_BEHIND neue(s) Update(s) verfügbar:"
+git log HEAD..origin/main --oneline --no-merges | head -5
+echo ""
+
+# Pull Updates
+echo "⬇️  Installiere Updates..."
+git pull origin main
+
+# Aktiviere Virtual Environment falls vorhanden
+if [ -d "venv" ]; then
+    echo ""
+    echo "🔧 Aktiviere Virtual Environment..."
+    source venv/bin/activate
+fi
+
+# Update Dependencies
+echo ""
+echo "📦 Aktualisiere Python-Pakete..."
+pip install --upgrade pip -q
+pip install -r requirements.txt -q
+echo "✓ Dependencies aktualisiert"
+
+# Neue Version anzeigen
+echo ""
+echo "✅ Update erfolgreich installiert!"
+echo ""
+echo "📌 Neue Version:"
+git log -1 --oneline
+echo ""
+
+# Aufräumen
+rm -rf .backup
+
+# Informiere über Neustart
+echo "╔═══════════════════════════════════════════╗"
+echo "║  Update abgeschlossen!                   ║"
+echo "╚═══════════════════════════════════════════╝"
+echo ""
+echo "Das System wird in 3 Sekunden neu gestartet..."
+sleep 3
+
+# Finde und stoppe laufende Instanz
+echo "🔄 Stoppe laufende Instanz..."
+pkill -f "python.*main.py.*web" || true
+sleep 2
+
+# Starte neu im Hintergrund
+echo "🚀 Starte System neu..."
+nohup python main.py web --host 0.0.0.0 --port 8080 > logs/update.log 2>&1 &
+sleep 2
+
+# Prüfe ob Server läuft
+if lsof -i :8080 >/dev/null 2>&1; then
+    echo "✓ System erfolgreich gestartet!"
+    echo ""
+    echo "🌐 Web-Dashboard: http://localhost:8080"
+else
+    echo "⚠️  System konnte nicht automatisch gestartet werden."
+    echo "Bitte manuell starten mit: python main.py web"
+fi
+
+echo ""
+echo "✨ Update erfolgreich abgeschlossen!"

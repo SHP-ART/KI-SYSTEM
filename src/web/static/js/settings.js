@@ -217,8 +217,122 @@ document.getElementById('save-sensor-config').addEventListener('click', async ()
     }
 });
 
+// ===== System Update Functions =====
+
+// Lade aktuelle Version
+async function loadVersion() {
+    try {
+        const data = await fetchJSON('/api/system/version');
+
+        if (data.success) {
+            document.getElementById('current-version').textContent = data.version.message;
+            document.getElementById('current-commit').textContent = data.version.commit + ' (' + data.version.time + ')';
+        } else {
+            document.getElementById('current-version').textContent = 'Nicht verfügbar';
+            document.getElementById('current-commit').textContent = '--';
+        }
+    } catch (error) {
+        console.error('Error loading version:', error);
+        document.getElementById('current-version').textContent = 'Fehler';
+    }
+}
+
+// Prüfe auf Updates
+async function checkForUpdates() {
+    const statusEl = document.getElementById('update-status');
+    const installBtn = document.getElementById('install-update');
+    const commitsList = document.getElementById('new-commits-list');
+    const resultEl = document.getElementById('update-result');
+
+    try {
+        statusEl.textContent = 'Prüfe...';
+        resultEl.textContent = '';
+        resultEl.style.display = 'none';
+
+        const data = await fetchJSON('/api/system/check-update');
+
+        if (data.success) {
+            if (data.update_available) {
+                statusEl.textContent = `Ja (${data.commits_behind} neue${data.commits_behind > 1 ? '' : 's'} Update)`;
+                statusEl.style.color = '#ff9800';
+                installBtn.style.display = 'inline-block';
+
+                // Zeige neue Commits
+                if (data.new_commits && data.new_commits.length > 0) {
+                    const list = document.getElementById('commits-list');
+                    list.innerHTML = data.new_commits.map(commit =>
+                        `<li><code>${commit.hash}</code> ${commit.message}</li>`
+                    ).join('');
+                    commitsList.style.display = 'block';
+                }
+            } else {
+                statusEl.textContent = 'Nein - System ist aktuell';
+                statusEl.style.color = '#4caf50';
+                installBtn.style.display = 'none';
+                commitsList.style.display = 'none';
+            }
+        } else {
+            statusEl.textContent = 'Fehler: ' + (data.error || 'Unbekannt');
+            statusEl.style.color = '#f44336';
+        }
+    } catch (error) {
+        console.error('Error checking for updates:', error);
+        statusEl.textContent = 'Fehler beim Prüfen';
+        statusEl.style.color = '#f44336';
+    }
+}
+
+// Installiere Update
+async function installUpdate() {
+    const resultEl = document.getElementById('update-result');
+    const installBtn = document.getElementById('install-update');
+
+    if (!confirm('System-Update wird durchgeführt.\n\nDas System wird neu gestartet.\nDatenbank und Einstellungen bleiben erhalten.\n\nFortfahren?')) {
+        return;
+    }
+
+    try {
+        installBtn.disabled = true;
+        resultEl.textContent = 'Update wird durchgeführt... Bitte warten...';
+        resultEl.className = 'action-result';
+        resultEl.style.display = 'block';
+
+        const response = await fetch('/api/system/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            resultEl.textContent = '✓ ' + data.message + '\n\nSeite wird in 10 Sekunden neu geladen...';
+            resultEl.className = 'action-result success';
+
+            // Warte 10 Sekunden und reload
+            setTimeout(() => {
+                window.location.reload();
+            }, 10000);
+        } else {
+            resultEl.textContent = '✗ Fehler: ' + (data.error || 'Unbekannter Fehler');
+            resultEl.className = 'action-result error';
+            installBtn.disabled = false;
+        }
+
+    } catch (error) {
+        resultEl.textContent = '✗ Fehler beim Update: ' + error.message;
+        resultEl.className = 'action-result error';
+        installBtn.disabled = false;
+    }
+}
+
+// Event Listeners für Update-Buttons
+document.getElementById('check-update').addEventListener('click', checkForUpdates);
+document.getElementById('install-update').addEventListener('click', installUpdate);
+
 // Init
 document.addEventListener('DOMContentLoaded', () => {
     loadConfig();
     loadSensorConfig();
+    loadVersion();
+    checkForUpdates(); // Auto-check beim Laden
 });

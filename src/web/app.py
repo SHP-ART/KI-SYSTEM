@@ -9,6 +9,8 @@ from pathlib import Path
 from loguru import logger
 from datetime import datetime
 import sys
+import subprocess
+import os
 
 # Füge src zum Python-Path hinzu
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -1221,6 +1223,152 @@ class WebInterface:
         def page_bathroom_analytics():
             """Seite: Badezimmer Analytics Dashboard"""
             return render_template('bathroom_analytics.html')
+
+        # ===== System Update Endpoints =====
+
+        @self.app.route('/api/system/version')
+        def get_version():
+            """Hole aktuelle Git-Version"""
+            try:
+                # Prüfe ob Git-Repository vorhanden
+                project_root = Path(__file__).parent.parent.parent
+                git_dir = project_root / '.git'
+
+                if not git_dir.exists():
+                    return jsonify({
+                        'success': False,
+                        'error': 'Kein Git-Repository gefunden'
+                    })
+
+                # Hole aktuelle Commit-Info
+                result = subprocess.run(
+                    ['git', 'log', '-1', '--format=%H|%h|%s|%ar'],
+                    cwd=str(project_root),
+                    capture_output=True,
+                    text=True
+                )
+
+                if result.returncode == 0:
+                    full_hash, short_hash, message, time_ago = result.stdout.strip().split('|', 3)
+
+                    return jsonify({
+                        'success': True,
+                        'version': {
+                            'commit': short_hash,
+                            'commit_full': full_hash,
+                            'message': message,
+                            'time': time_ago
+                        }
+                    })
+                else:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Konnte Versions-Info nicht abrufen'
+                    })
+
+            except Exception as e:
+                logger.error(f"Error getting version: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
+
+        @self.app.route('/api/system/check-update')
+        def check_update():
+            """Prüfe ob Updates verfügbar sind"""
+            try:
+                project_root = Path(__file__).parent.parent.parent
+
+                # Fetch remote
+                subprocess.run(
+                    ['git', 'fetch', 'origin'],
+                    cwd=str(project_root),
+                    capture_output=True
+                )
+
+                # Prüfe wie viele Commits zurück
+                result = subprocess.run(
+                    ['git', 'rev-list', 'HEAD..origin/main', '--count'],
+                    cwd=str(project_root),
+                    capture_output=True,
+                    text=True
+                )
+
+                if result.returncode == 0:
+                    commits_behind = int(result.stdout.strip())
+
+                    if commits_behind > 0:
+                        # Hole Liste der neuen Commits
+                        commits_result = subprocess.run(
+                            ['git', 'log', 'HEAD..origin/main', '--oneline', '--no-merges'],
+                            cwd=str(project_root),
+                            capture_output=True,
+                            text=True
+                        )
+
+                        new_commits = []
+                        if commits_result.returncode == 0:
+                            for line in commits_result.stdout.strip().split('\n'):
+                                if line:
+                                    hash_msg = line.split(' ', 1)
+                                    if len(hash_msg) == 2:
+                                        new_commits.append({
+                                            'hash': hash_msg[0],
+                                            'message': hash_msg[1]
+                                        })
+
+                        return jsonify({
+                            'success': True,
+                            'update_available': True,
+                            'commits_behind': commits_behind,
+                            'new_commits': new_commits[:5]  # Max 5 neueste
+                        })
+                    else:
+                        return jsonify({
+                            'success': True,
+                            'update_available': False,
+                            'message': 'System ist auf dem neuesten Stand'
+                        })
+                else:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Konnte Update-Status nicht prüfen'
+                    })
+
+            except Exception as e:
+                logger.error(f"Error checking for updates: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
+
+        @self.app.route('/api/system/update', methods=['POST'])
+        def trigger_update():
+            """Starte System-Update"""
+            try:
+                project_root = Path(__file__).parent.parent.parent
+                update_script = project_root / 'update.sh'
+
+                if not update_script.exists():
+                    return jsonify({
+                        'success': False,
+                        'error': 'Update-Script nicht gefunden'
+                    })
+
+                # Starte Update-Script im Hintergrund
+                logger.info("Starting system update...")
+
+                # Führe Update-Script aus (läuft im Hintergrund und startet Server neu)
+                subprocess.Popen(
+                    ['bash', str(update_script)],
+                    cwd=str(project_root),
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    start_new_session=True
+                )
+
+                return jsonify({
+                    'success': True,
+                    'message': 'Update wird durchgeführt. System startet in wenigen Sekunden neu...'
+                })
+
+            except Exception as e:
+                logger.error(f"Error triggering update: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
 
     def run(self, host='0.0.0.0', port=5000, debug=False):
         """Starte den Web-Server"""
