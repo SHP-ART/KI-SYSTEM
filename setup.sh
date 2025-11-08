@@ -114,6 +114,12 @@ if [ ! -d "venv" ]; then
     echo "📦 Erstelle Virtual Environment..."
     python3 -m venv venv
     echo "✓ Virtual Environment erstellt"
+elif [ ! -f "venv/bin/activate" ]; then
+    echo ""
+    echo "⚠️  Virtual Environment ist beschädigt - erstelle neu..."
+    rm -rf venv
+    python3 -m venv venv
+    echo "✓ Virtual Environment neu erstellt"
 else
     echo "✓ Virtual Environment existiert bereits"
 fi
@@ -121,7 +127,13 @@ fi
 # Aktiviere Virtual Environment
 echo ""
 echo "🔧 Aktiviere Virtual Environment..."
-source venv/bin/activate
+if [ -f "venv/bin/activate" ]; then
+    source venv/bin/activate
+else
+    echo "❌ FEHLER: venv/bin/activate nicht gefunden!"
+    echo "Virtual Environment konnte nicht erstellt werden."
+    exit 1
+fi
 
 # ===== DEPENDENCIES =====
 echo ""
