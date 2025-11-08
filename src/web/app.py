@@ -104,10 +104,10 @@ class WebInterface:
             """Analytics & Verlaufs-Statistiken Seite"""
             return render_template('analytics.html')
 
-        @self.app.route('/bathroom')
+        @self.app.route('/luftentfeuchten')
         def bathroom_page():
             """Badezimmer Automatisierung Seite"""
-            return render_template('bathroom.html')
+            return render_template('luftentfeuchten.html')
 
         # === API Endpunkte ===
 
@@ -984,13 +984,13 @@ class WebInterface:
 
         # === Bathroom Automation API Endpunkte ===
 
-        @self.app.route('/api/bathroom/config', methods=['GET', 'POST'])
+        @self.app.route('/api/luftentfeuchten/config', methods=['GET', 'POST'])
         def api_bathroom_config():
             """API: Badezimmer-Konfiguration verwalten"""
             import json
             from pathlib import Path
 
-            config_file = Path('data/bathroom_config.json')
+            config_file = Path('data/luftentfeuchten_config.json')
 
             if request.method == 'GET':
                 # Lade Konfiguration
@@ -1022,7 +1022,7 @@ class WebInterface:
         bathroom_status_cache = {'data': None, 'timestamp': 0}
         bathroom_instance_cache = {'instance': None, 'config_hash': None}
 
-        @self.app.route('/api/bathroom/status')
+        @self.app.route('/api/luftentfeuchten/status')
         def api_bathroom_status():
             """API: Badezimmer-Status abrufen (gecached)"""
             try:
@@ -1036,7 +1036,7 @@ class WebInterface:
                 if bathroom_status_cache['data'] and (now - bathroom_status_cache['timestamp']) < 3:
                     return jsonify(bathroom_status_cache['data'])
 
-                config_file = Path('data/bathroom_config.json')
+                config_file = Path('data/luftentfeuchten_config.json')
 
                 if not config_file.exists():
                     result = {
@@ -1091,7 +1091,7 @@ class WebInterface:
                 logger.error(f"Error getting bathroom status: {e}")
                 return jsonify({'error': str(e)}), 500
 
-        @self.app.route('/api/bathroom/test', methods=['POST'])
+        @self.app.route('/api/luftentfeuchten/test', methods=['POST'])
         def api_bathroom_test():
             """API: Badezimmer-Automatisierung testen"""
             try:
@@ -1099,7 +1099,7 @@ class WebInterface:
                 from pathlib import Path
                 from src.decision_engine.bathroom_automation import BathroomAutomation
 
-                config_file = Path('data/bathroom_config.json')
+                config_file = Path('data/luftentfeuchten_config.json')
 
                 if not config_file.exists():
                     return jsonify({'error': 'No configuration found'}), 400
@@ -1124,7 +1124,7 @@ class WebInterface:
                 logger.error(f"Error testing bathroom automation: {e}")
                 return jsonify({'error': str(e)}), 500
 
-        @self.app.route('/api/bathroom/analytics')
+        @self.app.route('/api/luftentfeuchten/analytics')
         def api_bathroom_analytics():
             """API: Badezimmer Analytics und Statistiken"""
             try:
@@ -1132,7 +1132,7 @@ class WebInterface:
                 from pathlib import Path
                 from src.decision_engine.bathroom_automation import BathroomAutomation
 
-                config_file = Path('data/bathroom_config.json')
+                config_file = Path('data/luftentfeuchten_config.json')
 
                 if not config_file.exists():
                     return jsonify({'error': 'No configuration found'}), 400
@@ -1153,7 +1153,7 @@ class WebInterface:
                 logger.error(f"Error getting bathroom analytics: {e}")
                 return jsonify({'error': str(e)}), 500
 
-        @self.app.route('/api/bathroom/events')
+        @self.app.route('/api/luftentfeuchten/events')
         def api_bathroom_events():
             """API: Badezimmer Events (Historie)"""
             try:
@@ -1175,7 +1175,7 @@ class WebInterface:
                 logger.error(f"Error getting bathroom events: {e}")
                 return jsonify({'error': str(e)}), 500
 
-        @self.app.route('/api/bathroom/optimize', methods=['POST'])
+        @self.app.route('/api/luftentfeuchten/optimize', methods=['POST'])
         def api_bathroom_optimize():
             """API: Badezimmer Parameter optimieren"""
             try:
@@ -1183,7 +1183,7 @@ class WebInterface:
                 from pathlib import Path
                 from src.decision_engine.bathroom_automation import BathroomAutomation
 
-                config_file = Path('data/bathroom_config.json')
+                config_file = Path('data/luftentfeuchten_config.json')
 
                 if not config_file.exists():
                     return jsonify({'error': 'No configuration found'}), 400
@@ -1219,10 +1219,10 @@ class WebInterface:
                 logger.error(f"Error optimizing bathroom parameters: {e}")
                 return jsonify({'error': str(e)}), 500
 
-        @self.app.route('/bathroom/analytics')
+        @self.app.route('/luftentfeuchten/analytics')
         def page_bathroom_analytics():
             """Seite: Badezimmer Analytics Dashboard"""
-            return render_template('bathroom_analytics.html')
+            return render_template('luftentfeuchten_analytics.html')
 
         # ===== System Update Endpoints =====
 

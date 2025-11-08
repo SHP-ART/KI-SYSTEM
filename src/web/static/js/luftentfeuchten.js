@@ -151,7 +151,7 @@ function populateSelect(selectId, devices) {
 // Lade Konfiguration
 async function loadConfig() {
     try {
-        const data = await fetchJSON('/api/bathroom/config');
+        const data = await fetchJSON('/api/luftentfeuchten/config');
 
         if (data.config) {
             const config = data.config;
@@ -216,7 +216,7 @@ async function saveConfig() {
             return;
         }
 
-        const result = await postJSON('/api/bathroom/config', { config });
+        const result = await postJSON('/api/luftentfeuchten/config', { config });
 
         if (result.success) {
             alert('✅ Konfiguration gespeichert!');
@@ -231,7 +231,7 @@ async function saveConfig() {
 // Lade Status
 async function loadStatus() {
     try {
-        const data = await fetchJSON('/api/bathroom/status');
+        const data = await fetchJSON('/api/luftentfeuchten/status');
 
         if (data.status) {
             const status = data.status;
@@ -272,7 +272,7 @@ async function loadStatus() {
 // Test-Funktion
 async function testAutomation() {
     try {
-        const result = await postJSON('/api/bathroom/test', {});
+        const result = await postJSON('/api/luftentfeuchten/test', {});
 
         if (result.success) {
             alert(`Test erfolgreich!\n\nAktionen: ${result.actions.length}\n${result.message || ''}`);

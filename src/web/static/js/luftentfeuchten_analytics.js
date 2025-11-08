@@ -8,8 +8,8 @@ async function loadAllData() {
     try {
         // Lade Analytics parallel
         const [analytics, events] = await Promise.all([
-            fetchJSON('/api/bathroom/analytics?days=30'),
-            fetchJSON('/api/bathroom/events?days=30&limit=50')
+            fetchJSON('/api/luftentfeuchten/analytics?days=30'),
+            fetchJSON('/api/luftentfeuchten/events?days=30&limit=50')
         ]);
 
         analyticsData = analytics;
@@ -377,7 +377,7 @@ async function optimizeNow() {
     resultSpan.textContent = '';
 
     try {
-        const result = await postJSON('/api/bathroom/optimize', {
+        const result = await postJSON('/api/luftentfeuchten/optimize', {
             days_back: 30,
             min_confidence: 0.7
         });
