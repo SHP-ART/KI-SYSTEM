@@ -39,11 +39,23 @@ echo "✓ Git Version: $(git --version | awk '{print $3}')"
 
 # Check pip
 if ! python3 -m pip --version &> /dev/null; then
-    echo "❌ pip nicht gefunden!"
-    echo "Bitte installiere pip: python3 -m ensurepip --upgrade"
-    exit 1
+    echo "⚠️  pip nicht gefunden - installiere pip..."
+
+    # Versuche pip zu installieren
+    if python3 -m ensurepip --upgrade 2>/dev/null; then
+        echo "✓ pip erfolgreich installiert"
+    else
+        echo "❌ Automatische pip-Installation fehlgeschlagen"
+        echo ""
+        echo "Bitte installiere pip manuell:"
+        echo "  macOS/Linux: python3 -m ensurepip --upgrade"
+        echo "  oder: sudo apt-get install python3-pip (Ubuntu/Debian)"
+        echo "  oder: sudo yum install python3-pip (CentOS/RedHat)"
+        exit 1
+    fi
+else
+    echo "✓ pip installiert"
 fi
-echo "✓ pip installiert"
 
 # Check lsof (für Port-Check)
 if ! command -v lsof &> /dev/null; then
