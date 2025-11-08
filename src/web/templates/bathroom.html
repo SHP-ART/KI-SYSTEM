@@ -53,11 +53,19 @@
     <div class="card config-card">
         <h3>⚙️ Konfiguration</h3>
 
-        <div class="form-group">
-            <label class="toggle-label">
+        <!-- Aktivierungs-Toggle hervorgehoben -->
+        <div class="enable-section" style="background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%); border: 2px solid #667eea; border-radius: 8px; padding: 20px; margin-bottom: 30px;">
+            <label class="toggle-label" style="display: flex; align-items: center; gap: 15px; cursor: pointer; margin: 0;">
                 <input type="checkbox" id="bathroom-enabled" class="toggle-checkbox">
                 <span class="toggle-switch"></span>
-                Badezimmer-Automatisierung aktivieren
+                <div style="flex: 1;">
+                    <div style="font-size: 16px; font-weight: 600; color: #1f2937; margin-bottom: 4px;">
+                        Badezimmer-Automatisierung aktivieren
+                    </div>
+                    <div style="font-size: 13px; color: #6b7280;">
+                        Aktiviert die automatische Steuerung basierend auf Luftfeuchtigkeit
+                    </div>
+                </div>
             </label>
         </div>
 
