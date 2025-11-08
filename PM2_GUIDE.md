@@ -37,10 +37,13 @@ pm2 flush               # Logs leeren
 
 ### Neustart & Stop
 ```bash
-pm2 restart ki-smart-home
-pm2 reload ki-smart-home   # Zero-downtime reload
-pm2 stop ki-smart-home
-pm2 delete ki-smart-home   # Aus PM2 entfernen
+pm2 restart ki-smart-home        # Nur diesen Prozess neu starten
+pm2 reload ki-smart-home         # Zero-downtime reload
+pm2 stop ki-smart-home           # Nur diesen Prozess stoppen
+pm2 delete ki-smart-home         # Aus PM2 entfernen
+
+# WICHTIG: Verwende NICHT 'pm2 restart all' wenn du andere PM2-Prozesse laufen hast!
+# Das würde alle PM2-Prozesse neu starten, nicht nur KI Smart Home
 ```
 
 ### System Autostart

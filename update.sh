@@ -124,10 +124,12 @@ if command -v pm2 &> /dev/null; then
     pm2 list
     echo ""
     echo "💡 Nützliche PM2 Befehle:"
-    echo "   pm2 logs           # Logs anzeigen"
-    echo "   pm2 monit          # Monitoring"
-    echo "   pm2 restart all    # Neustart"
-    echo "   pm2 stop all       # Stoppen"
+    echo "   pm2 logs ki-smart-home     # Logs anzeigen"
+    echo "   pm2 monit                  # Monitoring"
+    echo "   pm2 restart ki-smart-home  # Nur dieses System neu starten"
+    echo "   pm2 stop ki-smart-home     # Nur dieses System stoppen"
+    echo ""
+    echo "⚠️  Hinweis: Nur 'ki-smart-home' wird neu gestartet, nicht andere PM2-Prozesse!"
 else
     echo "Das System wird in 3 Sekunden neu gestartet..."
     sleep 3

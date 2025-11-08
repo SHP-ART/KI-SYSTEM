@@ -426,11 +426,11 @@ if [ "$PM2_INSTALLED" = true ] && [[ "$start_pm2" =~ ^[Jj]$ ]]; then
 
     echo ""
     echo "📋 Nützliche PM2 Befehle:"
-    echo "   pm2 list           # Status anzeigen"
-    echo "   pm2 logs           # Logs anzeigen"
-    echo "   pm2 monit          # Live-Monitoring"
-    echo "   pm2 restart all    # Neustart"
-    echo "   pm2 stop all       # Stoppen"
+    echo "   pm2 list                   # Status anzeigen"
+    echo "   pm2 logs ki-smart-home     # Logs anzeigen"
+    echo "   pm2 monit                  # Live-Monitoring"
+    echo "   pm2 restart ki-smart-home  # Nur diesen Prozess neu starten"
+    echo "   pm2 stop ki-smart-home     # Nur diesen Prozess stoppen"
     echo ""
     echo "📚 Weitere Infos: PM2_GUIDE.md"
 else
