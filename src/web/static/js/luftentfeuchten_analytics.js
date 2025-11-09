@@ -32,20 +32,35 @@ async function loadAllData() {
     try {
         // Lade Analytics parallel
         const hours = parseInt(document.getElementById('hours-selector')?.value || 6);
-        const [analytics, events, humidity] = await Promise.all([
+        const [analytics, events, humidityResponse] = await Promise.all([
             fetchJSON('/api/luftentfeuchten/analytics?days=30'),
             fetchJSON('/api/luftentfeuchten/events?days=30&limit=50'),
-            fetchJSON(`/api/luftentfeuchten/sensor-timeseries?hours=${hours}`)
+            fetch(`/api/luftentfeuchten/sensor-timeseries?hours=${hours}`)
         ]);
 
         analyticsData = analytics;
         eventsData = events;
-        humidityTimeseriesData = humidity;
+
+        // Prüfe Humidity-Response
+        if (humidityResponse.ok) {
+            humidityTimeseriesData = await humidityResponse.json();
+        } else {
+            const errorData = await humidityResponse.json();
+            console.error('Error loading humidity data:', errorData);
+            humidityTimeseriesData = {
+                error: errorData.error || 'Unbekannter Fehler',
+                data: []
+            };
+        }
 
         renderDashboard();
     } catch (error) {
         console.error('Error loading analytics data:', error);
-        // alert('Fehler beim Laden der Analytics-Daten');
+        humidityTimeseriesData = {
+            error: error.message,
+            data: []
+        };
+        renderDashboard();
     }
 }
 
@@ -434,9 +449,49 @@ async function optimizeNow() {
 
 // Render Live Humidity Timeseries
 function renderHumidityTimeseries() {
+    const chartContainer = document.getElementById('humidity-chart');
+
+    // Prüfe auf Fehler
+    if (humidityTimeseriesData && humidityTimeseriesData.error) {
+        let errorMessage = '';
+        let helpText = '';
+
+        if (humidityTimeseriesData.error.includes('No configuration found')) {
+            errorMessage = '⚙️ Badezimmer-Automatisierung nicht konfiguriert';
+            helpText = 'Bitte gehen Sie zu <a href="/luftentfeuchten" style="color: #3b82f6; text-decoration: underline;">Badezimmer Automatisierung</a> und konfigurieren Sie die Sensoren.';
+        } else if (humidityTimeseriesData.error.includes('Humidity sensor not configured')) {
+            errorMessage = '💧 Luftfeuchtigkeits-Sensor nicht konfiguriert';
+            helpText = 'Bitte gehen Sie zu <a href="/luftentfeuchten" style="color: #3b82f6; text-decoration: underline;">Badezimmer Automatisierung</a> und wählen Sie einen Luftfeuchtigkeits-Sensor aus.';
+        } else {
+            errorMessage = '❌ Fehler beim Laden der Sensor-Daten';
+            helpText = `Fehlerdetails: ${humidityTimeseriesData.error}`;
+        }
+
+        chartContainer.innerHTML = `
+            <div style="text-align: center; padding: 40px; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-radius: 8px; border-left: 4px solid #f59e0b;">
+                <div style="font-size: 1.2em; font-weight: 600; color: #92400e; margin-bottom: 10px;">
+                    ${errorMessage}
+                </div>
+                <div style="color: #92400e; font-size: 0.95em;">
+                    ${helpText}
+                </div>
+            </div>
+        `;
+        return;
+    }
+
+    // Prüfe ob Daten vorhanden
     if (!humidityTimeseriesData || !humidityTimeseriesData.data || humidityTimeseriesData.data.length === 0) {
-        document.getElementById('humidity-chart').innerHTML =
-            '<p style="color: #6b7280; text-align: center; padding: 40px;">Keine Sensordaten verfügbar. Bitte starten Sie die Datensammlung.</p>';
+        chartContainer.innerHTML = `
+            <div style="text-align: center; padding: 40px; background: #f9fafb; border-radius: 8px; border: 2px dashed #d1d5db;">
+                <div style="font-size: 1.2em; font-weight: 600; color: #6b7280; margin-bottom: 10px;">
+                    📊 Keine Sensordaten verfügbar
+                </div>
+                <div style="color: #6b7280; font-size: 0.95em;">
+                    Das System sammelt noch Daten. Bitte warten Sie ein paar Minuten und aktualisieren Sie die Seite.
+                </div>
+            </div>
+        `;
         return;
     }
 

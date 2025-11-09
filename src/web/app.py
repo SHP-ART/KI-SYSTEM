@@ -2407,20 +2407,33 @@ class WebInterface:
                 # Lade Config um sensor_id zu bekommen
                 config_file = Path('data/luftentfeuchten_config.json')
                 if not config_file.exists():
-                    return jsonify({'error': 'No configuration found'}), 400
+                    logger.warning("Bathroom config not found - user needs to configure bathroom automation")
+                    return jsonify({
+                        'error': 'No configuration found',
+                        'message': 'Bitte konfigurieren Sie zuerst die Badezimmer-Automatisierung unter /luftentfeuchten',
+                        'data': []
+                    }), 400
 
                 with open(config_file, 'r') as f:
                     config = json.load(f)
 
                 humidity_sensor_id = config.get('sensors', {}).get('humidity')
                 if not humidity_sensor_id:
-                    return jsonify({'error': 'Humidity sensor not configured'}), 400
+                    logger.warning("Humidity sensor not configured in bathroom config")
+                    return jsonify({
+                        'error': 'Humidity sensor not configured',
+                        'message': 'Bitte wählen Sie einen Luftfeuchtigkeits-Sensor in der Badezimmer-Konfiguration aus',
+                        'data': []
+                    }), 400
 
                 # Hole Zeitraum aus Query-Parametern
                 hours = int(request.args.get('hours', 6))
 
                 # Hole Sensor-Daten
                 data = self.db.get_sensor_data_timeseries(humidity_sensor_id, hours_back=hours)
+
+                if not data or len(data) == 0:
+                    logger.info(f"No sensor data found for {humidity_sensor_id} in last {hours} hours")
 
                 return jsonify({
                     'sensor_id': humidity_sensor_id,
