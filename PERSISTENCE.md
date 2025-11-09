@@ -45,7 +45,23 @@ logs/ki_system.log                  # Alle Log-Dateien
 data/backups/                       # Automatische Datenbank-Backups
 ```
 
-## 📦 Update-Prozess (Git Pull)
+## 📦 Update-Prozess
+
+### Option 1: Update über Web-Interface (Empfohlen ⭐)
+
+1. Öffne das Web-Dashboard: `http://localhost:5000/settings`
+2. Gehe zum Tab **"System"**
+3. Klicke auf **"Nach Updates suchen"**
+4. Falls Updates verfügbar: Klicke auf **"Update installieren"**
+5. Das System erstellt automatisch ein Backup und startet neu
+
+**Vorteile:**
+- ✅ Automatisches Backup vor dem Update
+- ✅ Automatischer Neustart
+- ✅ Keine Terminal-Befehle nötig
+- ✅ Zeigt verfügbare Änderungen an
+
+### Option 2: Manuelles Update via Git
 
 Wenn Sie ein Update durchführen, bleiben **alle oben genannten Dateien automatisch erhalten**:
 
@@ -57,13 +73,40 @@ git pull origin main
 
 ### Was passiert bei einem Update?
 
-| Datei-Typ | Bei Git Pull | Nach Update |
-|-----------|--------------|-------------|
+| Datei-Typ | Bei Update | Nach Update |
+|-----------|------------|-------------|
 | **Code** (Python, HTML, JS) | ✓ Wird aktualisiert | Neue Features verfügbar |
 | **Datenbank** | ✗ Bleibt unverändert | Alle Daten erhalten |
 | **Konfigurationen** | ✗ Bleiben unverändert | Alle Einstellungen erhalten |
 | **ML-Modelle** | ✗ Bleiben unverändert | Trainierte Modelle erhalten |
 | **.env** | ✗ Bleibt unverändert | Credentials sicher |
+
+### 🛡️ Automatische Backups beim Web-Update
+
+Wenn Sie über das Web-Interface updaten (`update.sh` Script):
+
+1. **Vor dem Update** wird automatisch ein Backup erstellt:
+   ```
+   .backup/20250109_143022/
+   ├── .env           # Ihre Credentials
+   ├── data/          # Komplette Datenbank + Configs
+   └── models/        # Trainierte ML-Modelle
+   ```
+
+2. **Backup-Aufbewahrung**: 7 Tage
+   - Alte Backups (> 7 Tage) werden automatisch gelöscht
+   - Die neuesten 7 Tage bleiben erhalten
+
+3. **Wiederherstellung bei Problemen**:
+   ```bash
+   # Finde neuestes Backup
+   ls -lt .backup/
+
+   # Wiederherstellen (Beispiel vom 09.01.2025 14:30)
+   cp -r .backup/20250109_143022/data/* data/
+   cp -r .backup/20250109_143022/models/* models/
+   cp .backup/20250109_143022/.env .env
+   ```
 
 ## 🛡️ Manuelles Backup (Optional)
 
@@ -179,7 +222,12 @@ Ignored files:
 ## 💡 Häufige Fragen
 
 **Q: Muss ich vor jedem Update ein Backup machen?**
-A: Nein, nicht zwingend. Alle wichtigen Daten sind automatisch vor Git-Änderungen geschützt. Ein Backup ist nur als zusätzliche Sicherheit sinnvoll.
+A: Nein! Beim Web-Update wird automatisch ein Backup erstellt. Bei manuellem `git pull` sind alle Daten durch .gitignore geschützt.
+
+**Q: Was ist der Unterschied zwischen Web-Update und git pull?**
+A:
+- **Web-Update**: Erstellt automatisch Backup, aktualisiert Dependencies, startet System neu
+- **git pull**: Schneller, aber ohne automatisches Backup oder Neustart (Daten trotzdem sicher durch .gitignore)
 
 **Q: Was passiert mit meinen Einstellungen nach `git pull`?**
 A: Alle Einstellungen bleiben erhalten, da sie in ignorierten JSON-Dateien im `data/` Verzeichnis gespeichert sind.

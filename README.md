@@ -159,7 +159,16 @@ Wichtige Einstellungen:
 
 ## 🔄 Updates & Daten-Persistenz
 
-### Updates installieren
+### Updates installieren (2 Optionen)
+
+**Option 1: Über Web-Interface (Empfohlen ⭐)**
+
+1. Öffne: `http://localhost:5000/settings` → Tab "System"
+2. Klicke auf **"Nach Updates suchen"**
+3. Falls Updates verfügbar: **"Update installieren"**
+4. Fertig! System erstellt Backup und startet automatisch neu
+
+**Option 2: Manuell via Terminal**
 
 ```bash
 # Hole neueste Version vom Repository
@@ -167,6 +176,9 @@ git pull origin main
 
 # Aktualisiere Dependencies (falls nötig)
 pip install -r requirements.txt --upgrade
+
+# Starte System neu
+python3 main.py web
 ```
 
 ### ✅ Deine Daten bleiben erhalten!
@@ -180,6 +192,11 @@ pip install -r requirements.txt --upgrade
 | 🧠 **Trainierte ML-Modelle** | `models/*.pkl` |
 | 🔑 **Credentials** | `.env` |
 | 📝 **Logs** | `logs/` |
+
+**Zusätzlich beim Web-Update:**
+- 🛡️ Automatisches Backup vor jedem Update (in `.backup/`)
+- 📦 Backups werden 7 Tage aufbewahrt
+- 🔄 Automatischer System-Neustart nach Update
 
 **Kein manuelles Backup vor Updates nötig!** Siehe [PERSISTENCE.md](PERSISTENCE.md) für Details.
 

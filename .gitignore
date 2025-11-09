@@ -58,6 +58,7 @@ models/*.joblib
 
 # Backups
 data/backups/
+.backup/
 *.backup
 *.bak
 

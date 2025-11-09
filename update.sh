@@ -34,18 +34,34 @@ else
     fi
 fi
 
-# Sichere Datenbank und Konfiguration (falls nicht in .gitignore)
+# Hinweis: Daten sind durch .gitignore geschützt
 echo ""
-echo "🔒 Sichere wichtige Dateien..."
-mkdir -p .backup
+echo "🔒 Datenschutz-Status:"
+echo "  ✓ Datenbank (data/*.db) - Geschützt durch .gitignore"
+echo "  ✓ Konfigurationen (data/*.json) - Geschützt durch .gitignore"
+echo "  ✓ ML-Modelle (models/*.pkl) - Geschützt durch .gitignore"
+echo "  ✓ Credentials (.env) - Geschützt durch .gitignore"
+echo ""
+echo "  ℹ️  Diese Dateien werden von Git NICHT überschrieben!"
+
+# Zusätzliches Sicherheits-Backup (nur zur Sicherheit)
+echo ""
+echo "📦 Erstelle zusätzliches Sicherheits-Backup..."
+BACKUP_DIR=".backup/$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$BACKUP_DIR"
 if [ -f ".env" ]; then
-    cp .env .backup/.env.bak
+    cp .env "$BACKUP_DIR/.env" 2>/dev/null || true
     echo "  ✓ .env gesichert"
 fi
 if [ -d "data" ]; then
-    cp -r data .backup/data_bak 2>/dev/null || true
-    echo "  ✓ Datenbank gesichert"
+    cp -r data "$BACKUP_DIR/data" 2>/dev/null || true
+    echo "  ✓ data/ gesichert"
 fi
+if [ -d "models" ]; then
+    cp -r models "$BACKUP_DIR/models" 2>/dev/null || true
+    echo "  ✓ models/ gesichert"
+fi
+echo "  💾 Backup gespeichert in: $BACKUP_DIR"
 
 # Hole Updates von GitHub
 echo ""
@@ -90,8 +106,11 @@ echo "📌 Neue Version:"
 git log -1 --oneline
 echo ""
 
-# Aufräumen
-rm -rf .backup
+# Aufräumen (alte Backups behalten, nur temporäre löschen)
+echo "🧹 Bereinige alte Backups (älter als 7 Tage)..."
+find .backup -type d -mtime +7 -exec rm -rf {} + 2>/dev/null || true
+echo "✓ Backups der letzten 7 Tage bleiben erhalten"
+echo ""
 
 # Informiere über Neustart
 echo "╔═══════════════════════════════════════════╗"
