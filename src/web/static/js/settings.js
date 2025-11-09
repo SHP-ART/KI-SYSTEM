@@ -805,20 +805,41 @@ if (saveHeatingModeBtn) {
 
 // Lade Datenbank-Status
 async function loadDatabaseStatus() {
+    // Zeige Loading-Indikatoren
+    document.getElementById('db-size').textContent = '...';
+    document.getElementById('db-size-bytes').textContent = 'Lädt...';
+    document.getElementById('db-total-rows').textContent = '...';
+    document.getElementById('db-oldest-data').textContent = '...';
+    document.getElementById('db-data-age').textContent = 'Lädt...';
+
     try {
         const response = await fetch('/api/database/status');
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
         const data = await response.json();
 
-        if (data.success) {
+        if (data.success && data.database) {
             const db = data.database;
-            const settings = data.settings;
+            const settings = data.settings || {};
 
             // Dateigröße
-            document.getElementById('db-size').textContent = db.file_size_mb + ' MB';
-            document.getElementById('db-size-bytes').textContent = formatBytes(db.file_size_bytes);
+            if (db.file_size_mb !== undefined && db.file_size_mb !== null) {
+                document.getElementById('db-size').textContent = db.file_size_mb + ' MB';
+                document.getElementById('db-size-bytes').textContent = formatBytes(db.file_size_bytes || 0);
+            } else {
+                document.getElementById('db-size').textContent = 'N/A';
+                document.getElementById('db-size-bytes').textContent = '--';
+            }
 
             // Gesamt Zeilen
-            document.getElementById('db-total-rows').textContent = formatNumber(db.total_rows);
+            if (db.total_rows !== undefined && db.total_rows !== null) {
+                document.getElementById('db-total-rows').textContent = formatNumber(db.total_rows);
+            } else {
+                document.getElementById('db-total-rows').textContent = '0';
+            }
 
             // Ältester Eintrag
             if (db.oldest_data) {
@@ -830,7 +851,7 @@ async function loadDatabaseStatus() {
                 document.getElementById('db-data-age').textContent = ageInDays + ' Tage alt';
             } else {
                 document.getElementById('db-oldest-data').textContent = 'Keine Daten';
-                document.getElementById('db-data-age').textContent = '';
+                document.getElementById('db-data-age').textContent = '0 Tage alt';
             }
 
             // Retention Days in Input setzen
@@ -853,11 +874,32 @@ async function loadDatabaseStatus() {
             }
 
             // Tabellen-Details
-            renderTableDetails(db.table_counts);
+            if (db.table_counts) {
+                renderTableDetails(db.table_counts);
+            }
 
+        } else {
+            throw new Error(data.error || 'Keine Datenbankdaten verfügbar');
         }
     } catch (error) {
         console.error('Error loading database status:', error);
+
+        // Zeige Fehler dem Benutzer
+        document.getElementById('db-size').innerHTML = '<span style="color: #ef4444; font-size: 14px;">Fehler</span>';
+        document.getElementById('db-size-bytes').textContent = error.message;
+        document.getElementById('db-total-rows').textContent = '--';
+        document.getElementById('db-oldest-data').textContent = '--';
+        document.getElementById('db-data-age').textContent = 'Fehler beim Laden';
+        document.getElementById('db-last-maintenance').textContent = '--';
+        document.getElementById('db-table-details').innerHTML = `
+            <div style="padding: 15px; background: #fee2e2; border-radius: 6px; color: #991b1b;">
+                <strong>❌ Fehler beim Laden der Datenbank-Statistiken</strong>
+                <p style="margin-top: 8px; font-size: 12px;">${error.message}</p>
+                <button onclick="loadDatabaseStatus()" class="btn btn-secondary" style="margin-top: 10px;">
+                    🔄 Erneut versuchen
+                </button>
+            </div>
+        `;
     }
 }
 
