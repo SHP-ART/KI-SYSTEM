@@ -3365,7 +3365,7 @@ class WebInterface:
 
     # === DATENBANK-MANAGEMENT ENDPOINTS ===
 
-    @app.route('/api/database/status')
+    @self.app.route('/api/database/status')
     def database_status():
         """Gibt den aktuellen Status der Datenbank zurück"""
         try:
@@ -3406,7 +3406,7 @@ class WebInterface:
             logger.error(f"Error getting database status: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
-    @app.route('/api/database/cleanup', methods=['POST'])
+    @self.app.route('/api/database/cleanup', methods=['POST'])
     def database_cleanup():
         """Führt manuelles Cleanup der Datenbank aus"""
         try:
@@ -3429,7 +3429,7 @@ class WebInterface:
             logger.error(f"Error during cleanup: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
 
-    @app.route('/api/database/vacuum', methods=['POST'])
+    @self.app.route('/api/database/vacuum', methods=['POST'])
     def database_vacuum():
         """Führt VACUUM auf der Datenbank aus (Optimierung)"""
         try:
