@@ -23,6 +23,34 @@
         </div>
     </div>
 
+    <!-- Info-Banner für Monitoring-Modus -->
+    <div class="card mode-monitoring-only" style="display: none; background: linear-gradient(135deg, #eff6ff 0%, #ffffff 100%); border-left: 4px solid #3b82f6;">
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <div style="font-size: 2em;">🤖</div>
+            <div>
+                <h4 style="margin: 0 0 5px 0; color: #1e40af;">Optimierungs-Modus aktiv</h4>
+                <p style="margin: 0; color: #6b7280; font-size: 0.9em;">
+                    Das System sammelt Daten und erstellt Optimierungsvorschläge.
+                    <strong>Tado X behält die volle Kontrolle</strong> über die Heizung.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Info-Banner für Steuerungs-Modus -->
+    <div class="card mode-control-only" style="background: linear-gradient(135deg, #fef3c7 0%, #ffffff 100%); border-left: 4px solid #f59e0b;">
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <div style="font-size: 2em;">🎮</div>
+            <div>
+                <h4 style="margin: 0 0 5px 0; color: #92400e;">Steuerungs-Modus aktiv</h4>
+                <p style="margin: 0; color: #6b7280; font-size: 0.9em;">
+                    Das KI-System steuert die Heizung direkt.
+                    Nutzen Sie die Schnellaktionen oder passen Sie die Einstellungen an.
+                </p>
+            </div>
+        </div>
+    </div>
+
     <!-- Übersicht -->
     <div class="card">
         <h3>📊 Übersicht</h3>
@@ -816,6 +844,38 @@
     border-radius: 6px;
     font-size: 0.85em;
     font-weight: 600;
+}
+
+/* Modus-Umschalter */
+.mode-toggle {
+    display: flex;
+    gap: 0;
+    background: #f3f4f6;
+    border-radius: 8px;
+    padding: 4px;
+}
+
+.mode-btn {
+    padding: 8px 16px;
+    border: none;
+    background: transparent;
+    color: #6b7280;
+    font-weight: 600;
+    font-size: 0.9em;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.mode-btn:hover {
+    background: rgba(59, 130, 246, 0.1);
+    color: #3b82f6;
+}
+
+.mode-btn.active {
+    background: white;
+    color: #3b82f6;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 </style>
 
