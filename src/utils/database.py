@@ -16,6 +16,7 @@ class Database:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.connection = None
         self._init_database()
+        self._run_migrations()
 
     def _init_database(self):
         """Erstellt die Datenbank-Tabellen"""
@@ -250,6 +251,21 @@ class Database:
 
         conn.commit()
         logger.info(f"Database initialized at {self.db_path}")
+
+    def _run_migrations(self):
+        """Führt ausstehende Datenbank-Migrationen aus"""
+        try:
+            from src.utils.migrations import MigrationManager
+
+            migrator = MigrationManager(str(self.db_path))
+            applied_count = migrator.run_migrations()
+
+            if applied_count > 0:
+                logger.info(f"Applied {applied_count} database migration(s)")
+
+        except Exception as e:
+            logger.error(f"Error running database migrations: {e}")
+            # Nicht fatal - System kann ohne Migrationen weiterlaufen
 
     def _get_connection(self) -> sqlite3.Connection:
         """Gibt eine Datenbankverbindung zurück"""
