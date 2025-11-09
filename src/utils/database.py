@@ -146,6 +146,62 @@ class Database:
             )
         """)
 
+        # === HEIZUNGS-OPTIMIERUNG TABELLEN ===
+
+        # Heizungs-Beobachtungen (kontinuierliche Aufzeichnung)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS heating_observations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME NOT NULL,
+                device_id TEXT NOT NULL,
+                room_name TEXT,
+                current_temperature REAL,
+                target_temperature REAL,
+                outdoor_temperature REAL,
+                is_heating BOOLEAN,
+                presence_detected BOOLEAN,
+                window_open BOOLEAN,
+                energy_price_level INTEGER,
+                hour_of_day INTEGER,
+                day_of_week INTEGER,
+                is_weekend BOOLEAN
+            )
+        """)
+
+        # KI-generierte Heizungs-Insights
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS heating_insights (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME NOT NULL,
+                insight_type TEXT NOT NULL,
+                device_id TEXT,
+                room_name TEXT,
+                recommendation TEXT NOT NULL,
+                potential_saving_percent REAL,
+                potential_saving_eur REAL,
+                confidence REAL,
+                samples_used INTEGER,
+                priority TEXT DEFAULT 'medium'
+            )
+        """)
+
+        # Optimierte Heizpläne
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS heating_schedules (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME NOT NULL,
+                device_id TEXT NOT NULL,
+                room_name TEXT,
+                schedule_type TEXT NOT NULL,
+                day_of_week INTEGER,
+                hour INTEGER,
+                recommended_temperature REAL,
+                reason TEXT,
+                confidence REAL,
+                samples_used INTEGER
+            )
+        """)
+
         # Erstelle Indizes für bessere Performance
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_sensor_timestamp
@@ -165,6 +221,21 @@ class Database:
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_bathroom_measurements_event
             ON bathroom_measurements(event_id, timestamp)
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_heating_observations_time
+            ON heating_observations(timestamp, device_id)
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_heating_insights_time
+            ON heating_insights(timestamp, device_id)
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_heating_schedules_device
+            ON heating_schedules(device_id, day_of_week, hour)
         """)
 
         conn.commit()
@@ -763,6 +834,220 @@ class Database:
             },
             'energy_price_per_kwh': energy_price_per_kwh,
             'note': 'Nur Luftentfeuchter-Verbrauch. Heizungskosten (Zentralheizung) nicht einberechnet.'
+        }
+
+    # === HEIZUNGS-OPTIMIERUNG METHODEN ===
+
+    def add_heating_observation(self, device_id: str, room_name: str,
+                               current_temp: float, target_temp: float,
+                               outdoor_temp: float, is_heating: bool,
+                               presence: bool, window_open: bool,
+                               energy_level: int = 2):
+        """Fügt eine Heizungs-Beobachtung hinzu"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        now = datetime.now()
+
+        cursor.execute("""
+            INSERT INTO heating_observations
+            (timestamp, device_id, room_name, current_temperature, target_temperature,
+             outdoor_temperature, is_heating, presence_detected, window_open,
+             energy_price_level, hour_of_day, day_of_week, is_weekend)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            now,
+            device_id,
+            room_name,
+            current_temp,
+            target_temp,
+            outdoor_temp,
+            is_heating,
+            presence,
+            window_open,
+            energy_level,
+            now.hour,
+            now.weekday(),
+            now.weekday() >= 5
+        ))
+
+        conn.commit()
+
+    def get_heating_observations(self, device_id: str = None,
+                                days_back: int = 7,
+                                limit: int = None) -> List[Dict]:
+        """Holt Heizungs-Beobachtungen"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        start_time = datetime.now() - timedelta(days=days_back)
+
+        query = "SELECT * FROM heating_observations WHERE timestamp >= ?"
+        params = [start_time]
+
+        if device_id:
+            query += " AND device_id = ?"
+            params.append(device_id)
+
+        query += " ORDER BY timestamp DESC"
+
+        if limit:
+            query += f" LIMIT {limit}"
+
+        cursor.execute(query, params)
+        return [dict(row) for row in cursor.fetchall()]
+
+    def add_heating_insight(self, insight_type: str, recommendation: str,
+                           device_id: str = None, room_name: str = None,
+                           saving_percent: float = None, saving_eur: float = None,
+                           confidence: float = 0.7, samples: int = 0,
+                           priority: str = 'medium'):
+        """Speichert einen KI-generierten Insight/Vorschlag"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            INSERT INTO heating_insights
+            (timestamp, insight_type, device_id, room_name, recommendation,
+             potential_saving_percent, potential_saving_eur, confidence,
+             samples_used, priority)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            datetime.now(),
+            insight_type,
+            device_id,
+            room_name,
+            recommendation,
+            saving_percent,
+            saving_eur,
+            confidence,
+            samples,
+            priority
+        ))
+
+        conn.commit()
+        logger.info(f"Heating insight: {insight_type} - {recommendation}")
+
+    def get_latest_heating_insights(self, days_back: int = 7,
+                                    min_confidence: float = 0.6,
+                                    limit: int = 10) -> List[Dict]:
+        """Holt die neuesten Heizungs-Insights"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        start_time = datetime.now() - timedelta(days=days_back)
+
+        cursor.execute("""
+            SELECT * FROM heating_insights
+            WHERE timestamp >= ? AND confidence >= ?
+            ORDER BY timestamp DESC, priority DESC
+            LIMIT ?
+        """, (start_time, min_confidence, limit))
+
+        return [dict(row) for row in cursor.fetchall()]
+
+    def save_heating_schedule(self, device_id: str, room_name: str,
+                             schedule_type: str, day_of_week: int, hour: int,
+                             recommended_temp: float, reason: str,
+                             confidence: float, samples: int):
+        """Speichert einen optimierten Heizplan"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            INSERT INTO heating_schedules
+            (timestamp, device_id, room_name, schedule_type, day_of_week,
+             hour, recommended_temperature, reason, confidence, samples_used)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            datetime.now(),
+            device_id,
+            room_name,
+            schedule_type,
+            day_of_week,
+            hour,
+            recommended_temp,
+            reason,
+            confidence,
+            samples
+        ))
+
+        conn.commit()
+
+    def get_heating_schedule(self, device_id: str = None,
+                            min_confidence: float = 0.7) -> List[Dict]:
+        """Holt den optimierten Heizplan für ein Gerät"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        if device_id:
+            cursor.execute("""
+                SELECT * FROM heating_schedules
+                WHERE device_id = ? AND confidence >= ?
+                ORDER BY day_of_week, hour
+            """, (device_id, min_confidence))
+        else:
+            cursor.execute("""
+                SELECT * FROM heating_schedules
+                WHERE confidence >= ?
+                ORDER BY device_id, day_of_week, hour
+            """, (min_confidence,))
+
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_heating_statistics(self, days_back: int = 30) -> Dict:
+        """Berechnet Statistiken für Heizungsoptimierung"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        start_time = datetime.now() - timedelta(days=days_back)
+
+        # Durchschnittstemperaturen
+        cursor.execute("""
+            SELECT
+                AVG(current_temperature) as avg_indoor,
+                AVG(target_temperature) as avg_target,
+                AVG(outdoor_temperature) as avg_outdoor
+            FROM heating_observations
+            WHERE timestamp >= ?
+        """, (start_time,))
+
+        temps = dict(cursor.fetchone())
+
+        # Heizstunden
+        cursor.execute("""
+            SELECT
+                COUNT(*) as total_observations,
+                SUM(CASE WHEN is_heating THEN 1 ELSE 0 END) as heating_count
+            FROM heating_observations
+            WHERE timestamp >= ?
+        """, (start_time,))
+
+        heating = dict(cursor.fetchone())
+        heating_percent = (heating['heating_count'] / heating['total_observations'] * 100) if heating['total_observations'] > 0 else 0
+
+        # Fenster-offen Statistik
+        cursor.execute("""
+            SELECT
+                SUM(CASE WHEN window_open AND is_heating THEN 1 ELSE 0 END) as heating_with_window_open
+            FROM heating_observations
+            WHERE timestamp >= ?
+        """, (start_time,))
+
+        window_stats = dict(cursor.fetchone())
+
+        return {
+            'period_days': days_back,
+            'temperatures': {
+                'avg_indoor': round(temps['avg_indoor'], 1) if temps['avg_indoor'] else None,
+                'avg_target': round(temps['avg_target'], 1) if temps['avg_target'] else None,
+                'avg_outdoor': round(temps['avg_outdoor'], 1) if temps['avg_outdoor'] else None
+            },
+            'heating': {
+                'total_observations': heating['total_observations'],
+                'heating_percent': round(heating_percent, 1),
+                'heating_with_window_open': window_stats['heating_with_window_open'] or 0
+            }
         }
 
     def close(self):

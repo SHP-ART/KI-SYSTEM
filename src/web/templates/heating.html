@@ -6,10 +6,19 @@
 <div class="heating-page">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <div>
-            <h2>🔥 Heizungssteuerung</h2>
-            <p class="subtitle">Zentrale Steuerung aller Heizgeräte und Thermostate</p>
+            <h2>🔥 Heizungssteuerung & Optimierung</h2>
+            <p class="subtitle" id="mode-subtitle">Zentrale Steuerung aller Heizgeräte und Thermostate</p>
         </div>
-        <div style="display: flex; gap: 10px;">
+        <div style="display: flex; gap: 15px; align-items: center;">
+            <!-- Modus-Umschalter -->
+            <div class="mode-toggle">
+                <button class="mode-btn active" data-mode="control" id="mode-control-btn">
+                    🎮 Steuerung
+                </button>
+                <button class="mode-btn" data-mode="monitoring" id="mode-monitoring-btn">
+                    📊 Monitoring
+                </button>
+            </div>
             <button class="btn btn-secondary" id="refresh-heating">🔄 Aktualisieren</button>
         </div>
     </div>
@@ -37,8 +46,8 @@
         </div>
     </div>
 
-    <!-- Schnellaktionen -->
-    <div class="card">
+    <!-- Schnellaktionen (Steuerungs-Modus) -->
+    <div class="card mode-control-only">
         <h3>⚡ Schnellaktionen</h3>
         <div class="heating-quick-actions">
             <button class="btn btn-primary" id="comfort-mode">
@@ -68,6 +77,70 @@
             </button>
         </div>
         <div id="quick-action-result" class="action-result"></div>
+    </div>
+
+    <!-- KI-Empfehlungen (Monitoring-Modus) -->
+    <div class="card mode-monitoring-only" style="display: none;">
+        <h3>🤖 KI-Empfehlungen & Optimierung</h3>
+        <p class="card-description">
+            Intelligente Vorschläge basierend auf Temperaturverlauf, Wettervorhersage und Energiepreisen
+        </p>
+        <div class="recommendations-grid">
+            <div class="recommendation-card energy">
+                <div class="recommendation-icon">💡</div>
+                <div class="recommendation-content">
+                    <h4>Energiesparpotenzial</h4>
+                    <p class="recommendation-value">~15%</p>
+                    <p class="recommendation-text">Senke Nachttemperatur um 2°C für ca. 45€/Monat Ersparnis</p>
+                </div>
+            </div>
+            <div class="recommendation-card comfort">
+                <div class="recommendation-icon">🌡️</div>
+                <div class="recommendation-content">
+                    <h4>Komfort-Optimierung</h4>
+                    <p class="recommendation-value">Gut</p>
+                    <p class="recommendation-text">Temperatur-Einstellungen sind optimal für deine Nutzungszeiten</p>
+                </div>
+            </div>
+            <div class="recommendation-card weather">
+                <div class="recommendation-icon">☀️</div>
+                <div class="recommendation-content">
+                    <h4>Wetter-Tipp</h4>
+                    <p class="recommendation-value">+3°C morgen</p>
+                    <p class="recommendation-text">Sonniger Tag - Heizung kann ab 11 Uhr reduziert werden</p>
+                </div>
+            </div>
+            <div class="recommendation-card timing">
+                <div class="recommendation-icon">⏰</div>
+                <div class="recommendation-content">
+                    <h4>Heiz-Timing</h4>
+                    <p class="recommendation-value">Optimal</p>
+                    <p class="recommendation-text">Tado X heizt zur richtigen Zeit vor - keine Anpassung nötig</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Temperaturverlauf (Monitoring-Modus) -->
+    <div class="card mode-monitoring-only" style="display: none;">
+        <h3>📊 Temperaturverlauf (24 Stunden)</h3>
+        <div class="chart-container">
+            <canvas id="temperature-chart"></canvas>
+        </div>
+        <div class="chart-legend">
+            <div class="legend-item">
+                <span class="legend-color" style="background: #ef4444;"></span>
+                <span>Außentemperatur</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-color" style="background: #3b82f6;"></span>
+                <span>Durchschnitt Innen</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-color" style="background: #10b981;"></span>
+                <span>Zieltemperatur</span>
+            </div>
+        </div>
     </div>
 
     <!-- Fenster-Sensoren -->
@@ -102,12 +175,16 @@
         </div>
     </div>
 
-    <!-- Heizgeräte Liste -->
+    <!-- Heizgeräte Übersicht -->
     <div class="card">
         <div class="card-header-with-actions">
-            <h3>🔥 Alle Heizgeräte</h3>
-            <button class="btn btn-small btn-primary" id="add-schedule">+ Zeitplan erstellen</button>
+            <h3 id="heaters-title">🔥 Alle Heizgeräte</h3>
+            <span class="badge mode-monitoring-only" style="display: none;">Nur Monitoring - Steuerung via Tado X</span>
+            <button class="btn btn-small btn-primary mode-control-only" id="add-schedule">+ Zeitplan erstellen</button>
         </div>
+        <p class="card-description mode-monitoring-only" style="display: none;">
+            Übersicht aller Thermostate. <strong>Steuerung erfolgt automatisch über Tado X.</strong>
+        </p>
 
         <div id="heaters-container" class="heaters-display">
             <!-- Heizgeräte werden hier dynamisch geladen -->
@@ -115,8 +192,55 @@
         </div>
     </div>
 
-    <!-- Globale Einstellungen -->
-    <div class="card">
+    <!-- Empfohlene Temperatur-Einstellungen (Monitoring-Modus) -->
+    <div class="card mode-monitoring-only" style="display: none;">
+        <h3>💡 Empfohlene Temperatur-Einstellungen</h3>
+        <p class="card-description">
+            KI-basierte Empfehlungen für optimale Temperatur-Einstellungen in Tado X
+        </p>
+
+        <div class="temperature-recommendations">
+            <div class="temp-recommendation-card">
+                <div class="temp-rec-icon">🏠</div>
+                <div class="temp-rec-content">
+                    <h4>Komfort (Tag)</h4>
+                    <div class="temp-rec-value">21°C</div>
+                    <p class="temp-rec-reason">Optimal für Wohn- und Arbeitsbereiche</p>
+                </div>
+            </div>
+            <div class="temp-recommendation-card">
+                <div class="temp-rec-icon">🌱</div>
+                <div class="temp-rec-content">
+                    <h4>Öko (Abwesend)</h4>
+                    <div class="temp-rec-value">18°C</div>
+                    <p class="temp-rec-reason">Spart ~12% Energie ohne Komforteinbußen</p>
+                </div>
+            </div>
+            <div class="temp-recommendation-card">
+                <div class="temp-rec-icon">🌙</div>
+                <div class="temp-rec-content">
+                    <h4>Nacht (Schlafen)</h4>
+                    <div class="temp-rec-value">17-18°C</div>
+                    <p class="temp-rec-reason">Ideal für erholsamen Schlaf</p>
+                </div>
+            </div>
+            <div class="temp-recommendation-card">
+                <div class="temp-rec-icon">❄️</div>
+                <div class="temp-rec-content">
+                    <h4>Frostschutz</h4>
+                    <div class="temp-rec-value">12°C</div>
+                    <p class="temp-rec-reason">Bei längerer Abwesenheit</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="info-box" style="margin-top: 20px;">
+            <strong>💡 Tipp:</strong> Diese Werte können in der Tado X App als Voreinstellungen hinterlegt werden.
+        </div>
+    </div>
+
+    <!-- Globale Heizungseinstellungen (Steuerungs-Modus) -->
+    <div class="card mode-control-only">
         <h3>⚙️ Globale Heizungseinstellungen</h3>
 
         <div class="form-section">
@@ -239,12 +363,12 @@
     </div>
 </div>
 
-<!-- Heater Control Modal -->
+<!-- Info Modal für Thermostate -->
 <div id="heater-modal" class="modal">
     <div class="modal-content">
         <span class="close">&times;</span>
         <div class="modal-header">
-            <h3 id="modal-heater-name">Heizgerät</h3>
+            <h3 id="modal-heater-name">Thermostat Details</h3>
             <div id="modal-heater-room" class="device-zone"></div>
         </div>
         <div class="modal-body">
@@ -252,11 +376,11 @@
                 <h4>Aktueller Status</h4>
                 <div class="state-display">
                     <div class="state-item">
-                        <span class="state-label">Temperatur:</span>
+                        <span class="state-label">Aktuelle Temperatur:</span>
                         <span class="state-value" id="modal-current-temp">--°C</span>
                     </div>
                     <div class="state-item">
-                        <span class="state-label">Ziel:</span>
+                        <span class="state-label">Zieltemperatur:</span>
                         <span class="state-value" id="modal-target-temp">--°C</span>
                     </div>
                     <div class="state-item">
@@ -266,68 +390,9 @@
                 </div>
             </div>
 
-            <div class="heater-controls">
-                <h4>Steuerung</h4>
-                <div class="form-group">
-                    <label>Zieltemperatur</label>
-                    <div class="slider-group">
-                        <input type="range" id="modal-temp-slider" min="5" max="30" step="0.5" value="20" class="slider">
-                        <span class="slider-value" id="modal-temp-value">20°C</span>
-                    </div>
-                </div>
-                <div class="modal-actions">
-                    <button class="btn btn-primary" id="modal-set-temp">Temperatur setzen</button>
-                    <button class="btn btn-secondary" id="modal-turn-off">Heizung aus</button>
-                </div>
-            </div>
-
-            <div id="modal-action-result" class="action-result"></div>
-        </div>
-    </div>
-</div>
-
-<!-- Schedule Modal -->
-<div id="schedule-modal" class="modal">
-    <div class="modal-content">
-        <span class="close">&times;</span>
-        <h3>⏰ Neuer Zeitplan</h3>
-        <div class="modal-body">
-            <div class="form-group">
-                <label>Name</label>
-                <input type="text" id="schedule-name" class="form-input" placeholder="z.B. Morgen-Routine">
-            </div>
-            <div class="form-group">
-                <label>Raum/Heizgerät</label>
-                <select id="schedule-heater" class="form-select">
-                    <option value="all">Alle Heizgeräte</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label>Temperatur</label>
-                <div class="slider-group">
-                    <input type="range" id="schedule-temp" min="15" max="24" step="0.5" value="21" class="slider">
-                    <span class="slider-value" id="schedule-temp-value">21°C</span>
-                </div>
-            </div>
-            <div class="form-group">
-                <label>Startzeit</label>
-                <input type="time" id="schedule-time" class="form-input" value="07:00">
-            </div>
-            <div class="form-group">
-                <label>Wochentage</label>
-                <div class="weekdays-selector">
-                    <button class="weekday-btn active" data-day="1">Mo</button>
-                    <button class="weekday-btn active" data-day="2">Di</button>
-                    <button class="weekday-btn active" data-day="3">Mi</button>
-                    <button class="weekday-btn active" data-day="4">Do</button>
-                    <button class="weekday-btn active" data-day="5">Fr</button>
-                    <button class="weekday-btn" data-day="6">Sa</button>
-                    <button class="weekday-btn" data-day="7">So</button>
-                </div>
-            </div>
-            <div class="modal-actions">
-                <button class="btn btn-primary" id="save-schedule">Zeitplan erstellen</button>
-                <button class="btn btn-secondary close">Abbrechen</button>
+            <div class="info-box" style="margin-top: 20px;">
+                <strong>ℹ️ Hinweis:</strong> Die Steuerung erfolgt automatisch über Tado X.
+                Für manuelle Anpassungen nutze bitte die Tado App.
             </div>
         </div>
     </div>
@@ -594,6 +659,163 @@
     color: #6b7280;
     font-size: 0.9em;
     margin-bottom: 15px;
+}
+
+/* Empfehlungskarten */
+.recommendations-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.recommendation-card {
+    background: white;
+    border: 2px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    gap: 15px;
+    transition: all 0.2s;
+}
+
+.recommendation-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.recommendation-card.energy {
+    border-left: 4px solid #10b981;
+}
+
+.recommendation-card.comfort {
+    border-left: 4px solid #3b82f6;
+}
+
+.recommendation-card.weather {
+    border-left: 4px solid #f59e0b;
+}
+
+.recommendation-card.timing {
+    border-left: 4px solid #8b5cf6;
+}
+
+.recommendation-icon {
+    font-size: 2.5em;
+    line-height: 1;
+}
+
+.recommendation-content h4 {
+    margin: 0 0 8px 0;
+    color: #1f2937;
+    font-size: 1em;
+}
+
+.recommendation-value {
+    font-size: 1.5em;
+    font-weight: 700;
+    color: #1f2937;
+    margin: 8px 0;
+}
+
+.recommendation-text {
+    color: #6b7280;
+    font-size: 0.9em;
+    margin: 0;
+    line-height: 1.4;
+}
+
+/* Temperatur-Empfehlungskarten */
+.temperature-recommendations {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.temp-recommendation-card {
+    background: linear-gradient(135deg, #f9fafb 0%, #ffffff 100%);
+    border: 2px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    transition: all 0.2s;
+}
+
+.temp-recommendation-card:hover {
+    border-color: #3b82f6;
+    transform: translateY(-2px);
+}
+
+.temp-rec-icon {
+    font-size: 2.5em;
+    margin-bottom: 10px;
+}
+
+.temp-rec-content h4 {
+    margin: 0 0 10px 0;
+    color: #1f2937;
+    font-size: 1em;
+}
+
+.temp-rec-value {
+    font-size: 2em;
+    font-weight: 700;
+    color: #3b82f6;
+    margin: 10px 0;
+}
+
+.temp-rec-reason {
+    color: #6b7280;
+    font-size: 0.85em;
+    margin: 0;
+}
+
+/* Chart Container */
+.chart-container {
+    position: relative;
+    height: 300px;
+    margin: 20px 0;
+}
+
+.chart-legend {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    margin-top: 15px;
+    flex-wrap: wrap;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9em;
+}
+
+.legend-color {
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+}
+
+/* Info Box */
+.info-box {
+    background: #eff6ff;
+    border-left: 4px solid #3b82f6;
+    border-radius: 6px;
+    padding: 12px 16px;
+    color: #1e40af;
+    font-size: 0.9em;
+}
+
+.badge {
+    background: #dbeafe;
+    color: #1e40af;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.85em;
+    font-weight: 600;
 }
 </style>
 

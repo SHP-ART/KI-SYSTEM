@@ -11,6 +11,7 @@ from datetime import datetime
 import sys
 import subprocess
 import os
+import json
 
 # Füge src zum Python-Path hinzu
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -20,6 +21,7 @@ from src.decision_engine.engine import DecisionEngine
 from src.data_collector.background_collector import BackgroundDataCollector
 from src.background.bathroom_optimizer import BathroomOptimizer
 from src.background.ml_auto_trainer import MLAutoTrainer
+from src.background.heating_data_collector import HeatingDataCollector
 from src.utils.database import Database
 
 
@@ -79,6 +81,18 @@ class WebInterface:
             logger.info("ML Auto-Trainer initialized")
         except Exception as e:
             logger.error(f"Failed to initialize ML Auto-Trainer: {e}")
+
+        # Initialisiere Heating Data Collector (sammelt alle 15 Min, optimiert täglich um 4:00 Uhr)
+        self.heating_collector = None
+        try:
+            self.heating_collector = HeatingDataCollector(
+                engine=self.engine,
+                interval_minutes=15,
+                optimize_at_hour=4  # 4:00 Uhr morgens
+            )
+            logger.info("Heating Data Collector initialized")
+        except Exception as e:
+            logger.error(f"Failed to initialize Heating Data Collector: {e}")
 
         # Registriere Routen
         self._register_routes()
@@ -2243,6 +2257,163 @@ class WebInterface:
                 logger.error(f"Error in bathroom preview: {e}")
                 return jsonify({'error': str(e)}), 500
 
+        # ===== Heizungs-Optimierungs-Endpoints =====
+
+        @self.app.route('/api/heating/mode', methods=['GET', 'POST'])
+        def api_heating_mode():
+            """Hole oder setze Heizungs-Modus (control/optimization)"""
+            mode_file = Path('data/heating_mode.json')
+
+            if request.method == 'GET':
+                # Lade aktuellen Modus
+                if mode_file.exists():
+                    with open(mode_file, 'r') as f:
+                        data = json.load(f)
+                    return jsonify(data)
+                else:
+                    # Default: control mode
+                    return jsonify({'mode': 'control', 'description': 'Direkte Steuerung'})
+
+            elif request.method == 'POST':
+                # Setze neuen Modus
+                data = request.json
+                mode = data.get('mode', 'control')
+
+                if mode not in ['control', 'optimization']:
+                    return jsonify({'error': 'Invalid mode'}), 400
+
+                mode_data = {
+                    'mode': mode,
+                    'description': 'Direkte Steuerung' if mode == 'control' else 'Nur Monitoring & Vorschläge',
+                    'updated_at': datetime.now().isoformat()
+                }
+
+                # Speichere Modus
+                mode_file.parent.mkdir(parents=True, exist_ok=True)
+                with open(mode_file, 'w') as f:
+                    json.dump(mode_data, f, indent=2)
+
+                logger.info(f"Heating mode changed to: {mode}")
+                return jsonify({'success': True, **mode_data})
+
+        @self.app.route('/api/heating/insights')
+        def api_heating_insights():
+            """Hole KI-generierte Heizungs-Insights"""
+            try:
+                from src.decision_engine.heating_optimizer import HeatingOptimizer
+
+                optimizer = HeatingOptimizer(db=self.db)
+                days_back = int(request.args.get('days', 14))
+
+                # Hole gespeicherte Insights aus DB
+                insights = self.db.get_latest_heating_insights(
+                    days_back=7,
+                    min_confidence=0.6,
+                    limit=10
+                )
+
+                # Wenn keine Insights vorhanden, generiere neue
+                if not insights:
+                    logger.info("No insights found in DB, generating new ones")
+                    insights = optimizer.generate_insights(days_back=days_back)
+
+                return jsonify({
+                    'success': True,
+                    'insights': insights,
+                    'count': len(insights)
+                })
+
+            except Exception as e:
+                logger.error(f"Error getting heating insights: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @self.app.route('/api/heating/patterns')
+        def api_heating_patterns():
+            """Analysiere Heizmuster"""
+            try:
+                from src.decision_engine.heating_optimizer import HeatingOptimizer
+
+                optimizer = HeatingOptimizer(db=self.db)
+                days_back = int(request.args.get('days', 14))
+
+                patterns = optimizer.analyze_patterns(days_back=days_back)
+
+                return jsonify({
+                    'success': True,
+                    **patterns
+                })
+
+            except Exception as e:
+                logger.error(f"Error analyzing heating patterns: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @self.app.route('/api/heating/schedule')
+        def api_heating_schedule():
+            """Hole optimierten Heizplan"""
+            try:
+                from src.decision_engine.heating_optimizer import HeatingOptimizer
+
+                optimizer = HeatingOptimizer(db=self.db)
+                device_id = request.args.get('device_id')
+
+                schedule = optimizer.get_recommended_schedule(device_id=device_id)
+
+                return jsonify({
+                    'success': True,
+                    'schedule': schedule,
+                    'count': len(schedule)
+                })
+
+            except Exception as e:
+                logger.error(f"Error getting heating schedule: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @self.app.route('/api/heating/statistics')
+        def api_heating_statistics():
+            """Hole Heizungs-Statistiken"""
+            try:
+                days_back = int(request.args.get('days', 30))
+                stats = self.db.get_heating_statistics(days_back=days_back)
+
+                return jsonify({
+                    'success': True,
+                    **stats
+                })
+
+            except Exception as e:
+                logger.error(f"Error getting heating statistics: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @self.app.route('/api/heating/collect', methods=['POST'])
+        def api_heating_collect():
+            """Sammle aktuellen Heizungszustand (für Optimierung)"""
+            try:
+                from src.decision_engine.heating_optimizer import HeatingOptimizer
+
+                optimizer = HeatingOptimizer(db=self.db)
+
+                # Hole Außentemperatur
+                outdoor_temp = None
+                if self.engine and self.engine.weather:
+                    weather_data = self.engine.weather.get_weather_data(self.engine.platform)
+                    if weather_data:
+                        outdoor_temp = weather_data.get('temperature')
+
+                # Sammle Daten
+                result = optimizer.collect_current_state(
+                    platform=self.engine.platform if self.engine else None,
+                    outdoor_temp=outdoor_temp
+                )
+
+                return jsonify({
+                    'success': True,
+                    **result
+                })
+
+            except Exception as e:
+                logger.error(f"Error collecting heating data: {e}")
+                return jsonify({'error': str(e)}), 500
+
         # ===== System Update Endpoints =====
 
         @self.app.route('/api/system/version')
@@ -2408,6 +2579,11 @@ class WebInterface:
             self.bathroom_optimizer.start()
             logger.info("Bathroom Optimizer started (runs daily at 3:00)")
 
+        # Starte Heating Data Collector
+        if self.heating_collector:
+            self.heating_collector.start()
+            logger.info("Heating Data Collector started (collects every 15min, optimizes daily at 4:00)")
+
         try:
             self.app.run(host=host, port=port, debug=debug)
         finally:
@@ -2423,6 +2599,10 @@ class WebInterface:
             if self.bathroom_optimizer:
                 self.bathroom_optimizer.stop()
                 logger.info("Bathroom Optimizer stopped")
+
+            if self.heating_collector:
+                self.heating_collector.stop()
+                logger.info("Heating Data Collector stopped")
 
 
 def create_app(config_path=None):

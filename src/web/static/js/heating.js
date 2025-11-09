@@ -6,30 +6,41 @@ let allRooms = [];
 let zoneNameMap = {};
 let currentFilter = 'all';
 let currentRoomFilter = 'all';
+let currentMode = 'control'; // control oder optimization
 
 // Lade alle Heizgeräte beim Seitenaufruf
 document.addEventListener('DOMContentLoaded', () => {
     loadHeaters();
     loadWindows();
+    loadHeatingMode();
     setupEventListeners();
     setupSliders();
     loadOutdoorTemp();
+
+    // Lade Optimierungsdaten wenn im Monitoring-Modus
+    if (currentMode === 'optimization') {
+        loadOptimizationData();
+    }
 });
 
 // Event Listeners einrichten
 function setupEventListeners() {
+    // Modus-Umschalter
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const mode = btn.dataset.mode;
+            await switchMode(mode === 'monitoring' ? 'optimization' : 'control');
+        });
+    });
+
     // Refresh Button
     document.getElementById('refresh-heating')?.addEventListener('click', () => {
         loadHeaters();
         loadWindows();
+        if (currentMode === 'optimization') {
+            loadOptimizationData();
+        }
     });
-
-    // Schnellaktionen
-    document.getElementById('comfort-mode')?.addEventListener('click', () => setAllHeaters(21));
-    document.getElementById('eco-mode')?.addEventListener('click', () => setAllHeaters(18));
-    document.getElementById('night-mode')?.addEventListener('click', () => setAllHeaters(17));
-    document.getElementById('frost-protection')?.addEventListener('click', () => setAllHeaters(12));
-    document.getElementById('all-heaters-off')?.addEventListener('click', turnAllHeatersOff);
 
     // Filter
     document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -47,7 +58,6 @@ function setupEventListeners() {
     });
 
     // Speichern
-    document.getElementById('save-heating-settings')?.addEventListener('click', saveSettings);
 
     // Zeitplan erstellen
     document.getElementById('add-schedule')?.addEventListener('click', () => {
@@ -364,7 +374,7 @@ function createHeaterCard(heater) {
     `;
 }
 
-// Öffne Heizgeräte-Modal
+// Öffne Heizgeräte-Info-Modal (nur Anzeige, keine Steuerung)
 function openHeaterModal(heater) {
     const modal = document.getElementById('heater-modal');
     const currentTemp = getCurrentTemp(heater);
@@ -378,23 +388,6 @@ function openHeaterModal(heater) {
     document.getElementById('modal-target-temp').textContent =
         targetTemp !== null ? targetTemp.toFixed(1) + '°C' : '--';
     document.getElementById('modal-heater-status').textContent = isActive ? '🔥 Aktiv' : '⏸️ Inaktiv';
-
-    // Setze Slider-Wert
-    const slider = document.getElementById('modal-temp-slider');
-    if (targetTemp !== null) {
-        slider.value = targetTemp;
-        document.getElementById('modal-temp-value').textContent = targetTemp.toFixed(1) + '°C';
-    }
-
-    // Event Listener für Buttons
-    document.getElementById('modal-set-temp').onclick = async () => {
-        const newTemp = parseFloat(slider.value);
-        await setHeaterTemperature(heater, newTemp);
-    };
-
-    document.getElementById('modal-turn-off').onclick = async () => {
-        await turnHeaterOff(heater);
-    };
 
     modal.style.display = 'block';
 }
@@ -628,6 +621,165 @@ async function saveSettings() {
     } catch (error) {
         console.error('Error saving settings:', error);
         resultDiv.innerHTML = '<div class="error">✗ Fehler beim Speichern der Einstellungen</div>';
+    }
+}
+
+// === HEIZUNGS-OPTIMIERUNG FUNKTIONEN ===
+
+// Lade aktuellen Heizungs-Modus
+async function loadHeatingMode() {
+    try {
+        const data = await fetchJSON('/api/heating/mode');
+        currentMode = data.mode || 'control';
+        updateModeUI(currentMode);
+    } catch (error) {
+        console.error('Error loading heating mode:', error);
+        currentMode = 'control';
+        updateModeUI(currentMode);
+    }
+}
+
+// Wechsle zwischen Control und Optimization Modus
+async function switchMode(newMode) {
+    try {
+        const response = await fetch('/api/heating/mode', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: newMode })
+        });
+
+        if (!response.ok) throw new Error('Failed to switch mode');
+
+        const data = await response.json();
+        currentMode = data.mode;
+        updateModeUI(currentMode);
+
+        // Lade relevante Daten für den neuen Modus
+        if (currentMode === 'optimization') {
+            loadOptimizationData();
+        }
+
+        console.log('Switched to mode:', currentMode);
+    } catch (error) {
+        console.error('Error switching mode:', error);
+        alert('Fehler beim Wechseln des Modus');
+    }
+}
+
+// Update UI basierend auf Modus
+function updateModeUI(mode) {
+    // Update Mode-Buttons
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+        const btnMode = btn.dataset.mode;
+        if ((mode === 'control' && btnMode === 'control') ||
+            (mode === 'optimization' && btnMode === 'monitoring')) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+
+    // Zeige/verstecke Modi-spezifische Elemente
+    if (mode === 'control') {
+        // Steuerungs-Elemente zeigen
+        document.querySelectorAll('.mode-control-only').forEach(el => {
+            el.style.display = 'block';
+        });
+        document.querySelectorAll('.mode-monitoring-only').forEach(el => {
+            el.style.display = 'none';
+        });
+        document.getElementById('mode-subtitle').textContent = 'Zentrale Steuerung aller Heizgeräte und Thermostate';
+    } else {
+        // Monitoring-Elemente zeigen
+        document.querySelectorAll('.mode-control-only').forEach(el => {
+            el.style.display = 'none';
+        });
+        document.querySelectorAll('.mode-monitoring-only').forEach(el => {
+            el.style.display = 'block';
+        });
+        document.getElementById('mode-subtitle').textContent = 'KI-Analyse und Optimierungsvorschläge für Tado X';
+    }
+}
+
+// Lade Optimierungsdaten (Insights, Muster, etc.)
+async function loadOptimizationData() {
+    try {
+        // Lade Insights
+        const insights = await fetchJSON('/api/heating/insights');
+        renderInsights(insights.insights || []);
+
+        // Lade Statistiken
+        const stats = await fetchJSON('/api/heating/statistics');
+        renderStatistics(stats);
+
+        console.log('Optimization data loaded');
+    } catch (error) {
+        console.error('Error loading optimization data:', error);
+    }
+}
+
+// Rendere KI-Insights
+function renderInsights(insights) {
+    const container = document.querySelector('.recommendations-grid');
+    if (!container) return;
+
+    if (insights.length === 0) {
+        container.innerHTML = `
+            <div class="info-box" style="grid-column: 1 / -1;">
+                <strong>ℹ️ Hinweis:</strong> Noch nicht genug Daten für Optimierungsvorschläge.
+                <br>Das System sammelt aktuell Daten über dein Heizverhalten.
+                <br>Komme in ein paar Tagen wieder, um personalisierte Vorschläge zu erhalten.
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = insights.map(insight => createInsightCard(insight)).join('');
+}
+
+// Erstelle Insight-Karte
+function createInsightCard(insight) {
+    const typeClasses = {
+        'night_reduction': 'energy',
+        'window_warning': 'comfort',
+        'temperature_optimization': 'weather',
+        'weekend_optimization': 'timing'
+    };
+
+    const cardClass = typeClasses[insight.insight_type] || 'energy';
+
+    return `
+        <div class="recommendation-card ${cardClass}">
+            <div class="recommendation-icon">${insight.icon || '💡'}</div>
+            <div class="recommendation-content">
+                <h4>${insight.title || insight.insight_type}</h4>
+                <p class="recommendation-value">
+                    ${insight.potential_saving_percent ? `~${insight.potential_saving_percent}%` : 'Optimierung'}
+                </p>
+                <p class="recommendation-text">${insight.recommendation}</p>
+                ${insight.potential_saving_eur ?
+                    `<small style="color: #10b981; font-weight: 600;">Sparpotenzial: ~${insight.potential_saving_eur}€/Monat</small>` :
+                    ''}
+            </div>
+        </div>
+    `;
+}
+
+// Rendere Statistiken
+function renderStatistics(stats) {
+    // Update Temperatur-Stats wenn vorhanden
+    if (stats.temperatures) {
+        const avgIndoor = stats.temperatures.avg_indoor;
+        if (avgIndoor) {
+            document.getElementById('avg-temp').textContent = avgIndoor + '°C';
+        }
+    }
+
+    // Update Heiz-Stats
+    if (stats.heating) {
+        const heatingPercent = stats.heating.heating_percent;
+        // Könnte zusätzliche Stats-Anzeigen aktualisieren
+        console.log('Heating active:', heatingPercent + '%');
     }
 }
 
