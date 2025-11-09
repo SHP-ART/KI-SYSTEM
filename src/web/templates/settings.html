@@ -53,6 +53,29 @@
             <div id="sensor-save-result" class="action-result"></div>
         </div>
 
+        <!-- Heating Mode Settings -->
+        <div class="card settings-card">
+            <h3>🔥 Heizungssteuerung</h3>
+            <p class="card-description">
+                Wähle wie das System die Heizung handhaben soll.
+            </p>
+
+            <div class="form-group">
+                <label for="heating-mode"><strong>Heizungs-Modus:</strong></label>
+                <select id="heating-mode" class="form-select" style="margin-bottom: 10px;">
+                    <option value="control">🎮 Steuerung - KI steuert Heizung direkt</option>
+                    <option value="optimization">📊 Optimierung - Nur Datensammlung & Vorschläge (für Tado X)</option>
+                </select>
+
+                <div id="heating-mode-description" class="info-box" style="margin-top: 10px;">
+                    <!-- Wird dynamisch gefüllt -->
+                </div>
+            </div>
+
+            <button class="btn btn-primary" id="save-heating-mode">Heizungs-Modus speichern</button>
+            <div id="heating-mode-result" class="action-result"></div>
+        </div>
+
         <!-- Data Collection Settings -->
         <div class="card settings-card">
             <h3>Datensammlung</h3>

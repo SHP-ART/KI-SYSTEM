@@ -10,29 +10,37 @@
             <p class="subtitle" id="mode-subtitle">Zentrale Steuerung aller Heizgeräte und Thermostate</p>
         </div>
         <div style="display: flex; gap: 15px; align-items: center;">
-            <!-- Modus-Umschalter -->
-            <div class="mode-toggle">
-                <button class="mode-btn active" data-mode="control" id="mode-control-btn">
-                    🎮 Steuerung
-                </button>
-                <button class="mode-btn" data-mode="monitoring" id="mode-monitoring-btn">
-                    📊 Monitoring
-                </button>
-            </div>
             <button class="btn btn-secondary" id="refresh-heating">🔄 Aktualisieren</button>
         </div>
     </div>
 
-    <!-- Info-Banner für Monitoring-Modus -->
+    <!-- Info-Banner & Status für Monitoring-Modus -->
     <div class="card mode-monitoring-only" style="display: none; background: linear-gradient(135deg, #eff6ff 0%, #ffffff 100%); border-left: 4px solid #3b82f6;">
-        <div style="display: flex; align-items: center; gap: 15px;">
+        <div style="display: flex; align-items: flex-start; gap: 15px;">
             <div style="font-size: 2em;">🤖</div>
-            <div>
+            <div style="flex: 1;">
                 <h4 style="margin: 0 0 5px 0; color: #1e40af;">Optimierungs-Modus aktiv</h4>
-                <p style="margin: 0; color: #6b7280; font-size: 0.9em;">
+                <p style="margin: 0 0 15px 0; color: #6b7280; font-size: 0.9em;">
                     Das System sammelt Daten und erstellt Optimierungsvorschläge.
                     <strong>Tado X behält die volle Kontrolle</strong> über die Heizung.
+                    <a href="/settings" style="color: #3b82f6; text-decoration: none;">⚙️ Modus ändern</a>
                 </p>
+
+                <!-- Datensammlung-Status -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 10px;">
+                    <div style="background: white; padding: 12px; border-radius: 8px; border: 1px solid #e5e7eb;">
+                        <div style="font-size: 0.75em; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;">Beobachtungen</div>
+                        <div style="font-size: 1.5em; font-weight: 700; color: #1f2937;" id="monitoring-observations-count">--</div>
+                    </div>
+                    <div style="background: white; padding: 12px; border-radius: 8px; border: 1px solid #e5e7eb;">
+                        <div style="font-size: 0.75em; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;">Daten-Zeitraum</div>
+                        <div style="font-size: 1.5em; font-weight: 700; color: #1f2937;" id="monitoring-data-days">-- Tage</div>
+                    </div>
+                    <div style="background: white; padding: 12px; border-radius: 8px; border: 1px solid #e5e7eb;">
+                        <div style="font-size: 0.75em; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;">Optimierungen</div>
+                        <div style="font-size: 1.5em; font-weight: 700; color: #10b981;" id="monitoring-insights-count">--</div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -46,6 +54,7 @@
                 <p style="margin: 0; color: #6b7280; font-size: 0.9em;">
                     Das KI-System steuert die Heizung direkt.
                     Nutzen Sie die Schnellaktionen oder passen Sie die Einstellungen an.
+                    <a href="/settings" style="color: #92400e; text-decoration: none;">⚙️ Modus ändern</a>
                 </p>
             </div>
         </div>

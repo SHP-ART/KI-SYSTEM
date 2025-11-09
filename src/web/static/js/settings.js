@@ -537,6 +537,100 @@ if (historyDetails) {
     });
 }
 
+// === HEIZUNGS-MODUS FUNKTIONEN ===
+
+// Lade Heizungs-Modus
+async function loadHeatingMode() {
+    try {
+        const data = await fetchJSON('/api/heating/mode');
+        const mode = data.mode || 'control';
+
+        const select = document.getElementById('heating-mode');
+        if (select) {
+            select.value = mode;
+            updateHeatingModeDescription(mode);
+        }
+    } catch (error) {
+        console.error('Error loading heating mode:', error);
+    }
+}
+
+// Update Beschreibung basierend auf Modus
+function updateHeatingModeDescription(mode) {
+    const descriptionEl = document.getElementById('heating-mode-description');
+    if (!descriptionEl) return;
+
+    if (mode === 'control') {
+        descriptionEl.innerHTML = `
+            <strong>🎮 Steuerungs-Modus:</strong>
+            <ul style="margin: 5px 0 0 0; padding-left: 20px;">
+                <li>KI-System steuert die Heizung <strong>direkt und automatisch</strong></li>
+                <li>Nutzt ML-Modelle für optimale Temperaturen</li>
+                <li>Schnellaktionen und Zeitpläne verfügbar</li>
+                <li>Für vollautomatische Smart-Home-Steuerung</li>
+            </ul>
+        `;
+    } else {
+        descriptionEl.innerHTML = `
+            <strong>📊 Optimierungs-Modus:</strong>
+            <ul style="margin: 5px 0 0 0; padding-left: 20px;">
+                <li><strong>Perfekt für Tado X</strong> und andere externe Steuerungen</li>
+                <li>System sammelt Daten über Heizverhalten</li>
+                <li>Generiert KI-basierte Optimierungsvorschläge</li>
+                <li>Zeigt Einsparpotenziale in € und %</li>
+                <li><strong>Keine automatischen Eingriffe</strong> - Sie behalten die Kontrolle</li>
+            </ul>
+        `;
+    }
+}
+
+// Heizungs-Modus ändern Event
+const heatingModeSelect = document.getElementById('heating-mode');
+if (heatingModeSelect) {
+    heatingModeSelect.addEventListener('change', (e) => {
+        updateHeatingModeDescription(e.target.value);
+    });
+}
+
+// Heizungs-Modus speichern
+const saveHeatingModeBtn = document.getElementById('save-heating-mode');
+if (saveHeatingModeBtn) {
+    saveHeatingModeBtn.addEventListener('click', async () => {
+        const resultEl = document.getElementById('heating-mode-result');
+        const mode = document.getElementById('heating-mode').value;
+
+        resultEl.innerHTML = '<div class="loading">Speichere...</div>';
+        resultEl.style.display = 'block';
+
+        try {
+            const response = await fetch('/api/heating/mode', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mode })
+            });
+
+            if (!response.ok) throw new Error('Failed to save mode');
+
+            const data = await response.json();
+
+            resultEl.innerHTML = `
+                <div class="success">
+                    ✓ Heizungs-Modus gespeichert: <strong>${mode === 'control' ? '🎮 Steuerung' : '📊 Optimierung'}</strong>
+                    <br><small>Die Änderung ist sofort auf der Heizungs-Seite sichtbar.</small>
+                </div>
+            `;
+
+            setTimeout(() => {
+                resultEl.style.display = 'none';
+            }, 5000);
+
+        } catch (error) {
+            console.error('Error saving heating mode:', error);
+            resultEl.innerHTML = '<div class="error">✗ Fehler beim Speichern</div>';
+        }
+    });
+}
+
 // Init
 document.addEventListener('DOMContentLoaded', () => {
     loadConfig();
@@ -544,4 +638,5 @@ document.addEventListener('DOMContentLoaded', () => {
     loadVersion();
     checkForUpdates(); // Auto-check beim Laden
     loadMLStatus(); // Lade ML Status
+    loadHeatingMode(); // Lade Heizungs-Modus
 });

@@ -25,14 +25,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Event Listeners einrichten
 function setupEventListeners() {
-    // Modus-Umschalter
-    document.querySelectorAll('.mode-btn').forEach(btn => {
-        btn.addEventListener('click', async () => {
-            const mode = btn.dataset.mode;
-            await switchMode(mode === 'monitoring' ? 'optimization' : 'control');
-        });
-    });
-
     // Refresh Button
     document.getElementById('refresh-heating')?.addEventListener('click', () => {
         loadHeaters();
@@ -668,17 +660,6 @@ async function switchMode(newMode) {
 
 // Update UI basierend auf Modus
 function updateModeUI(mode) {
-    // Update Mode-Buttons
-    document.querySelectorAll('.mode-btn').forEach(btn => {
-        const btnMode = btn.dataset.mode;
-        if ((mode === 'control' && btnMode === 'control') ||
-            (mode === 'optimization' && btnMode === 'monitoring')) {
-            btn.classList.add('active');
-        } else {
-            btn.classList.remove('active');
-        }
-    });
-
     // Zeige/verstecke Modi-spezifische Elemente
     if (mode === 'control') {
         // Steuerungs-Elemente zeigen
@@ -722,6 +703,13 @@ async function loadOptimizationData() {
 function renderInsights(insights) {
     const container = document.querySelector('.recommendations-grid');
     if (!container) return;
+
+    // Update Insights-Zähler
+    const insightsCount = insights.length;
+    const insightsCountEl = document.getElementById('monitoring-insights-count');
+    if (insightsCountEl) {
+        insightsCountEl.textContent = insightsCount;
+    }
 
     if (insights.length === 0) {
         container.innerHTML = `
@@ -778,8 +766,18 @@ function renderStatistics(stats) {
     // Update Heiz-Stats
     if (stats.heating) {
         const heatingPercent = stats.heating.heating_percent;
-        // Könnte zusätzliche Stats-Anzeigen aktualisieren
         console.log('Heating active:', heatingPercent + '%');
+    }
+
+    // Update Monitoring-Status (nur im Monitoring-Modus sichtbar)
+    if (currentMode === 'optimization') {
+        // Beobachtungen
+        const observationsCount = stats.heating?.total_observations || 0;
+        document.getElementById('monitoring-observations-count').textContent = observationsCount;
+
+        // Daten-Zeitraum
+        const dataDays = stats.period_days || 0;
+        document.getElementById('monitoring-data-days').textContent = dataDays > 0 ? dataDays + ' Tage' : 'Keine Daten';
     }
 }
 
