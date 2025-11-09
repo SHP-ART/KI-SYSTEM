@@ -216,67 +216,84 @@
             </label>
         </div>
 
-        <div class="form-section">
-            <h4>Geräte zuweisen</h4>
+        <!-- Tab Navigation -->
+        <div class="config-tabs">
+            <button class="tab-btn active" data-tab="devices">🔌 Geräte zuweisen</button>
+            <button class="tab-btn" data-tab="thresholds">📏 Schwellwerte</button>
+            <button class="tab-btn" data-tab="advanced">⚙️ Erweitert</button>
+        </div>
 
-            <div class="form-group">
-                <label>Raum auswählen</label>
-                <select id="room-filter" class="form-select">
-                    <option value="">-- Alle Räume --</option>
-                </select>
-                <small style="color: #6b7280; margin-top: 4px; display: block;">
-                    Wählen Sie einen Raum aus, um nur Geräte aus diesem Raum anzuzeigen
-                </small>
-            </div>
+        <!-- Tab Content: Geräte -->
+        <div class="tab-content active" id="tab-devices">
+            <div class="form-section">
+                <div class="form-group">
+                    <label>Raum auswählen</label>
+                    <select id="room-filter" class="form-select">
+                        <option value="">-- Alle Räume --</option>
+                    </select>
+                    <small style="color: #6b7280; margin-top: 4px; display: block;">
+                        Wählen Sie einen Raum aus, um nur Geräte aus diesem Raum anzuzeigen
+                    </small>
+                </div>
 
-            <div class="form-group">
-                <label>Luftfeuchtigkeit-Sensor *</label>
-                <select id="humidity-sensor" class="form-select">
-                    <option value="">-- Sensor auswählen --</option>
-                </select>
-            </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px; margin-top: 20px;">
+                    <div class="form-group">
+                        <label>Luftfeuchtigkeit-Sensor *</label>
+                        <select id="humidity-sensor" class="form-select">
+                            <option value="">-- Sensor auswählen --</option>
+                        </select>
+                    </div>
 
-            <div class="form-group">
-                <label>Temperatur-Sensor *</label>
-                <select id="temperature-sensor" class="form-select">
-                    <option value="">-- Sensor auswählen --</option>
-                </select>
-            </div>
+                    <div class="form-group">
+                        <label>Temperatur-Sensor *</label>
+                        <select id="temperature-sensor" class="form-select">
+                            <option value="">-- Sensor auswählen --</option>
+                        </select>
+                    </div>
 
-            <div class="form-group">
-                <label>Luftentfeuchter *</label>
-                <select id="dehumidifier" class="form-select">
-                    <option value="">-- Gerät auswählen --</option>
-                </select>
-            </div>
+                    <div class="form-group">
+                        <label>Luftentfeuchter *</label>
+                        <select id="dehumidifier" class="form-select">
+                            <option value="">-- Gerät auswählen --</option>
+                        </select>
+                    </div>
 
-            <div class="form-group">
-                <label>Heizung/Thermostat</label>
-                <select id="heater" class="form-select">
-                    <option value="">-- Optional --</option>
-                </select>
-            </div>
+                    <div class="form-group">
+                        <label>Heizung/Thermostat</label>
+                        <select id="heater" class="form-select">
+                            <option value="">-- Optional --</option>
+                        </select>
+                    </div>
 
-            <div class="form-group">
-                <label>Bewegungssensor (Optional)</label>
-                <select id="motion-sensor" class="form-select">
-                    <option value="">-- Optional --</option>
-                </select>
-            </div>
+                    <div class="form-group">
+                        <label>Bewegungssensor (Optional)</label>
+                        <select id="motion-sensor" class="form-select">
+                            <option value="">-- Optional --</option>
+                        </select>
+                    </div>
 
-            <div class="form-group">
-                <label>Tür-Sensor (Optional)</label>
-                <select id="door-sensor" class="form-select">
-                    <option value="">-- Optional --</option>
-                </select>
+                    <div class="form-group">
+                        <label>Tür-Sensor (Optional)</label>
+                        <select id="door-sensor" class="form-select">
+                            <option value="">-- Optional --</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div style="background: #eff6ff; border-left: 4px solid #3b82f6; border-radius: 6px; padding: 12px; margin-top: 20px;">
+                    <small style="color: #1e40af;">
+                        <strong>💡 Tipp:</strong> Pflichtfelder (*) müssen ausgefüllt werden. Optionale Sensoren verbessern die Genauigkeit der Duscherkennung.
+                    </small>
+                </div>
             </div>
         </div>
 
-        <div class="form-section">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <h4 style="margin: 0;">Schwellwerte</h4>
-                <div id="learning-status-badge" style="display: none;">
-                    <!-- Wird per JavaScript gefüllt -->
+        <!-- Tab Content: Schwellwerte -->
+        <div class="tab-content" id="tab-thresholds">
+            <div class="form-section">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <div id="learning-status-badge" style="display: none;">
+                        <!-- Wird per JavaScript gefüllt -->
                 </div>
             </div>
 
@@ -351,9 +368,46 @@
                     <!-- Wird per JavaScript gefüllt -->
                 </small>
             </div>
+            </div>
         </div>
 
-        <div class="form-actions">
+        <!-- Tab Content: Erweitert -->
+        <div class="tab-content" id="tab-advanced">
+            <div class="form-section">
+                <h4>Energie-Berechnung</h4>
+                <p style="color: #6b7280; font-size: 0.9em; margin-bottom: 15px;">
+                    Diese Werte werden für die Energie- und Kostenberechnung verwendet.
+                </p>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                    <div class="form-group">
+                        <label>Luftentfeuchter Leistung (Watt)</label>
+                        <input type="number" id="dehumidifier-wattage" class="form-input" value="400" min="100" max="2000" step="50">
+                        <small style="color: #6b7280; margin-top: 4px; display: block;">Standard: 400W</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Heizung Leistung (Watt)</label>
+                        <input type="number" id="heater-wattage" class="form-input" value="2000" min="500" max="5000" step="100">
+                        <small style="color: #6b7280; margin-top: 4px; display: block;">Standard: 2000W</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Strompreis (€/kWh)</label>
+                        <input type="number" id="energy-price" class="form-input" value="0.30" min="0.01" max="1.00" step="0.01">
+                        <small style="color: #6b7280; margin-top: 4px; display: block;">Standard: 0.30€/kWh</small>
+                    </div>
+                </div>
+
+                <div style="background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 6px; padding: 12px; margin-top: 20px;">
+                    <small style="color: #92400e;">
+                        <strong>ℹ️ Hinweis:</strong> Diese Werte beeinflussen nur die Anzeige der Energie-Statistiken, nicht die Automation selbst.
+                    </small>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-actions" style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #e5e7eb;">
             <button id="save-bathroom-config" class="btn btn-primary">💾 Konfiguration speichern</button>
             <button id="test-bathroom" class="btn btn-secondary">🧪 Test ausführen</button>
         </div>
@@ -640,6 +694,68 @@
 .alert-message {
     font-size: 0.9em;
     color: #4b5563;
+}
+
+/* Tab System */
+.config-tabs {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 25px;
+    border-bottom: 2px solid #e5e7eb;
+}
+
+.tab-btn {
+    background: transparent;
+    border: none;
+    padding: 12px 20px;
+    font-size: 0.95em;
+    font-weight: 500;
+    color: #6b7280;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: all 0.2s ease;
+    position: relative;
+    bottom: -2px;
+}
+
+.tab-btn:hover {
+    color: #3b82f6;
+    background: #eff6ff;
+}
+
+.tab-btn.active {
+    color: #3b82f6;
+    border-bottom-color: #3b82f6;
+    font-weight: 600;
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.form-input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.95em;
+    transition: border-color 0.2s ease;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 </style>
 

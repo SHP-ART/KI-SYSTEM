@@ -170,6 +170,15 @@ async function loadConfig() {
             setSlider('target-temperature', config.target_temperature || 22);
             setSlider('dehumidifier-delay', config.dehumidifier_delay || 5);
 
+            // Energie-Werte (Tab: Erweitert)
+            const dehumWattage = document.getElementById('dehumidifier-wattage');
+            const heaterWattage = document.getElementById('heater-wattage');
+            const energyPrice = document.getElementById('energy-price');
+
+            if (dehumWattage) dehumWattage.value = config.dehumidifier_wattage || 400;
+            if (heaterWattage) heaterWattage.value = config.heater_wattage || 2000;
+            if (energyPrice) energyPrice.value = config.energy_price_per_kwh || 0.30;
+
             // Enabled
             document.getElementById('bathroom-enabled').checked = config.enabled || false;
         }
@@ -207,7 +216,11 @@ async function saveConfig() {
             humidity_threshold_high: parseFloat(document.getElementById('humidity-high').value),
             humidity_threshold_low: parseFloat(document.getElementById('humidity-low').value),
             target_temperature: parseFloat(document.getElementById('target-temperature').value),
-            dehumidifier_delay: parseInt(document.getElementById('dehumidifier-delay').value)
+            dehumidifier_delay: parseInt(document.getElementById('dehumidifier-delay').value),
+            // Energie-Werte
+            dehumidifier_wattage: parseFloat(document.getElementById('dehumidifier-wattage').value),
+            heater_wattage: parseFloat(document.getElementById('heater-wattage').value),
+            energy_price_per_kwh: parseFloat(document.getElementById('energy-price').value)
         };
 
         // Validierung
@@ -219,12 +232,14 @@ async function saveConfig() {
         const result = await postJSON('/api/luftentfeuchten/config', { config });
 
         if (result.success) {
-            alert('✅ Konfiguration gespeichert!');
+            showToast('✅ Konfiguration gespeichert!', 'success');
             loadStatus();
+            // Energie-Stats neu laden
+            loadEnergyStats();
         }
     } catch (error) {
         console.error('Error saving config:', error);
-        alert('Fehler beim Speichern der Konfiguration');
+        showToast('❌ Fehler beim Speichern', 'error');
     }
 }
 
@@ -797,9 +812,30 @@ async function showPreview() {
     }
 }
 
+// Setup Tab System
+function setupTabs() {
+    const tabButtons = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    tabButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const targetTab = button.getAttribute('data-tab');
+
+            // Deaktiviere alle Tabs
+            tabButtons.forEach(btn => btn.classList.remove('active'));
+            tabContents.forEach(content => content.classList.remove('active'));
+
+            // Aktiviere gewählten Tab
+            button.classList.add('active');
+            document.getElementById(`tab-${targetTab}`).classList.add('active');
+        });
+    });
+}
+
 // Init
 document.addEventListener('DOMContentLoaded', async () => {
     setupSliders();
+    setupTabs();
 
     // Zeige Lade-Indikator
     const statusSection = document.querySelector('.status-grid');
