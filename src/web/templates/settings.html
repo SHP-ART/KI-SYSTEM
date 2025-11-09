@@ -55,6 +55,10 @@
                     </label>
                 </div>
             </form>
+            <div class="form-actions" style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
+                <button id="save-data-collection" class="btn btn-primary">💾 Einstellungen speichern</button>
+                <div id="data-collection-result" class="action-result" style="display: none; margin-top: 10px;"></div>
+            </div>
         </div>
 
         <!-- Decision Engine Settings -->
@@ -82,6 +86,10 @@
                     <small>Kann nicht deaktiviert werden</small>
                 </div>
             </form>
+            <div class="form-actions" style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
+                <button id="save-decision-engine" class="btn btn-primary">💾 Einstellungen speichern</button>
+                <div id="decision-engine-result" class="action-result" style="display: none; margin-top: 10px;"></div>
+            </div>
         </div>
         </div>
     </div>
@@ -460,6 +468,32 @@
         padding: 10px 16px;
         font-size: 13px;
     }
+}
+
+/* Action Result Messages */
+.action-result {
+    padding: 12px;
+    border-radius: 6px;
+    font-size: 0.95em;
+    margin-top: 10px;
+}
+
+.action-result.success {
+    background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+    border-left: 4px solid #10b981;
+    color: #065f46;
+}
+
+.action-result.error {
+    background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+    border-left: 4px solid #ef4444;
+    color: #991b1b;
+}
+
+.action-result.loading {
+    background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+    border-left: 4px solid #3b82f6;
+    color: #1e40af;
 }
 </style>
 

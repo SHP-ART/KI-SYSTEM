@@ -22,6 +22,7 @@ from src.data_collector.background_collector import BackgroundDataCollector
 from src.background.bathroom_optimizer import BathroomOptimizer
 from src.background.ml_auto_trainer import MLAutoTrainer
 from src.background.heating_data_collector import HeatingDataCollector
+from src.background.database_maintenance import DatabaseMaintenanceJob
 from src.utils.database import Database
 
 
@@ -93,6 +94,20 @@ class WebInterface:
             logger.info("Heating Data Collector initialized")
         except Exception as e:
             logger.error(f"Failed to initialize Heating Data Collector: {e}")
+
+        # Initialisiere Database Maintenance Job (läuft täglich um 5:00 Uhr)
+        self.db_maintenance = None
+        try:
+            # Lade Retention aus Config
+            retention_days = self.engine.config.get('database.retention_days', 90) if self.engine else 90
+
+            self.db_maintenance = DatabaseMaintenanceJob(
+                retention_days=retention_days,
+                run_hour=5  # 5:00 Uhr morgens (nach allen anderen Jobs)
+            )
+            logger.info(f"Database Maintenance Job initialized (retention: {retention_days} days)")
+        except Exception as e:
+            logger.error(f"Failed to initialize Database Maintenance: {e}")
 
         # Registriere Routen
         self._register_routes()
@@ -500,6 +515,131 @@ class WebInterface:
                 # Update Konfiguration
                 # TODO: Implementiere Config-Update
                 return jsonify({'success': True, 'message': 'Config update coming soon'})
+
+        # === Settings APIs ===
+
+        @self.app.route('/api/settings/general', methods=['GET'])
+        def api_settings_general_get():
+            """API: Allgemeine Einstellungen laden"""
+            try:
+                import json
+                from pathlib import Path
+
+                settings_file = Path('data/settings_general.json')
+
+                if settings_file.exists():
+                    with open(settings_file, 'r') as f:
+                        settings = json.load(f)
+                    return jsonify(settings)
+                else:
+                    # Rückgabe von defaults wenn keine Datei existiert
+                    return jsonify({
+                        'data_collection': {
+                            'interval': 300,
+                            'weather_enabled': True,
+                            'energy_prices_enabled': False
+                        },
+                        'decision_engine': {
+                            'mode': 'learning',
+                            'confidence_threshold': 0.7
+                        }
+                    })
+
+            except Exception as e:
+                logger.error(f"Error loading general settings: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @self.app.route('/api/settings/data-collection', methods=['POST'])
+        def api_settings_data_collection():
+            """API: Datensammlungs-Einstellungen speichern"""
+            try:
+                import json
+                from pathlib import Path
+
+                data = request.json
+
+                # Validierung
+                if 'collection_interval' in data:
+                    interval = int(data['collection_interval'])
+                    if interval < 60 or interval > 3600:
+                        return jsonify({'error': 'Intervall muss zwischen 60 und 3600 Sekunden liegen'}), 400
+
+                # Speichere in data/settings_general.json
+                settings_file = Path('data/settings_general.json')
+                settings = {}
+
+                if settings_file.exists():
+                    with open(settings_file, 'r') as f:
+                        settings = json.load(f)
+
+                settings['data_collection'] = {
+                    'interval': data.get('collection_interval', 300),
+                    'weather_enabled': data.get('enable_weather', True),
+                    'energy_prices_enabled': data.get('enable_energy_prices', False),
+                    'updated_at': datetime.now().isoformat()
+                }
+
+                settings_file.parent.mkdir(parents=True, exist_ok=True)
+                with open(settings_file, 'w') as f:
+                    json.dump(settings, f, indent=2)
+
+                logger.info(f"Data collection settings updated: {settings['data_collection']}")
+
+                return jsonify({
+                    'success': True,
+                    'message': 'Datensammlungs-Einstellungen gespeichert'
+                })
+
+            except Exception as e:
+                logger.error(f"Error saving data collection settings: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @self.app.route('/api/settings/decision-engine', methods=['POST'])
+        def api_settings_decision_engine():
+            """API: Entscheidungs-Engine-Einstellungen speichern"""
+            try:
+                import json
+                from pathlib import Path
+
+                data = request.json
+
+                # Validierung
+                decision_mode = data.get('decision_mode', 'learning')
+                if decision_mode not in ['auto', 'learning', 'manual']:
+                    return jsonify({'error': 'Ungültiger Modus. Erlaubt: auto, learning, manual'}), 400
+
+                confidence_threshold = float(data.get('confidence_threshold', 0.7))
+                if confidence_threshold < 0 or confidence_threshold > 1:
+                    return jsonify({'error': 'Konfidenz-Schwellwert muss zwischen 0 und 1 liegen'}), 400
+
+                # Speichere in data/settings_general.json
+                settings_file = Path('data/settings_general.json')
+                settings = {}
+
+                if settings_file.exists():
+                    with open(settings_file, 'r') as f:
+                        settings = json.load(f)
+
+                settings['decision_engine'] = {
+                    'mode': decision_mode,
+                    'confidence_threshold': confidence_threshold,
+                    'updated_at': datetime.now().isoformat()
+                }
+
+                settings_file.parent.mkdir(parents=True, exist_ok=True)
+                with open(settings_file, 'w') as f:
+                    json.dump(settings, f, indent=2)
+
+                logger.info(f"Decision engine settings updated: {settings['decision_engine']}")
+
+                return jsonify({
+                    'success': True,
+                    'message': 'Entscheidungs-Engine-Einstellungen gespeichert'
+                })
+
+            except Exception as e:
+                logger.error(f"Error saving decision engine settings: {e}")
+                return jsonify({'error': str(e)}), 500
 
         # === ML Training Status API ===
 
@@ -2257,6 +2397,80 @@ class WebInterface:
                 logger.error(f"Error in bathroom preview: {e}")
                 return jsonify({'error': str(e)}), 500
 
+        @self.app.route('/api/luftentfeuchten/sensor-timeseries', methods=['GET'])
+        def api_bathroom_sensor_timeseries():
+            """API: Zeitreihen-Daten für Luftfeuchtigkeit im Bad"""
+            try:
+                import json
+                from pathlib import Path
+
+                # Lade Config um sensor_id zu bekommen
+                config_file = Path('data/luftentfeuchten_config.json')
+                if not config_file.exists():
+                    return jsonify({'error': 'No configuration found'}), 400
+
+                with open(config_file, 'r') as f:
+                    config = json.load(f)
+
+                humidity_sensor_id = config.get('sensors', {}).get('humidity')
+                if not humidity_sensor_id:
+                    return jsonify({'error': 'Humidity sensor not configured'}), 400
+
+                # Hole Zeitraum aus Query-Parametern
+                hours = int(request.args.get('hours', 6))
+
+                # Hole Sensor-Daten
+                data = self.db.get_sensor_data_timeseries(humidity_sensor_id, hours_back=hours)
+
+                return jsonify({
+                    'sensor_id': humidity_sensor_id,
+                    'hours': hours,
+                    'data': data,
+                    'count': len(data)
+                })
+
+            except Exception as e:
+                logger.error(f"Error getting sensor timeseries: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @self.app.route('/api/luftentfeuchten/manual-event', methods=['POST'])
+        def api_bathroom_manual_event():
+            """API: Manuelles Eintragen eines Duschereignisses"""
+            try:
+                data = request.json
+
+                # Validierung
+                if not data.get('start_time') or not data.get('end_time'):
+                    return jsonify({'error': 'start_time and end_time are required'}), 400
+
+                # Parse Zeitstempel
+                from datetime import datetime
+                start_time = datetime.fromisoformat(data['start_time'].replace('Z', '+00:00'))
+                end_time = datetime.fromisoformat(data['end_time'].replace('Z', '+00:00'))
+
+                # Peak Humidity (optional, default 75%)
+                peak_humidity = float(data.get('peak_humidity', 75.0))
+
+                # Erstelle Event
+                event_id = self.db.create_manual_bathroom_event(
+                    start_time=start_time,
+                    end_time=end_time,
+                    peak_humidity=peak_humidity,
+                    notes=data.get('notes')
+                )
+
+                logger.info(f"Manual bathroom event created: {event_id} by user")
+
+                return jsonify({
+                    'success': True,
+                    'event_id': event_id,
+                    'message': 'Duschereignis erfolgreich eingetragen'
+                })
+
+            except Exception as e:
+                logger.error(f"Error creating manual bathroom event: {e}")
+                return jsonify({'error': str(e)}), 500
+
         # ===== Heizungs-Optimierungs-Endpoints =====
 
         @self.app.route('/api/heating/mode', methods=['GET', 'POST'])
@@ -2412,6 +2626,23 @@ class WebInterface:
 
             except Exception as e:
                 logger.error(f"Error collecting heating data: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @self.app.route('/api/heating/analytics')
+        def api_heating_analytics():
+            """Hole umfassende Heizungs-Analytics"""
+            try:
+                days_back = int(request.args.get('days', 7))
+
+                analytics = self._calculate_heating_analytics(days_back)
+
+                return jsonify({
+                    'success': True,
+                    **analytics
+                })
+
+            except Exception as e:
+                logger.error(f"Error getting heating analytics: {e}")
                 return jsonify({'error': str(e)}), 500
 
         # ===== Analytics Endpoints =====
@@ -2608,6 +2839,287 @@ class WebInterface:
             except Exception as e:
                 logger.error(f"Error triggering update: {e}")
                 return jsonify({'success': False, 'error': str(e)}), 500
+
+    def _calculate_heating_analytics(self, days_back: int) -> dict:
+        """Berechnet umfassende Heizungs-Analytics"""
+        from datetime import datetime, timedelta
+        import statistics
+
+        observations = self.db.get_heating_observations(days_back=days_back)
+
+        if not observations or len(observations) < 10:
+            return {
+                'sufficient_data': False,
+                'message': f'Nicht genug Daten (min. 10 Beobachtungen, aktuell: {len(observations) if observations else 0})',
+                'observations_count': len(observations) if observations else 0
+            }
+
+        # 1. Heizzeiten-Analyse
+        heating_times = self._analyze_heating_times(observations)
+
+        # 2. Temperatur-Effizienz
+        temp_efficiency = self._analyze_temperature_efficiency(observations)
+
+        # 3. Heizkosten-Schätzung
+        cost_estimates = self._estimate_heating_costs(observations, days_back)
+
+        # 4. Raum-Vergleiche
+        room_comparison = self._compare_rooms(observations)
+
+        # 5. Wetter-Korrelation
+        weather_correlation = self._analyze_weather_correlation(observations)
+
+        return {
+            'sufficient_data': True,
+            'observations_count': len(observations),
+            'period_days': days_back,
+            'heating_times': heating_times,
+            'temperature_efficiency': temp_efficiency,
+            'cost_estimates': cost_estimates,
+            'room_comparison': room_comparison,
+            'weather_correlation': weather_correlation
+        }
+
+    def _analyze_heating_times(self, observations: list) -> dict:
+        """Analysiert wann am meisten geheizt wird"""
+        import statistics
+
+        # Gruppiere nach Stunde
+        hourly_heating = {}
+        for obs in observations:
+            hour = obs.get('hour_of_day')
+            if hour is not None:
+                if hour not in hourly_heating:
+                    hourly_heating[hour] = {'count': 0, 'heating': 0}
+                hourly_heating[hour]['count'] += 1
+                if obs.get('is_heating'):
+                    hourly_heating[hour]['heating'] += 1
+
+        # Berechne Heizprozentsatz pro Stunde
+        hourly_data = []
+        for hour in range(24):
+            if hour in hourly_heating:
+                total = hourly_heating[hour]['count']
+                heating = hourly_heating[hour]['heating']
+                percentage = (heating / total * 100) if total > 0 else 0
+                hourly_data.append({
+                    'hour': hour,
+                    'heating_percentage': round(percentage, 1),
+                    'observations': total
+                })
+            else:
+                hourly_data.append({
+                    'hour': hour,
+                    'heating_percentage': 0,
+                    'observations': 0
+                })
+
+        # Peak Heizzeiten
+        sorted_hours = sorted(hourly_data, key=lambda x: x['heating_percentage'], reverse=True)
+        peak_hours = sorted_hours[:5]
+
+        return {
+            'hourly_data': hourly_data,
+            'peak_hours': peak_hours
+        }
+
+    def _analyze_temperature_efficiency(self, observations: list) -> dict:
+        """Analysiert Temperatur-Effizienz (Soll vs. Ist)"""
+        import statistics
+
+        deviations = []
+        for obs in observations:
+            target = obs.get('target_temperature')
+            current = obs.get('current_temperature')
+            if target and current:
+                deviation = abs(target - current)
+                deviations.append({
+                    'target': target,
+                    'current': current,
+                    'deviation': deviation,
+                    'timestamp': obs.get('timestamp')
+                })
+
+        if not deviations:
+            return {'available': False}
+
+        deviation_values = [d['deviation'] for d in deviations]
+
+        # Effizienz-Score (0-100, je geringer die Abweichung, desto besser)
+        avg_deviation = statistics.mean(deviation_values)
+        # 0°C Abweichung = 100%, 2°C = 0%
+        efficiency_score = max(0, 100 - (avg_deviation / 2.0 * 100))
+
+        return {
+            'available': True,
+            'avg_deviation': round(avg_deviation, 2),
+            'min_deviation': round(min(deviation_values), 2),
+            'max_deviation': round(max(deviation_values), 2),
+            'efficiency_score': round(efficiency_score, 1),
+            'samples': len(deviations)
+        }
+
+    def _estimate_heating_costs(self, observations: list, days: int) -> dict:
+        """Schätzt Heizkosten"""
+        import statistics
+
+        # Zähle Heizstunden
+        heating_count = sum(1 for obs in observations if obs.get('is_heating'))
+        total_count = len(observations)
+
+        # Annahme: Alle 15 Minuten eine Beobachtung
+        minutes_per_observation = 15
+        total_minutes = total_count * minutes_per_observation
+        heating_minutes = heating_count * minutes_per_observation
+        heating_hours = heating_minutes / 60
+
+        # Kosten-Schätzungen (grobe Annahmen)
+        # Gas: ~0.15€/kWh, Durchschnitt-Heizung: 10-15 kW
+        avg_heating_power_kw = 12  # kW
+        cost_per_kwh = 0.15  # EUR
+
+        # Tagesverbrauch
+        hours_per_day = total_minutes / days / 60
+        heating_hours_per_day = heating_minutes / days / 60
+        daily_kwh = heating_hours_per_day * avg_heating_power_kw
+        daily_cost = daily_kwh * cost_per_kwh
+
+        # Wochenverbrauch
+        weekly_cost = daily_cost * 7
+
+        # Monatsverbrauch
+        monthly_cost = daily_cost * 30
+
+        # Hochrechnung Jahresverbrauch
+        yearly_cost = daily_cost * 365
+
+        return {
+            'heating_hours_total': round(heating_hours, 1),
+            'heating_hours_per_day': round(heating_hours_per_day, 1),
+            'heating_percentage': round((heating_count / total_count * 100), 1) if total_count > 0 else 0,
+            'costs': {
+                'daily': round(daily_cost, 2),
+                'weekly': round(weekly_cost, 2),
+                'monthly': round(monthly_cost, 2),
+                'yearly': round(yearly_cost, 2)
+            },
+            'consumption': {
+                'daily_kwh': round(daily_kwh, 1),
+                'monthly_kwh': round(daily_kwh * 30, 1),
+                'yearly_kwh': round(daily_kwh * 365, 0)
+            },
+            'assumptions': {
+                'avg_power_kw': avg_heating_power_kw,
+                'cost_per_kwh': cost_per_kwh,
+                'observation_interval_min': minutes_per_observation
+            }
+        }
+
+    def _compare_rooms(self, observations: list) -> dict:
+        """Vergleicht Heizverhalten zwischen Räumen"""
+        import statistics
+
+        rooms = {}
+        for obs in observations:
+            room = obs.get('room_name', 'Unbekannt')
+            if room not in rooms:
+                rooms[room] = {
+                    'observations': 0,
+                    'heating_count': 0,
+                    'temps': [],
+                    'target_temps': []
+                }
+
+            rooms[room]['observations'] += 1
+            if obs.get('is_heating'):
+                rooms[room]['heating_count'] += 1
+
+            if obs.get('current_temperature'):
+                rooms[room]['temps'].append(obs['current_temperature'])
+            if obs.get('target_temperature'):
+                rooms[room]['target_temps'].append(obs['target_temperature'])
+
+        # Berechne Statistiken pro Raum
+        room_stats = []
+        for room, data in rooms.items():
+            heating_pct = (data['heating_count'] / data['observations'] * 100) if data['observations'] > 0 else 0
+            avg_temp = statistics.mean(data['temps']) if data['temps'] else None
+            avg_target = statistics.mean(data['target_temps']) if data['target_temps'] else None
+
+            room_stats.append({
+                'room': room,
+                'observations': data['observations'],
+                'heating_percentage': round(heating_pct, 1),
+                'avg_temperature': round(avg_temp, 1) if avg_temp else None,
+                'avg_target_temperature': round(avg_target, 1) if avg_target else None
+            })
+
+        # Sortiere nach Heizprozentsatz
+        room_stats.sort(key=lambda x: x['heating_percentage'], reverse=True)
+
+        return {
+            'rooms': room_stats,
+            'room_count': len(room_stats)
+        }
+
+    def _analyze_weather_correlation(self, observations: list) -> dict:
+        """Analysiert Korrelation zwischen Außentemperatur und Heizverhalten"""
+        import statistics
+
+        # Gruppiere nach Außentemperatur-Bereichen
+        temp_ranges = {
+            'below_0': {'heating': 0, 'total': 0, 'label': 'Unter 0°C'},
+            '0_to_5': {'heating': 0, 'total': 0, 'label': '0-5°C'},
+            '5_to_10': {'heating': 0, 'total': 0, 'label': '5-10°C'},
+            '10_to_15': {'heating': 0, 'total': 0, 'label': '10-15°C'},
+            'above_15': {'heating': 0, 'total': 0, 'label': 'Über 15°C'}
+        }
+
+        outdoor_temps = []
+
+        for obs in observations:
+            outdoor_temp = obs.get('outdoor_temperature')
+            if outdoor_temp is None:
+                continue
+
+            outdoor_temps.append(outdoor_temp)
+
+            # Bestimme Range
+            if outdoor_temp < 0:
+                range_key = 'below_0'
+            elif outdoor_temp < 5:
+                range_key = '0_to_5'
+            elif outdoor_temp < 10:
+                range_key = '5_to_10'
+            elif outdoor_temp < 15:
+                range_key = '10_to_15'
+            else:
+                range_key = 'above_15'
+
+            temp_ranges[range_key]['total'] += 1
+            if obs.get('is_heating'):
+                temp_ranges[range_key]['heating'] += 1
+
+        # Berechne Heizprozentsatz pro Range
+        correlation_data = []
+        for key, data in temp_ranges.items():
+            if data['total'] > 0:
+                heating_pct = (data['heating'] / data['total'] * 100)
+                correlation_data.append({
+                    'range': data['label'],
+                    'heating_percentage': round(heating_pct, 1),
+                    'observations': data['total']
+                })
+
+        # Durchschnittliche Außentemperatur
+        avg_outdoor = statistics.mean(outdoor_temps) if outdoor_temps else None
+
+        return {
+            'available': len(outdoor_temps) > 0,
+            'correlation_data': correlation_data,
+            'avg_outdoor_temp': round(avg_outdoor, 1) if avg_outdoor else None,
+            'samples_with_weather': len(outdoor_temps)
+        }
 
     def _calculate_comfort_metrics(self, sensor_data: list, hours_back: int) -> dict:
         """Berechnet Komfort-Metriken aus Sensordaten"""
@@ -2838,6 +3350,100 @@ class WebInterface:
 
         return trends
 
+    # === DATENBANK-MANAGEMENT ENDPOINTS ===
+
+    @app.route('/api/database/status')
+    def database_status():
+        """Gibt den aktuellen Status der Datenbank zurück"""
+        try:
+            db_info = self.db.get_database_size()
+
+            # Retention-Einstellung aus Config
+            retention_days = self.config.get('database.retention_days', 90)
+
+            # Maintenance Job Status
+            maintenance_status = {}
+            if self.db_maintenance:
+                status = self.db_maintenance.get_status()
+                maintenance_status = {
+                    'running': status['running'],
+                    'last_cleanup': status['last_cleanup'],
+                    'last_vacuum': status['last_vacuum'],
+                    'retention_days': status['retention_days'],
+                    'next_run_hour': status['run_hour']
+                }
+
+            return jsonify({
+                'success': True,
+                'database': {
+                    'file_size_mb': db_info['file_size_mb'],
+                    'file_size_bytes': db_info['file_size_bytes'],
+                    'total_rows': db_info['total_rows'],
+                    'table_counts': db_info['table_counts'],
+                    'oldest_data': db_info['oldest_data'],
+                    'newest_data': db_info['newest_data'],
+                    'file_path': db_info['file_path']
+                },
+                'settings': {
+                    'retention_days': retention_days
+                },
+                'maintenance': maintenance_status
+            })
+        except Exception as e:
+            logger.error(f"Error getting database status: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/database/cleanup', methods=['POST'])
+    def database_cleanup():
+        """Führt manuelles Cleanup der Datenbank aus"""
+        try:
+            data = request.json or {}
+            retention_days = data.get('retention_days')
+
+            # Verwende Config-Wert wenn nicht angegeben
+            if retention_days is None:
+                retention_days = self.config.get('database.retention_days', 90)
+
+            deleted_counts = self.db.cleanup_old_data(retention_days=retention_days)
+
+            return jsonify({
+                'success': True,
+                'deleted_rows': sum(deleted_counts.values()),
+                'details': deleted_counts,
+                'message': f'Cleanup abgeschlossen: {sum(deleted_counts.values())} Zeilen gelöscht'
+            })
+        except Exception as e:
+            logger.error(f"Error during cleanup: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/database/vacuum', methods=['POST'])
+    def database_vacuum():
+        """Führt VACUUM auf der Datenbank aus (Optimierung)"""
+        try:
+            # Speichere Größe vor VACUUM
+            before_info = self.db.get_database_size()
+            before_size = before_info['file_size_mb']
+
+            # Führe VACUUM aus
+            self.db.vacuum_database()
+
+            # Speichere Größe nach VACUUM
+            after_info = self.db.get_database_size()
+            after_size = after_info['file_size_mb']
+
+            freed_mb = before_size - after_size
+
+            return jsonify({
+                'success': True,
+                'before_size_mb': before_size,
+                'after_size_mb': after_size,
+                'freed_mb': round(freed_mb, 2),
+                'message': f'VACUUM abgeschlossen: {round(freed_mb, 2)} MB freigegeben'
+            })
+        except Exception as e:
+            logger.error(f"Error during vacuum: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
     def run(self, host='0.0.0.0', port=5000, debug=False):
         """Starte den Web-Server"""
         logger.info(f"Starting web interface on http://{host}:{port}")
@@ -2862,6 +3468,11 @@ class WebInterface:
             self.heating_collector.start()
             logger.info("Heating Data Collector started (collects every 15min, optimizes daily at 4:00)")
 
+        # Starte Database Maintenance Job
+        if self.db_maintenance:
+            self.db_maintenance.start()
+            logger.info("Database Maintenance Job started (runs daily at 5:00)")
+
         try:
             self.app.run(host=host, port=port, debug=debug)
         finally:
@@ -2881,6 +3492,10 @@ class WebInterface:
             if self.heating_collector:
                 self.heating_collector.stop()
                 logger.info("Heating Data Collector stopped")
+
+            if self.db_maintenance:
+                self.db_maintenance.stop()
+                logger.info("Database Maintenance Job stopped")
 
 
 def create_app(config_path=None):

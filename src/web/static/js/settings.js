@@ -61,6 +61,42 @@ async function loadConfig() {
         document.getElementById('confidence-threshold').value = threshold;
         document.getElementById('confidence-value').textContent = threshold.toFixed(2);
 
+        // Lade gespeicherte Einstellungen aus settings_general.json (falls vorhanden)
+        try {
+            const settingsResponse = await fetch('/api/settings/general');
+            if (settingsResponse.ok) {
+                const settings = await settingsResponse.json();
+
+                // Data Collection Settings
+                if (settings.data_collection) {
+                    if (settings.data_collection.interval) {
+                        document.getElementById('collection-interval').value = settings.data_collection.interval;
+                    }
+                    if (typeof settings.data_collection.weather_enabled !== 'undefined') {
+                        document.getElementById('enable-weather').checked = settings.data_collection.weather_enabled;
+                    }
+                    if (typeof settings.data_collection.energy_prices_enabled !== 'undefined') {
+                        document.getElementById('enable-energy-prices').checked = settings.data_collection.energy_prices_enabled;
+                    }
+                }
+
+                // Decision Engine Settings
+                if (settings.decision_engine) {
+                    if (settings.decision_engine.mode) {
+                        document.getElementById('decision-mode').value = settings.decision_engine.mode;
+                    }
+                    if (typeof settings.decision_engine.confidence_threshold !== 'undefined') {
+                        const threshold = settings.decision_engine.confidence_threshold;
+                        document.getElementById('confidence-threshold').value = threshold;
+                        document.getElementById('confidence-value').textContent = threshold.toFixed(2);
+                    }
+                }
+            }
+        } catch (settingsError) {
+            // Kein Problem wenn Datei nicht existiert - verwende defaults
+            console.log('No saved settings found, using defaults');
+        }
+
     } catch (error) {
         console.error('Error loading config:', error);
     }
@@ -69,6 +105,98 @@ async function loadConfig() {
 // Confidence Slider
 document.getElementById('confidence-threshold').addEventListener('input', (e) => {
     document.getElementById('confidence-value').textContent = parseFloat(e.target.value).toFixed(2);
+});
+
+// === ALLGEMEIN-TAB SPEICHERN ===
+
+// Speichere Datensammlungs-Einstellungen
+document.getElementById('save-data-collection')?.addEventListener('click', async () => {
+    const resultEl = document.getElementById('data-collection-result');
+    const btn = document.getElementById('save-data-collection');
+
+    const collectionInterval = parseInt(document.getElementById('collection-interval').value);
+    const enableWeather = document.getElementById('enable-weather').checked;
+    const enableEnergyPrices = document.getElementById('enable-energy-prices').checked;
+
+    try {
+        btn.disabled = true;
+        resultEl.textContent = 'Speichere Einstellungen...';
+        resultEl.className = 'action-result loading';
+        resultEl.style.display = 'block';
+
+        const response = await fetch('/api/settings/data-collection', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                collection_interval: collectionInterval,
+                enable_weather: enableWeather,
+                enable_energy_prices: enableEnergyPrices
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            resultEl.textContent = '✓ Einstellungen erfolgreich gespeichert';
+            resultEl.className = 'action-result success';
+            setTimeout(() => {
+                resultEl.style.display = 'none';
+            }, 3000);
+        } else {
+            throw new Error(data.error || 'Unbekannter Fehler');
+        }
+
+    } catch (error) {
+        console.error('Error saving data collection settings:', error);
+        resultEl.textContent = '✗ Fehler beim Speichern: ' + error.message;
+        resultEl.className = 'action-result error';
+    } finally {
+        btn.disabled = false;
+    }
+});
+
+// Speichere Entscheidungs-Engine-Einstellungen
+document.getElementById('save-decision-engine')?.addEventListener('click', async () => {
+    const resultEl = document.getElementById('decision-engine-result');
+    const btn = document.getElementById('save-decision-engine');
+
+    const decisionMode = document.getElementById('decision-mode').value;
+    const confidenceThreshold = parseFloat(document.getElementById('confidence-threshold').value);
+
+    try {
+        btn.disabled = true;
+        resultEl.textContent = 'Speichere Einstellungen...';
+        resultEl.className = 'action-result loading';
+        resultEl.style.display = 'block';
+
+        const response = await fetch('/api/settings/decision-engine', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                decision_mode: decisionMode,
+                confidence_threshold: confidenceThreshold
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            resultEl.textContent = '✓ Einstellungen erfolgreich gespeichert';
+            resultEl.className = 'action-result success';
+            setTimeout(() => {
+                resultEl.style.display = 'none';
+            }, 3000);
+        } else {
+            throw new Error(data.error || 'Unbekannter Fehler');
+        }
+
+    } catch (error) {
+        console.error('Error saving decision engine settings:', error);
+        resultEl.textContent = '✗ Fehler beim Speichern: ' + error.message;
+        resultEl.className = 'action-result error';
+    } finally {
+        btn.disabled = false;
+    }
 });
 
 // Verbindung testen
