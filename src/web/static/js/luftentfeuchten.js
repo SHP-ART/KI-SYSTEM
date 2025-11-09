@@ -127,6 +127,10 @@ function populateDeviceSelectors() {
     // Tür-Sensoren
     const doorSensors = filterByRoom(allDevices.filter(d => hasCap(d, 'alarm_contact')));
     populateSelect('door-sensor', doorSensors);
+
+    // Fenster-Sensoren
+    const windowSensors = filterByRoom(allDevices.filter(d => hasCap(d, 'alarm_contact')));
+    populateSelect('window-sensor', windowSensors);
 }
 
 function populateSelect(selectId, devices) {
@@ -163,6 +167,7 @@ async function loadConfig() {
             setSelectValue('heater', config.heater_id);
             setSelectValue('motion-sensor', config.motion_sensor_id);
             setSelectValue('door-sensor', config.door_sensor_id);
+            setSelectValue('window-sensor', config.window_sensor_id);
 
             // Schwellwerte
             setSlider('humidity-high', config.humidity_threshold_high || 70);
@@ -211,6 +216,7 @@ async function saveConfig() {
             heater_id: document.getElementById('heater').value || null,
             motion_sensor_id: document.getElementById('motion-sensor').value || null,
             door_sensor_id: document.getElementById('door-sensor').value || null,
+            window_sensor_id: document.getElementById('window-sensor').value || null,
             humidity_threshold_high: parseFloat(document.getElementById('humidity-high').value),
             humidity_threshold_low: parseFloat(document.getElementById('humidity-low').value),
             target_temperature: parseFloat(document.getElementById('target-temperature').value),
@@ -401,6 +407,28 @@ async function loadLiveSensorStatus() {
             document.getElementById('live-door-meta').textContent = devices.door_sensor.available ? 'Online' : 'Offline';
         } else {
             document.getElementById('live-door-card').style.display = 'none';
+        }
+
+        // Window Sensor
+        if (devices.window_sensor) {
+            const card = document.getElementById('live-window-card');
+            card.style.display = 'block';
+            document.getElementById('live-window-name').textContent = devices.window_sensor.name;
+            const valueEl = document.getElementById('live-window-value');
+            const iconEl = document.getElementById('live-window-icon');
+
+            if (devices.window_sensor.is_open) {
+                valueEl.textContent = 'Offen';
+                valueEl.className = 'sensor-value door-open';
+                iconEl.textContent = '🪟🔓';
+            } else {
+                valueEl.textContent = 'Geschlossen';
+                valueEl.className = 'sensor-value door-closed';
+                iconEl.textContent = '🪟🔒';
+            }
+            document.getElementById('live-window-meta').textContent = devices.window_sensor.available ? 'Online' : 'Offline';
+        } else {
+            document.getElementById('live-window-card').style.display = 'none';
         }
 
         // Motion Sensor

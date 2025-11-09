@@ -29,6 +29,7 @@ class BathroomAutomation:
                 'heater_id': str,
                 'door_sensor_id': str (optional),
                 'motion_sensor_id': str (optional),
+                'window_sensor_id': str (optional, empfohlen),
                 'humidity_threshold_high': float (default: 70),
                 'humidity_threshold_low': float (default: 60),
                 'target_temperature': float (default: 22)
@@ -77,9 +78,27 @@ class BathroomAutomation:
         temperature = self._get_temperature(platform)
         motion_detected = self._check_motion(platform)
         door_closed = self._check_door(platform)
+        window_open = self._check_window(platform)
 
         if humidity is None:
             logger.warning("No humidity sensor data available")
+            return actions
+
+        # Sicherheitscheck: Bei offenem Fenster keine Automation
+        if window_open:
+            logger.info("⚠️ Window is open - skipping heating and dehumidifier control")
+            # Schalte Luftentfeuchter aus wenn er läuft
+            if self.dehumidifier_running:
+                dehumidifier_id = self.config.get('dehumidifier_id')
+                if dehumidifier_id:
+                    logger.info("💨 Turning OFF dehumidifier (window open)")
+                    self.dehumidifier_running = False
+                    self._log_device_action('dehumidifier', dehumidifier_id, 'turn_off', 'Window open - energy saving', platform)
+                    actions.append({
+                        'device_id': dehumidifier_id,
+                        'action': 'turn_off',
+                        'reason': 'Window open - energy saving'
+                    })
             return actions
 
         # Update Motion-Tracking
@@ -197,6 +216,24 @@ class BathroomAutomation:
             logger.debug(f"Error reading door sensor: {e}")
 
         return False
+
+    def _check_window(self, platform) -> bool:
+        """Prüft Fenster-Sensor (offen = True)"""
+        sensor_id = self.config.get('window_sensor_id')
+        if not sensor_id:
+            return False  # Kein Sensor = Fenster als geschlossen annehmen
+
+        try:
+            state = platform.get_state(sensor_id)
+            if state:
+                caps = state.get('attributes', {}).get('capabilities', {})
+                # alarm_contact: true = offen, false = geschlossen
+                if 'alarm_contact' in caps:
+                    return caps['alarm_contact'].get('value', False)
+        except Exception as e:
+            logger.debug(f"Error reading window sensor: {e}")
+
+        return False  # Bei Fehler: Fenster als geschlossen annehmen
 
     def _detect_shower(self, humidity: float, motion: bool, door_closed: bool) -> bool:
         """

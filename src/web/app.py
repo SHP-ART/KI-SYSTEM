@@ -1849,6 +1849,22 @@ class WebInterface:
                             'available': state.get('available', True)
                         }
 
+                # Window Sensor
+                if config.get('window_sensor_id'):
+                    sensor_id = config['window_sensor_id']
+                    state = self.engine.platform.get_state(sensor_id)
+                    if state:
+                        # alarm_contact: true = open, false = closed
+                        caps = state.get('capabilitiesObj', {})
+                        alarm_contact = caps.get('alarm_contact', {}).get('value', False)
+                        devices_status['window_sensor'] = {
+                            'id': sensor_id,
+                            'name': state.get('name', sensor_id),
+                            'value': 'open' if alarm_contact else 'closed',
+                            'is_open': alarm_contact,
+                            'available': state.get('available', True)
+                        }
+
                 # Motion Sensor
                 if config.get('motion_sensor_id'):
                     sensor_id = config['motion_sensor_id']
