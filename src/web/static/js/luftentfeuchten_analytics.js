@@ -510,6 +510,10 @@ function renderHumidityTimeseries() {
     }
 
     const canvas = document.getElementById('humidity-canvas');
+    if (!canvas) {
+        console.error('Canvas element not found');
+        return;
+    }
     const ctx = canvas.getContext('2d');
 
     // Setze Canvas-Größe
@@ -640,6 +644,11 @@ function toggleMarkingMode() {
     const canvas = document.getElementById('humidity-canvas');
     const instructionNormal = document.getElementById('marking-instruction');
     const instructionActive = document.getElementById('marking-active-instruction');
+
+    if (!canvas) {
+        console.error('Canvas element not found in toggleMarkingMode');
+        return;
+    }
 
     if (isMarkingMode) {
         btn.textContent = '❌ Abbrechen';
@@ -853,16 +862,18 @@ document.addEventListener('DOMContentLoaded', () => {
     // Event Listener für Markier-Modus
     document.getElementById('toggle-marking-mode').addEventListener('click', toggleMarkingMode);
 
-    // Canvas Event Listeners
+    // Canvas Event Listeners - nur wenn Canvas existiert
     const canvas = document.getElementById('humidity-canvas');
-    canvas.addEventListener('mousedown', handleCanvasMouseDown);
-    canvas.addEventListener('mousemove', handleCanvasMouseMove);
-    canvas.addEventListener('mouseup', handleCanvasMouseUp);
-    canvas.addEventListener('mouseleave', () => {
-        if (isSelecting) {
-            handleCanvasMouseUp();
-        }
-    });
+    if (canvas) {
+        canvas.addEventListener('mousedown', handleCanvasMouseDown);
+        canvas.addEventListener('mousemove', handleCanvasMouseMove);
+        canvas.addEventListener('mouseup', handleCanvasMouseUp);
+        canvas.addEventListener('mouseleave', () => {
+            if (isSelecting) {
+                handleCanvasMouseUp();
+            }
+        });
+    }
 
     // Selection Confirm Event Listeners
     document.getElementById('confirm-selection').addEventListener('click', confirmSelection);
