@@ -2,23 +2,50 @@
 
 let analyticsData = null;
 let eventsData = null;
+let humidityTimeseriesData = null;
+
+// Helper functions
+async function fetchJSON(url) {
+    const response = await fetch(url);
+    if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return await response.json();
+}
+
+async function postJSON(url, data) {
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+    });
+    if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return await response.json();
+}
 
 // Lade alle Daten
 async function loadAllData() {
     try {
         // Lade Analytics parallel
-        const [analytics, events] = await Promise.all([
+        const hours = parseInt(document.getElementById('hours-selector')?.value || 6);
+        const [analytics, events, humidity] = await Promise.all([
             fetchJSON('/api/luftentfeuchten/analytics?days=30'),
-            fetchJSON('/api/luftentfeuchten/events?days=30&limit=50')
+            fetchJSON('/api/luftentfeuchten/events?days=30&limit=50'),
+            fetchJSON(`/api/luftentfeuchten/sensor-timeseries?hours=${hours}`)
         ]);
 
         analyticsData = analytics;
         eventsData = events;
+        humidityTimeseriesData = humidity;
 
         renderDashboard();
     } catch (error) {
         console.error('Error loading analytics data:', error);
-        alert('Fehler beim Laden der Analytics-Daten');
+        // alert('Fehler beim Laden der Analytics-Daten');
     }
 }
 
@@ -28,6 +55,7 @@ function renderDashboard() {
         return;
     }
 
+    renderHumidityTimeseries();
     renderLearningStatus();
     renderStatistics();
     renderPrediction();
@@ -404,12 +432,376 @@ async function optimizeNow() {
     }
 }
 
+// Render Live Humidity Timeseries
+function renderHumidityTimeseries() {
+    if (!humidityTimeseriesData || !humidityTimeseriesData.data || humidityTimeseriesData.data.length === 0) {
+        document.getElementById('humidity-chart').innerHTML =
+            '<p style="color: #6b7280; text-align: center; padding: 40px;">Keine Sensordaten verfügbar. Bitte starten Sie die Datensammlung.</p>';
+        return;
+    }
+
+    const canvas = document.getElementById('humidity-canvas');
+    const ctx = canvas.getContext('2d');
+
+    // Setze Canvas-Größe
+    canvas.width = canvas.parentElement.clientWidth;
+    canvas.height = 300;
+
+    const padding = 50;
+    const chartWidth = canvas.width - 2 * padding;
+    const chartHeight = canvas.height - 2 * padding;
+
+    const data = humidityTimeseriesData.data;
+
+    // Extrahiere Werte
+    const values = data.map(d => parseFloat(d.value));
+    const timestamps = data.map(d => new Date(d.timestamp));
+
+    // Finde Min/Max
+    const maxValue = Math.max(...values);
+    const minValue = Math.min(...values);
+    const range = maxValue - minValue;
+    const yMin = Math.max(0, minValue - range * 0.1);
+    const yMax = maxValue + range * 0.1;
+
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Zeichne Achsen
+    ctx.strokeStyle = '#e5e7eb';
+    ctx.lineWidth = 1;
+
+    // Y-Achse
+    ctx.beginPath();
+    ctx.moveTo(padding, padding);
+    ctx.lineTo(padding, canvas.height - padding);
+    ctx.stroke();
+
+    // X-Achse
+    ctx.beginPath();
+    ctx.moveTo(padding, canvas.height - padding);
+    ctx.lineTo(canvas.width - padding, canvas.height - padding);
+    ctx.stroke();
+
+    // Zeichne Gitterlinien und Y-Labels
+    ctx.strokeStyle = '#f3f4f6';
+    ctx.fillStyle = '#6b7280';
+    ctx.font = '12px Arial';
+    for (let i = 0; i <= 5; i++) {
+        const y = padding + (chartHeight / 5) * i;
+        ctx.beginPath();
+        ctx.moveTo(padding, y);
+        ctx.lineTo(canvas.width - padding, y);
+        ctx.stroke();
+
+        // Y-Label
+        const value = yMax - (yMax - yMin) / 5 * i;
+        ctx.textAlign = 'right';
+        ctx.fillText(value.toFixed(0) + '%', padding - 10, y + 4);
+    }
+
+    // X-Labels (Zeit)
+    const numXLabels = 6;
+    for (let i = 0; i <= numXLabels; i++) {
+        const index = Math.floor((data.length - 1) / numXLabels * i);
+        const x = padding + (chartWidth / numXLabels) * i;
+        const time = timestamps[index];
+
+        ctx.textAlign = 'center';
+        ctx.fillText(
+            time.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }),
+            x,
+            canvas.height - padding + 20
+        );
+    }
+
+    // Hilfsfunktionen
+    const getY = (value) => {
+        return canvas.height - padding - ((value - yMin) / (yMax - yMin)) * chartHeight;
+    };
+
+    const getX = (index) => {
+        return padding + (chartWidth / (data.length - 1)) * index;
+    };
+
+    // Zeichne Linie
+    ctx.strokeStyle = '#3b82f6';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    values.forEach((value, i) => {
+        const x = getX(i);
+        const y = getY(value);
+        if (i === 0) {
+            ctx.moveTo(x, y);
+        } else {
+            ctx.lineTo(x, y);
+        }
+    });
+    ctx.stroke();
+
+    // Zeichne Datenpunkte
+    values.forEach((value, i) => {
+        const x = getX(i);
+        const y = getY(value);
+
+        ctx.fillStyle = '#3b82f6';
+        ctx.beginPath();
+        ctx.arc(x, y, 3, 0, 2 * Math.PI);
+        ctx.fill();
+    });
+
+    // Legende
+    ctx.fillStyle = '#1f2937';
+    ctx.font = '14px Arial';
+    ctx.textAlign = 'left';
+    ctx.fillText(`Aktuelle Luftfeuchtigkeit: ${values[values.length - 1].toFixed(1)}%`, padding + 10, padding + 20);
+}
+
+// === CHART MARKIER-FUNKTIONALITÄT ===
+
+let isMarkingMode = false;
+let isSelecting = false;
+let selectionStart = null;
+let selectionEnd = null;
+let selectedData = null;
+
+function toggleMarkingMode() {
+    isMarkingMode = !isMarkingMode;
+    const btn = document.getElementById('toggle-marking-mode');
+    const canvas = document.getElementById('humidity-canvas');
+    const instructionNormal = document.getElementById('marking-instruction');
+    const instructionActive = document.getElementById('marking-active-instruction');
+
+    if (isMarkingMode) {
+        btn.textContent = '❌ Abbrechen';
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-danger');
+        canvas.style.cursor = 'crosshair';
+        instructionNormal.style.display = 'none';
+        instructionActive.style.display = 'inline';
+    } else {
+        btn.textContent = '✏️ Markier-Modus';
+        btn.classList.remove('btn-danger');
+        btn.classList.add('btn-primary');
+        canvas.style.cursor = 'default';
+        instructionNormal.style.display = 'inline';
+        instructionActive.style.display = 'none';
+        clearSelection();
+    }
+}
+
+function handleCanvasMouseDown(e) {
+    if (!isMarkingMode) return;
+
+    const canvas = document.getElementById('humidity-canvas');
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+
+    isSelecting = true;
+    selectionStart = x;
+    selectionEnd = x;
+
+    updateSelectionVisual();
+}
+
+function handleCanvasMouseMove(e) {
+    if (!isMarkingMode || !isSelecting) return;
+
+    const canvas = document.getElementById('humidity-canvas');
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+
+    selectionEnd = x;
+    updateSelectionVisual();
+}
+
+function handleCanvasMouseUp(e) {
+    if (!isMarkingMode || !isSelecting) return;
+
+    isSelecting = false;
+
+    // Berechne Start- und End-Zeiten basierend auf der Auswahl
+    const canvas = document.getElementById('humidity-canvas');
+    const rect = canvas.getBoundingClientRect();
+
+    const startX = Math.min(selectionStart, selectionEnd);
+    const endX = Math.max(selectionStart, selectionEnd);
+
+    // Zu klein? Abbrechen
+    if (Math.abs(endX - startX) < 20) {
+        clearSelection();
+        return;
+    }
+
+    // Berechne Zeiten aus X-Koordinaten
+    calculateTimesFromSelection(startX, endX, rect.width);
+}
+
+function updateSelectionVisual() {
+    const overlay = document.getElementById('selection-overlay');
+    const box = document.getElementById('selection-box');
+
+    if (!isSelecting) {
+        overlay.style.display = 'none';
+        return;
+    }
+
+    overlay.style.display = 'block';
+
+    const startX = Math.min(selectionStart, selectionEnd);
+    const width = Math.abs(selectionEnd - selectionStart);
+
+    box.style.left = startX + 'px';
+    box.style.top = '0';
+    box.style.width = width + 'px';
+    box.style.height = '100%';
+}
+
+function calculateTimesFromSelection(startX, endX, canvasWidth) {
+    if (!humidityTimeseriesData || !humidityTimeseriesData.data) return;
+
+    const data = humidityTimeseriesData.data;
+    if (data.length === 0) return;
+
+    // Konvertiere X-Position zu Daten-Index
+    const startIndex = Math.floor((startX / canvasWidth) * data.length);
+    const endIndex = Math.floor((endX / canvasWidth) * data.length);
+
+    const startTime = new Date(data[startIndex].timestamp);
+    const endTime = new Date(data[endIndex].timestamp);
+
+    // Finde maximale Luftfeuchtigkeit im Bereich
+    let maxHumidity = 0;
+    for (let i = startIndex; i <= endIndex; i++) {
+        if (data[i].humidity > maxHumidity) {
+            maxHumidity = data[i].humidity;
+        }
+    }
+
+    selectedData = {
+        startTime,
+        endTime,
+        peakHumidity: maxHumidity
+    };
+
+    showSelectionConfirm();
+}
+
+function showSelectionConfirm() {
+    const confirmBox = document.getElementById('selection-confirm');
+    const overlay = document.getElementById('selection-overlay');
+
+    // Zeige Confirmation Box
+    confirmBox.style.display = 'block';
+    overlay.style.display = 'block';
+
+    // Fülle Daten
+    const duration = (selectedData.endTime - selectedData.startTime) / 1000 / 60;
+
+    document.getElementById('selection-start-time').textContent = formatTime(selectedData.startTime);
+    document.getElementById('selection-end-time').textContent = formatTime(selectedData.endTime);
+    document.getElementById('selection-duration').textContent = Math.round(duration) + ' Min';
+    document.getElementById('selection-peak-humidity').textContent = selectedData.peakHumidity.toFixed(1) + '%';
+}
+
+function formatTime(date) {
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    return `${day}.${month}. ${hours}:${minutes}`;
+}
+
+function clearSelection() {
+    selectionStart = null;
+    selectionEnd = null;
+    selectedData = null;
+    isSelecting = false;
+
+    document.getElementById('selection-overlay').style.display = 'none';
+    document.getElementById('selection-confirm').style.display = 'none';
+    document.getElementById('selection-result').style.display = 'none';
+}
+
+async function confirmSelection() {
+    if (!selectedData) return;
+
+    const resultEl = document.getElementById('selection-result');
+    const confirmBtn = document.getElementById('confirm-selection');
+
+    try {
+        confirmBtn.disabled = true;
+        resultEl.innerHTML = '<div style="padding: 10px; background: #dbeafe; border-radius: 4px; color: #1e40af;">📤 Speichere Event...</div>';
+        resultEl.style.display = 'block';
+
+        const response = await fetch('/api/luftentfeuchten/manual-event', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                start_time: selectedData.startTime.toISOString(),
+                end_time: selectedData.endTime.toISOString(),
+                peak_humidity: selectedData.peakHumidity,
+                notes: 'Manuell im Diagramm markiert'
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            resultEl.innerHTML = `<div style="padding: 10px; background: #d1fae5; border-radius: 4px; color: #065f46;">✅ ${data.message}</div>`;
+
+            // Reload nach 1 Sekunde
+            setTimeout(async () => {
+                clearSelection();
+                toggleMarkingMode();
+                await loadAllData();
+            }, 1500);
+        } else {
+            throw new Error(data.error || 'Unbekannter Fehler');
+        }
+
+    } catch (error) {
+        console.error('Error saving event:', error);
+        resultEl.innerHTML = `<div style="padding: 10px; background: #fee2e2; border-radius: 4px; color: #991b1b;">❌ Fehler: ${error.message}</div>`;
+    } finally {
+        confirmBtn.disabled = false;
+    }
+}
+
 // Init
 document.addEventListener('DOMContentLoaded', () => {
     loadAllData();
 
     // Event Listener für Optimierungs-Button
     document.getElementById('optimize-now').addEventListener('click', optimizeNow);
+
+    // Event Listener für Hours-Selector
+    const hoursSelector = document.getElementById('hours-selector');
+    if (hoursSelector) {
+        hoursSelector.addEventListener('change', loadAllData);
+    }
+
+    // Event Listener für Markier-Modus
+    document.getElementById('toggle-marking-mode').addEventListener('click', toggleMarkingMode);
+
+    // Canvas Event Listeners
+    const canvas = document.getElementById('humidity-canvas');
+    canvas.addEventListener('mousedown', handleCanvasMouseDown);
+    canvas.addEventListener('mousemove', handleCanvasMouseMove);
+    canvas.addEventListener('mouseup', handleCanvasMouseUp);
+    canvas.addEventListener('mouseleave', () => {
+        if (isSelecting) {
+            handleCanvasMouseUp();
+        }
+    });
+
+    // Selection Confirm Event Listeners
+    document.getElementById('confirm-selection').addEventListener('click', confirmSelection);
+    document.getElementById('cancel-selection').addEventListener('click', () => {
+        clearSelection();
+        toggleMarkingMode();
+    });
+    document.getElementById('adjust-selection').addEventListener('click', clearSelection);
 
     // Auto-Refresh alle 30 Sekunden
     setInterval(loadAllData, 30000);

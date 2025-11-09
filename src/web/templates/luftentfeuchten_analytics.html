@@ -12,6 +12,86 @@
         <a href="/luftentfeuchten" class="btn btn-secondary">Zurück zur Konfiguration</a>
     </div>
 
+    <!-- Live-Luftfeuchtigkeits-Diagramm -->
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h3>💧 Live-Luftfeuchtigkeit (letzte 6 Stunden)</h3>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <select id="hours-selector" class="form-select" style="padding: 6px 12px;">
+                    <option value="3">3 Stunden</option>
+                    <option value="6" selected>6 Stunden</option>
+                    <option value="12">12 Stunden</option>
+                    <option value="24">24 Stunden</option>
+                </select>
+                <button id="toggle-marking-mode" class="btn btn-primary">
+                    ✏️ Markier-Modus
+                </button>
+            </div>
+        </div>
+
+        <div style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border-left: 4px solid #3b82f6; border-radius: 6px; padding: 12px; margin-bottom: 15px;">
+            <div style="display: flex; align-items: start; gap: 10px;">
+                <span style="font-size: 1.3em;">💡</span>
+                <div style="flex: 1;">
+                    <div style="font-weight: 600; color: #1e40af; margin-bottom: 4px;">Dusch-Event im Diagramm markieren</div>
+                    <div style="font-size: 0.85em; color: #1e40af;">
+                        <span id="marking-instruction">
+                            Klicke auf <strong>"✏️ Markier-Modus"</strong> und markiere dann im Diagramm den Zeitbereich des Dusch-Events durch Klicken + Ziehen.
+                        </span>
+                        <span id="marking-active-instruction" style="display: none; font-weight: 600;">
+                            👆 Klicke und ziehe im Diagramm, um einen Bereich zu markieren.
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="humidity-chart" style="margin-top: 20px; position: relative; height: 300px;">
+            <canvas id="humidity-canvas"></canvas>
+            <div id="selection-overlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: none;">
+                <div id="selection-box" style="position: absolute; background: rgba(59, 130, 246, 0.2); border: 2px solid #3b82f6; border-radius: 4px;"></div>
+            </div>
+        </div>
+        <div style="margin-top: 10px; font-size: 0.85em; color: #6b7280;">
+            Aktualisiert alle 30 Sekunden. Zeigt die tatsächlichen Sensor-Werte.
+        </div>
+
+        <!-- Markierungs-Bestätigung -->
+        <div id="selection-confirm" style="display: none; margin-top: 15px; padding: 15px; background: #f9fafb; border-radius: 8px; border: 2px solid #3b82f6;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h4 style="margin: 0; color: #1f2937;">📝 Markierten Bereich als Dusch-Event speichern?</h4>
+                <button id="cancel-selection" class="btn btn-sm" style="background: #e5e7eb; color: #374151;">✕</button>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 12px;">
+                <div>
+                    <div style="font-size: 0.85em; color: #6b7280;">Startzeit:</div>
+                    <div id="selection-start-time" style="font-weight: 600; color: #1f2937;">--:--</div>
+                </div>
+                <div>
+                    <div style="font-size: 0.85em; color: #6b7280;">Endzeit:</div>
+                    <div id="selection-end-time" style="font-weight: 600; color: #1f2937;">--:--</div>
+                </div>
+                <div>
+                    <div style="font-size: 0.85em; color: #6b7280;">Dauer:</div>
+                    <div id="selection-duration" style="font-weight: 600; color: #1f2937;">-- Min</div>
+                </div>
+                <div>
+                    <div style="font-size: 0.85em; color: #6b7280;">Max. Luftfeuchtigkeit:</div>
+                    <div id="selection-peak-humidity" style="font-weight: 600; color: #1f2937;">--%</div>
+                </div>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button id="confirm-selection" class="btn btn-primary" style="flex: 1;">
+                    ✅ Als Dusch-Event speichern
+                </button>
+                <button id="adjust-selection" class="btn btn-secondary">
+                    🔄 Neu markieren
+                </button>
+            </div>
+            <div id="selection-result" style="margin-top: 10px; display: none;"></div>
+        </div>
+    </div>
+
     <!-- Lern-Status & Optimierung -->
     <div class="card">
         <h3>Selbst-Optimierung</h3>
@@ -229,6 +309,138 @@
     padding: 15px;
     border-radius: 4px;
     margin: 10px 0;
+}
+
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 12px;
+    padding: 25px;
+    max-width: 600px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.form-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.95em;
+    transition: border-color 0.2s ease;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.form-select {
+    padding: 8px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: white;
+    font-size: 0.9em;
+}
+
+.slider-group {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.slider {
+    flex: 1;
+    height: 6px;
+    border-radius: 3px;
+    background: #e5e7eb;
+    outline: none;
+    -webkit-appearance: none;
+}
+
+.slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #3b82f6;
+    cursor: pointer;
+}
+
+.slider::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #3b82f6;
+    cursor: pointer;
+    border: none;
+}
+
+.slider-value {
+    min-width: 60px;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: white;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.btn-secondary {
+    background: #e5e7eb;
+    color: #374151;
+}
+
+.btn-secondary:hover {
+    background: #d1d5db;
+}
+
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 0.85em;
 }
 </style>
 

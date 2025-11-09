@@ -82,73 +82,6 @@
         </div>
     </div>
 
-    <!-- Manuelles Dusch-Event eintragen -->
-    <div class="card" id="manual-event-card">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-            <div>
-                <h3 style="margin: 0;">📝 Dusch-Event manuell eintragen</h3>
-                <p class="subtitle" style="margin: 5px 0 0 0;">Hilft der KI, die Duscherkennung zu verbessern</p>
-            </div>
-        </div>
-
-        <div style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border-left: 4px solid #3b82f6; border-radius: 6px; padding: 15px; margin-bottom: 20px;">
-            <div style="display: flex; align-items: start; gap: 12px;">
-                <span style="font-size: 1.5em;">💡</span>
-                <div style="flex: 1;">
-                    <div style="font-weight: 600; color: #1e40af; margin-bottom: 4px;">Warum manuelle Events eintragen?</div>
-                    <div style="font-size: 0.9em; color: #1e40af;">
-                        Wenn das System ein Duschereignis nicht automatisch erkannt hat, können Sie es hier manuell nachtragen.
-                        Das verbessert die KI-Mustererkennung und macht die automatische Erkennung präziser.
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="form-section">
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
-                <div class="form-group">
-                    <label>Startzeit *</label>
-                    <input type="datetime-local" id="manual-start-time" class="form-input" required>
-                    <small style="color: #6b7280; margin-top: 4px; display: block;">
-                        Wann haben Sie mit dem Duschen begonnen?
-                    </small>
-                </div>
-
-                <div class="form-group">
-                    <label>Endzeit *</label>
-                    <input type="datetime-local" id="manual-end-time" class="form-input" required>
-                    <small style="color: #6b7280; margin-top: 4px; display: block;">
-                        Wann war die Dusche beendet?
-                    </small>
-                </div>
-
-                <div class="form-group">
-                    <label>Maximale Luftfeuchtigkeit (%)</label>
-                    <input type="number" id="manual-peak-humidity" class="form-input" value="75" min="50" max="100" step="1">
-                    <small style="color: #6b7280; margin-top: 4px; display: block;">
-                        Geschätzte maximale Luftfeuchtigkeit während des Duschens
-                    </small>
-                </div>
-            </div>
-
-            <div class="form-group" style="margin-top: 15px;">
-                <label>Notizen (Optional)</label>
-                <textarea id="manual-notes" class="form-input" rows="2" placeholder="z.B. 'Lange, heiße Dusche' oder 'Fenster war offen'"></textarea>
-            </div>
-
-            <div style="display: flex; gap: 10px; margin-top: 20px;">
-                <button id="submit-manual-event" class="btn btn-primary">
-                    ✅ Event eintragen
-                </button>
-                <button id="clear-manual-form" class="btn btn-secondary">
-                    🔄 Formular zurücksetzen
-                </button>
-            </div>
-
-            <div id="manual-event-result" class="action-result" style="display: none; margin-top: 15px;"></div>
-        </div>
-    </div>
-
     <!-- Energie & Kosten Card -->
     <div class="card energy-card" id="energy-card">
         <h3>⚡ Energie & Kosten (letzte 30 Tage)</h3>
@@ -913,41 +846,6 @@
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
-/* Manual Event Form */
-.action-result {
-    padding: 12px;
-    border-radius: 6px;
-    font-size: 0.95em;
-}
-
-.action-result .success {
-    background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
-    border-left: 4px solid #10b981;
-    padding: 12px;
-    border-radius: 6px;
-    color: #065f46;
-}
-
-.action-result .error {
-    background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
-    border-left: 4px solid #ef4444;
-    padding: 12px;
-    border-radius: 6px;
-    color: #991b1b;
-}
-
-.action-result .loading {
-    background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
-    border-left: 4px solid #3b82f6;
-    padding: 12px;
-    border-radius: 6px;
-    color: #1e40af;
-}
-
-textarea.form-input {
-    resize: vertical;
-    font-family: inherit;
-}
 </style>
 
 <script src="{{ url_for('static', filename='js/luftentfeuchten.js') }}"></script>
