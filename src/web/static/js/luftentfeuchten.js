@@ -317,6 +317,202 @@ function setupSliders() {
     });
 }
 
+// Live Sensor Status laden
+let liveSensorInterval = null;
+
+async function loadLiveSensorStatus() {
+    try {
+        const data = await fetchJSON('/api/luftentfeuchten/live-status');
+
+        if (!data.devices || Object.keys(data.devices).length === 0) {
+            // Keine Geräte konfiguriert - verstecke Live-Card
+            document.getElementById('live-sensors-card').style.display = 'none';
+            return;
+        }
+
+        // Zeige Live-Card
+        document.getElementById('live-sensors-card').style.display = 'block';
+
+        const devices = data.devices;
+
+        // Humidity Sensor
+        if (devices.humidity_sensor) {
+            const card = document.getElementById('live-humidity-card');
+            card.style.display = 'block';
+            document.getElementById('live-humidity-name').textContent = devices.humidity_sensor.name;
+            const value = devices.humidity_sensor.value;
+            if (value !== null && value !== undefined) {
+                document.getElementById('live-humidity-value').textContent = `${value.toFixed(1)}%`;
+                document.getElementById('live-humidity-meta').textContent = devices.humidity_sensor.available ? 'Online' : 'Offline';
+            } else {
+                document.getElementById('live-humidity-value').textContent = '--';
+                document.getElementById('live-humidity-meta').textContent = 'Keine Daten';
+            }
+        } else {
+            document.getElementById('live-humidity-card').style.display = 'none';
+        }
+
+        // Temperature Sensor
+        if (devices.temperature_sensor) {
+            const card = document.getElementById('live-temp-card');
+            card.style.display = 'block';
+            document.getElementById('live-temp-name').textContent = devices.temperature_sensor.name;
+            const value = devices.temperature_sensor.value;
+            if (value !== null && value !== undefined) {
+                document.getElementById('live-temp-value').textContent = `${value.toFixed(1)}°C`;
+                document.getElementById('live-temp-meta').textContent = devices.temperature_sensor.available ? 'Online' : 'Offline';
+            } else {
+                document.getElementById('live-temp-value').textContent = '--';
+                document.getElementById('live-temp-meta').textContent = 'Keine Daten';
+            }
+        } else {
+            document.getElementById('live-temp-card').style.display = 'none';
+        }
+
+        // Door Sensor
+        if (devices.door_sensor) {
+            const card = document.getElementById('live-door-card');
+            card.style.display = 'block';
+            document.getElementById('live-door-name').textContent = devices.door_sensor.name;
+            const valueEl = document.getElementById('live-door-value');
+            const iconEl = document.getElementById('live-door-icon');
+
+            if (devices.door_sensor.is_open) {
+                valueEl.textContent = 'Offen';
+                valueEl.className = 'sensor-value door-open';
+                iconEl.textContent = '🚪🔓';
+            } else {
+                valueEl.textContent = 'Geschlossen';
+                valueEl.className = 'sensor-value door-closed';
+                iconEl.textContent = '🚪🔒';
+            }
+            document.getElementById('live-door-meta').textContent = devices.door_sensor.available ? 'Online' : 'Offline';
+        } else {
+            document.getElementById('live-door-card').style.display = 'none';
+        }
+
+        // Motion Sensor
+        if (devices.motion_sensor) {
+            const card = document.getElementById('live-motion-card');
+            card.style.display = 'block';
+            document.getElementById('live-motion-name').textContent = devices.motion_sensor.name;
+            const valueEl = document.getElementById('live-motion-value');
+            const iconEl = document.getElementById('live-motion-icon');
+
+            if (devices.motion_sensor.motion_detected) {
+                valueEl.textContent = 'Bewegung erkannt!';
+                valueEl.className = 'sensor-value motion-detected';
+                iconEl.textContent = '👤✨';
+            } else {
+                valueEl.textContent = 'Keine Bewegung';
+                valueEl.className = 'sensor-value';
+                iconEl.textContent = '👤';
+            }
+            document.getElementById('live-motion-meta').textContent = devices.motion_sensor.available ? 'Online' : 'Offline';
+        } else {
+            document.getElementById('live-motion-card').style.display = 'none';
+        }
+
+        // Dehumidifier
+        if (devices.dehumidifier) {
+            const card = document.getElementById('live-dehumidifier-card');
+            card.style.display = 'block';
+            document.getElementById('live-dehumidifier-name').textContent = devices.dehumidifier.name;
+            const valueEl = document.getElementById('live-dehumidifier-value');
+            const iconEl = document.getElementById('live-dehumidifier-icon');
+
+            if (devices.dehumidifier.is_on) {
+                valueEl.textContent = 'An';
+                valueEl.style.color = '#10b981';
+                iconEl.textContent = '💨';
+            } else {
+                valueEl.textContent = 'Aus';
+                valueEl.style.color = '#6b7280';
+                iconEl.textContent = '💨';
+            }
+            document.getElementById('live-dehumidifier-meta').textContent = devices.dehumidifier.available ? 'Online' : 'Offline';
+        } else {
+            document.getElementById('live-dehumidifier-card').style.display = 'none';
+        }
+
+        // Heater
+        if (devices.heater) {
+            const card = document.getElementById('live-heater-card');
+            card.style.display = 'block';
+            document.getElementById('live-heater-name').textContent = devices.heater.name;
+            const value = devices.heater.value;
+            if (value !== null && value !== undefined) {
+                document.getElementById('live-heater-value').textContent = `${value.toFixed(1)}°C`;
+            } else {
+                document.getElementById('live-heater-value').textContent = '--';
+            }
+            document.getElementById('live-heater-meta').textContent = devices.heater.available ? 'Online' : 'Offline';
+        } else {
+            document.getElementById('live-heater-card').style.display = 'none';
+        }
+
+    } catch (error) {
+        console.error('Error loading live sensor status:', error);
+    }
+}
+
+// Aktoren-Steuerung
+async function controlActuator(deviceType, action) {
+    try {
+        const result = await postJSON('/api/luftentfeuchten/control', {
+            device_type: deviceType,
+            action: action
+        });
+
+        if (result.success) {
+            // Zeige kurze Bestätigung
+            const message = result.message || 'Befehl gesendet';
+            showToast(message, 'success');
+
+            // Lade sofort den neuen Status
+            setTimeout(loadLiveSensorStatus, 500);
+        } else {
+            showToast(result.error || 'Fehler beim Steuern', 'error');
+        }
+    } catch (error) {
+        console.error('Error controlling actuator:', error);
+        showToast('Fehler beim Steuern des Geräts', 'error');
+    }
+}
+
+// Toast-Nachricht anzeigen
+function showToast(message, type = 'info') {
+    // Erstelle Toast Element wenn nicht vorhanden
+    let toastContainer = document.getElementById('toast-container');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.id = 'toast-container';
+        toastContainer.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 9999;';
+        document.body.appendChild(toastContainer);
+    }
+
+    const toast = document.createElement('div');
+    const bgColor = type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6';
+    toast.style.cssText = `
+        background: ${bgColor};
+        color: white;
+        padding: 12px 20px;
+        border-radius: 6px;
+        margin-bottom: 10px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        animation: slideIn 0.3s ease;
+    `;
+    toast.textContent = message;
+
+    toastContainer.appendChild(toast);
+
+    // Entferne nach 3 Sekunden
+    setTimeout(() => {
+        toast.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
 // Init
 document.addEventListener('DOMContentLoaded', async () => {
     setupSliders();
@@ -354,6 +550,31 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    // Aktoren-Test Event Listeners
+    const dehumidifierOn = document.getElementById('test-dehumidifier-on');
+    const dehumidifierOff = document.getElementById('test-dehumidifier-off');
+    const heaterUp = document.getElementById('test-heater-up');
+    const heaterDown = document.getElementById('test-heater-down');
+
+    if (dehumidifierOn) {
+        dehumidifierOn.addEventListener('click', () => controlActuator('dehumidifier', 'on'));
+    }
+    if (dehumidifierOff) {
+        dehumidifierOff.addEventListener('click', () => controlActuator('dehumidifier', 'off'));
+    }
+    if (heaterUp) {
+        heaterUp.addEventListener('click', () => controlActuator('heater', 'temp_up'));
+    }
+    if (heaterDown) {
+        heaterDown.addEventListener('click', () => controlActuator('heater', 'temp_down'));
+    }
+
     // Auto-refresh Status alle 10 Sekunden
     setInterval(loadStatus, 10000);
+
+    // Lade Live-Sensor-Status initial
+    await loadLiveSensorStatus();
+
+    // Auto-refresh Live-Sensoren alle 5 Sekunden
+    liveSensorInterval = setInterval(loadLiveSensorStatus, 5000);
 });

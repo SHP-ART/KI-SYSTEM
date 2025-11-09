@@ -49,6 +49,88 @@
         </div>
     </div>
 
+    <!-- Live Sensor Values & Actuator Testing -->
+    <div class="card" id="live-sensors-card" style="display: none;">
+        <h3>📡 Live-Sensor-Werte & Aktoren-Test</h3>
+        <p class="subtitle" style="margin-bottom: 20px;">Echtzeitwerte der konfigurierten Sensoren und Steuerung der Aktoren</p>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+            <!-- Humidity Sensor -->
+            <div class="sensor-live-card" id="live-humidity-card" style="display: none;">
+                <div class="sensor-header">
+                    <span class="sensor-icon">💧</span>
+                    <span class="sensor-name" id="live-humidity-name">Luftfeuchtigkeit</span>
+                </div>
+                <div class="sensor-value" id="live-humidity-value">--%</div>
+                <div class="sensor-meta" id="live-humidity-meta">Warte auf Daten...</div>
+            </div>
+
+            <!-- Temperature Sensor -->
+            <div class="sensor-live-card" id="live-temp-card" style="display: none;">
+                <div class="sensor-header">
+                    <span class="sensor-icon">🌡️</span>
+                    <span class="sensor-name" id="live-temp-name">Temperatur</span>
+                </div>
+                <div class="sensor-value" id="live-temp-value">--°C</div>
+                <div class="sensor-meta" id="live-temp-meta">Warte auf Daten...</div>
+            </div>
+
+            <!-- Door Sensor -->
+            <div class="sensor-live-card" id="live-door-card" style="display: none;">
+                <div class="sensor-header">
+                    <span class="sensor-icon" id="live-door-icon">🚪</span>
+                    <span class="sensor-name" id="live-door-name">Tür-Sensor</span>
+                </div>
+                <div class="sensor-value" id="live-door-value">Unbekannt</div>
+                <div class="sensor-meta" id="live-door-meta">Warte auf Daten...</div>
+            </div>
+
+            <!-- Motion Sensor -->
+            <div class="sensor-live-card" id="live-motion-card" style="display: none;">
+                <div class="sensor-header">
+                    <span class="sensor-icon" id="live-motion-icon">👤</span>
+                    <span class="sensor-name" id="live-motion-name">Bewegung</span>
+                </div>
+                <div class="sensor-value" id="live-motion-value">Keine Bewegung</div>
+                <div class="sensor-meta" id="live-motion-meta">Warte auf Daten...</div>
+            </div>
+
+            <!-- Dehumidifier Control -->
+            <div class="sensor-live-card actuator-card" id="live-dehumidifier-card" style="display: none;">
+                <div class="sensor-header">
+                    <span class="sensor-icon" id="live-dehumidifier-icon">💨</span>
+                    <span class="sensor-name" id="live-dehumidifier-name">Luftentfeuchter</span>
+                </div>
+                <div class="sensor-value" id="live-dehumidifier-value">Aus</div>
+                <div style="margin-top: 15px;">
+                    <button class="btn btn-sm btn-test" id="test-dehumidifier-on">▶️ Ein</button>
+                    <button class="btn btn-sm btn-test" id="test-dehumidifier-off" style="margin-left: 8px;">⏸️ Aus</button>
+                </div>
+                <div class="sensor-meta" id="live-dehumidifier-meta">Warte auf Daten...</div>
+            </div>
+
+            <!-- Heater Control -->
+            <div class="sensor-live-card actuator-card" id="live-heater-card" style="display: none;">
+                <div class="sensor-header">
+                    <span class="sensor-icon" id="live-heater-icon">🔥</span>
+                    <span class="sensor-name" id="live-heater-name">Heizung</span>
+                </div>
+                <div class="sensor-value" id="live-heater-value">--°C</div>
+                <div style="margin-top: 15px;">
+                    <button class="btn btn-sm btn-test" id="test-heater-up">⬆️ +1°C</button>
+                    <button class="btn btn-sm btn-test" id="test-heater-down" style="margin-left: 8px;">⬇️ -1°C</button>
+                </div>
+                <div class="sensor-meta" id="live-heater-meta">Warte auf Daten...</div>
+            </div>
+        </div>
+
+        <div style="margin-top: 20px; padding: 12px; background: #eff6ff; border-left: 4px solid #3b82f6; border-radius: 4px;">
+            <small style="color: #1e40af;">
+                ℹ️ Aktualisiert alle 5 Sekunden. Aktoren-Tests schalten Geräte direkt - verwenden Sie diese Funktion vorsichtig!
+            </small>
+        </div>
+    </div>
+
     <!-- Konfiguration -->
     <div class="card config-card">
         <h3>⚙️ Konfiguration</h3>
@@ -190,6 +272,108 @@
         </div>
     </div>
 </div>
+
+<style>
+.sensor-live-card {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    border: 2px solid #e5e7eb;
+    transition: all 0.3s ease;
+}
+
+.sensor-live-card:hover {
+    border-color: #3b82f6;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.actuator-card {
+    border-color: #fbbf24;
+    background: linear-gradient(135deg, #ffffff 0%, #fef3c715 100%);
+}
+
+.actuator-card:hover {
+    border-color: #f59e0b;
+}
+
+.sensor-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.sensor-icon {
+    font-size: 1.8em;
+}
+
+.sensor-name {
+    font-weight: 600;
+    color: #1f2937;
+    font-size: 1.05em;
+}
+
+.sensor-value {
+    font-size: 2em;
+    font-weight: bold;
+    color: #1f2937;
+    margin: 10px 0;
+}
+
+.sensor-meta {
+    font-size: 0.85em;
+    color: #6b7280;
+    margin-top: 8px;
+}
+
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 0.85em;
+}
+
+.btn-test {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: white;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-test:hover {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(0,0,0,0.15);
+}
+
+.btn-test:active {
+    transform: translateY(0);
+}
+
+.btn-test:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Status indicators for door/motion */
+.sensor-value.door-open {
+    color: #ef4444;
+}
+
+.sensor-value.door-closed {
+    color: #10b981;
+}
+
+.sensor-value.motion-detected {
+    color: #f59e0b;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+</style>
 
 <script src="{{ url_for('static', filename='js/luftentfeuchten.js') }}"></script>
 {% endblock %}

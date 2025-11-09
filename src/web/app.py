@@ -1681,6 +1681,185 @@ class WebInterface:
                 logger.error(f"Error optimizing bathroom parameters: {e}")
                 return jsonify({'error': str(e)}), 500
 
+        @self.app.route('/api/luftentfeuchten/live-status')
+        def api_bathroom_live_status():
+            """API: Live-Status aller konfigurierten Badezimmer-Sensoren und Aktoren"""
+            try:
+                import json
+                from pathlib import Path
+
+                config_file = Path('data/luftentfeuchten_config.json')
+
+                if not config_file.exists():
+                    return jsonify({'error': 'No configuration found', 'devices': {}}), 200
+
+                with open(config_file, 'r') as f:
+                    config = json.load(f)
+
+                devices_status = {}
+
+                # Humidity Sensor
+                if config.get('humidity_sensor_id'):
+                    sensor_id = config['humidity_sensor_id']
+                    state = self.engine.platform.get_state(sensor_id)
+                    if state:
+                        devices_status['humidity_sensor'] = {
+                            'id': sensor_id,
+                            'name': state.get('attributes', {}).get('friendly_name', sensor_id),
+                            'value': self.engine._extract_humidity_value(state),
+                            'unit': '%',
+                            'available': state.get('state', 'unknown') != 'unavailable'
+                        }
+
+                # Temperature Sensor
+                if config.get('temperature_sensor_id'):
+                    sensor_id = config['temperature_sensor_id']
+                    state = self.engine.platform.get_state(sensor_id)
+                    if state:
+                        devices_status['temperature_sensor'] = {
+                            'id': sensor_id,
+                            'name': state.get('attributes', {}).get('friendly_name', sensor_id),
+                            'value': self.engine._extract_temperature_value(state),
+                            'unit': '°C',
+                            'available': state.get('state', 'unknown') != 'unavailable'
+                        }
+
+                # Door Sensor
+                if config.get('door_sensor_id'):
+                    sensor_id = config['door_sensor_id']
+                    state = self.engine.platform.get_state(sensor_id)
+                    if state:
+                        # alarm_contact: true = closed (contact made), false = open (contact broken)
+                        caps = state.get('capabilitiesObj', {})
+                        alarm_contact = caps.get('alarm_contact', {}).get('value', False)
+                        devices_status['door_sensor'] = {
+                            'id': sensor_id,
+                            'name': state.get('name', sensor_id),
+                            'value': 'closed' if alarm_contact else 'open',
+                            'is_open': not alarm_contact,
+                            'available': state.get('available', True)
+                        }
+
+                # Motion Sensor
+                if config.get('motion_sensor_id'):
+                    sensor_id = config['motion_sensor_id']
+                    state = self.engine.platform.get_state(sensor_id)
+                    if state:
+                        # alarm_motion: true = motion detected
+                        caps = state.get('capabilitiesObj', {})
+                        alarm_motion = caps.get('alarm_motion', {}).get('value', False)
+                        devices_status['motion_sensor'] = {
+                            'id': sensor_id,
+                            'name': state.get('name', sensor_id),
+                            'value': 'detected' if alarm_motion else 'clear',
+                            'motion_detected': alarm_motion,
+                            'available': state.get('available', True)
+                        }
+
+                # Dehumidifier
+                if config.get('dehumidifier_id'):
+                    device_id = config['dehumidifier_id']
+                    state = self.engine.platform.get_state(device_id)
+                    if state:
+                        caps = state.get('capabilitiesObj', {})
+                        onoff = caps.get('onoff', {}).get('value', False)
+                        devices_status['dehumidifier'] = {
+                            'id': device_id,
+                            'name': state.get('name', device_id),
+                            'value': 'on' if onoff else 'off',
+                            'is_on': onoff,
+                            'available': state.get('available', True)
+                        }
+
+                # Heater
+                if config.get('heater_id'):
+                    device_id = config['heater_id']
+                    state = self.engine.platform.get_state(device_id)
+                    if state:
+                        caps = state.get('capabilitiesObj', {})
+                        target_temp = caps.get('target_temperature', {}).get('value', None)
+                        devices_status['heater'] = {
+                            'id': device_id,
+                            'name': state.get('name', device_id),
+                            'value': target_temp,
+                            'unit': '°C',
+                            'available': state.get('available', True)
+                        }
+
+                return jsonify({'devices': devices_status})
+
+            except Exception as e:
+                logger.error(f"Error getting bathroom live status: {e}")
+                return jsonify({'error': str(e), 'devices': {}}), 500
+
+        @self.app.route('/api/luftentfeuchten/control', methods=['POST'])
+        def api_bathroom_control():
+            """API: Steuerung von Aktoren (Luftentfeuchter, Heizung)"""
+            try:
+                data = request.json
+                device_type = data.get('device_type')  # 'dehumidifier' or 'heater'
+                action = data.get('action')  # 'on', 'off', 'temp_up', 'temp_down'
+
+                import json
+                from pathlib import Path
+
+                config_file = Path('data/luftentfeuchten_config.json')
+
+                if not config_file.exists():
+                    return jsonify({'error': 'No configuration found'}), 400
+
+                with open(config_file, 'r') as f:
+                    config = json.load(f)
+
+                success = False
+                message = ""
+
+                if device_type == 'dehumidifier':
+                    device_id = config.get('dehumidifier_id')
+                    if not device_id:
+                        return jsonify({'error': 'Dehumidifier not configured'}), 400
+
+                    if action == 'on':
+                        self.engine.platform.turn_on(device_id)
+                        success = True
+                        message = "Luftentfeuchter eingeschaltet"
+                    elif action == 'off':
+                        self.engine.platform.turn_off(device_id)
+                        success = True
+                        message = "Luftentfeuchter ausgeschaltet"
+
+                elif device_type == 'heater':
+                    device_id = config.get('heater_id')
+                    if not device_id:
+                        return jsonify({'error': 'Heater not configured'}), 400
+
+                    # Get current temperature
+                    state = self.engine.platform.get_state(device_id)
+                    if state:
+                        caps = state.get('capabilitiesObj', {})
+                        current_temp = caps.get('target_temperature', {}).get('value', 20.0)
+
+                        if action == 'temp_up':
+                            new_temp = min(current_temp + 1, 30)  # Max 30°C
+                            self.engine.platform.set_climate_temperature(device_id, new_temp)
+                            success = True
+                            message = f"Heizung auf {new_temp}°C erhöht"
+                        elif action == 'temp_down':
+                            new_temp = max(current_temp - 1, 10)  # Min 10°C
+                            self.engine.platform.set_climate_temperature(device_id, new_temp)
+                            success = True
+                            message = f"Heizung auf {new_temp}°C gesenkt"
+
+                if success:
+                    logger.info(f"Bathroom control: {device_type} - {action}")
+                    return jsonify({'success': True, 'message': message})
+                else:
+                    return jsonify({'error': 'Invalid action'}), 400
+
+            except Exception as e:
+                logger.error(f"Error controlling bathroom device: {e}")
+                return jsonify({'error': str(e)}), 500
+
         @self.app.route('/luftentfeuchten/analytics')
         def page_bathroom_analytics():
             """Seite: Badezimmer Analytics Dashboard"""
