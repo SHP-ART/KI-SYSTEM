@@ -373,3 +373,93 @@ class BathroomAnalyzer:
             'predictions': next_predictions[:3],  # Top 3 Vorhersagen
             'most_likely': next_predictions[0] if next_predictions else None
         }
+
+    def check_system_health(self, days_back: int = 7) -> List[Dict]:
+        """
+        Prüft System-Gesundheit und erkennt potenzielle Probleme
+
+        Returns:
+            List von Alerts/Warnungen
+        """
+        alerts = []
+        events = self.db.get_bathroom_events(days_back=days_back)
+
+        if not events or len(events) < 2:
+            return alerts
+
+        # 1. Luftentfeuchter läuft ungewöhnlich lange
+        for event in events[:5]:  # Letzte 5 Events prüfen
+            runtime = event.get('dehumidifier_runtime_minutes', 0)
+            if runtime > 240:  # > 4 Stunden
+                alerts.append({
+                    'severity': 'high',
+                    'type': 'long_dehumidifier_runtime',
+                    'title': '⚠️ Luftentfeuchter läuft sehr lange',
+                    'message': f'Luftentfeuchter lief {runtime} Minuten (Event: {event["start_time"]}). Möglicherweise Filter verstopft oder Gerät defekt?',
+                    'timestamp': event['start_time'],
+                    'event_id': event['id']
+                })
+
+        # 2. Luftfeuchtigkeit wird nicht reduziert
+        ineffective_events = [e for e in events if e.get('peak_humidity') and e.get('end_humidity')
+                             and (e['peak_humidity'] - e['end_humidity']) < 5]
+        if len(ineffective_events) >= 3:
+            alerts.append({
+                'severity': 'medium',
+                'type': 'ineffective_dehumidification',
+                'title': '⚠️ Entfeuchtung nicht effektiv',
+                'message': f'{len(ineffective_events)} Events mit wenig Verbesserung. Luftfeuchtigkeit wird kaum reduziert.',
+                'timestamp': datetime.now().isoformat()
+            })
+
+        # 3. Ungewöhnlich lange Duschen
+        long_showers = [e for e in events[:10] if e.get('duration_minutes', 0) > 45]
+        if long_showers:
+            for event in long_showers:
+                alerts.append({
+                    'severity': 'low',
+                    'type': 'long_shower',
+                    'title': 'ℹ️ Ungewöhnlich lange Dusche',
+                    'message': f'Dusche dauerte {event["duration_minutes"]} Minuten am {event["start_time"]}. Tür offen gelassen?',
+                    'timestamp': event['start_time'],
+                    'event_id': event['id']
+                })
+
+        # 4. Sehr hohe Luftfeuchtigkeit erreicht
+        extreme_humidity_events = [e for e in events[:10] if e.get('peak_humidity', 0) > 90]
+        if extreme_humidity_events:
+            for event in extreme_humidity_events:
+                alerts.append({
+                    'severity': 'medium',
+                    'type': 'extreme_humidity',
+                    'title': '⚠️ Sehr hohe Luftfeuchtigkeit',
+                    'message': f'Luftfeuchtigkeit erreichte {event["peak_humidity"]}% (Kondenswasser-Risiko)',
+                    'timestamp': event['start_time'],
+                    'event_id': event['id']
+                })
+
+        # 5. Keine Events seit längerer Zeit (mögliches Problem mit Sensoren)
+        if events:
+            last_event_time = datetime.fromisoformat(events[0]['start_time'])
+            days_since_last = (datetime.now() - last_event_time).days
+            if days_since_last > 7:
+                alerts.append({
+                    'severity': 'medium',
+                    'type': 'no_recent_events',
+                    'title': '⚠️ Keine Events seit längerer Zeit',
+                    'message': f'Letztes Event vor {days_since_last} Tagen. Sensoren prüfen?',
+                    'timestamp': datetime.now().isoformat()
+                })
+
+        # 6. Dehumidifier läuft nie (möglicherweise nicht verbunden)
+        no_dehumidifier_events = [e for e in events[:10] if e.get('dehumidifier_runtime_minutes', 0) == 0]
+        if len(no_dehumidifier_events) >= 5:
+            alerts.append({
+                'severity': 'high',
+                'type': 'dehumidifier_never_runs',
+                'title': '⚠️ Luftentfeuchter läuft nie',
+                'message': f'{len(no_dehumidifier_events)} Events ohne Luftentfeuchter-Aktivität. Gerät angeschlossen?',
+                'timestamp': datetime.now().isoformat()
+            })
+
+        return alerts

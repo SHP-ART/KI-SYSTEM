@@ -564,6 +564,43 @@ class Database:
         result = cursor.fetchone()
         return result['parameter_value'] if result else None
 
+    def get_learned_parameter_details(self, parameter_name: str,
+                                      min_confidence: float = 0.7) -> Optional[Dict]:
+        """Holt Details des neuesten gelernten Parameters (inkl. Confidence, Samples)"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT parameter_value, confidence, samples_used, timestamp, reason
+            FROM bathroom_learned_parameters
+            WHERE parameter_name = ? AND confidence >= ?
+            ORDER BY timestamp DESC
+            LIMIT 1
+        """, (parameter_name, min_confidence))
+
+        result = cursor.fetchone()
+        if result:
+            return {
+                'value': result['parameter_value'],
+                'confidence': result['confidence'],
+                'samples_used': result['samples_used'],
+                'timestamp': result['timestamp'],
+                'reason': result['reason']
+            }
+        return None
+
+    def reset_learned_parameters(self) -> int:
+        """Löscht alle gelernten Parameter (Reset auf manuelle Werte)"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("DELETE FROM bathroom_learned_parameters")
+        deleted_count = cursor.rowcount
+
+        conn.commit()
+        logger.info(f"Reset learned parameters: {deleted_count} entries deleted")
+        return deleted_count
+
     def get_bathroom_events(self, days_back: int = 30, limit: int = None) -> List[Dict]:
         """Holt Badezimmer-Events der letzten X Tage"""
         conn = self._get_connection()
@@ -636,6 +673,101 @@ class Database:
             'peak_hours': peak_hours,
             'weekday_distribution': weekday_distribution,
             'period_days': days_back
+        }
+
+    def get_bathroom_energy_stats(self, days_back: int = 30,
+                                   dehumidifier_wattage: float = 400.0,
+                                   heater_wattage: float = 2000.0,
+                                   energy_price_per_kwh: float = 0.30) -> Dict:
+        """
+        Berechnet Energie-Statistiken für Badezimmer-Automatisierung
+
+        Args:
+            days_back: Zeitraum in Tagen
+            dehumidifier_wattage: Leistung des Luftentfeuchters in Watt (Standard: 400W)
+            heater_wattage: Leistung der Heizung in Watt (Standard: 2000W)
+            energy_price_per_kwh: Strompreis pro kWh in EUR (Standard: 0.30€)
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        start_time = datetime.now() - timedelta(days=days_back)
+
+        # Gesamte Laufzeit des Luftentfeuchters
+        cursor.execute("""
+            SELECT
+                SUM(dehumidifier_runtime_minutes) as total_runtime_minutes,
+                COUNT(*) as event_count
+            FROM bathroom_events
+            WHERE start_time >= ? AND dehumidifier_runtime_minutes IS NOT NULL
+        """, (start_time,))
+
+        result = cursor.fetchone()
+        total_runtime_minutes = result['total_runtime_minutes'] or 0.0
+        event_count = result['event_count'] or 0
+
+        # Umrechnung in Stunden
+        total_runtime_hours = total_runtime_minutes / 60.0
+
+        # Energieverbrauch berechnen
+        dehumidifier_kwh = (total_runtime_hours * dehumidifier_wattage) / 1000.0
+        dehumidifier_cost = dehumidifier_kwh * energy_price_per_kwh
+
+        # Geschätzter Heizungs-Mehrverbrauch (während Entfeuchtung +1°C)
+        # Annahme: Heizung läuft durchschnittlich 30% der Entfeuchtungszeit
+        heater_extra_hours = total_runtime_hours * 0.3
+        heater_extra_kwh = (heater_extra_hours * heater_wattage) / 1000.0
+        heater_extra_cost = heater_extra_kwh * energy_price_per_kwh
+
+        # Gesamtkosten
+        total_kwh = dehumidifier_kwh + heater_extra_kwh
+        total_cost = dehumidifier_cost + heater_extra_cost
+
+        # Vergleich: Wenn Luftentfeuchter immer an wäre (24/7)
+        hours_in_period = days_back * 24
+        always_on_kwh = (hours_in_period * dehumidifier_wattage) / 1000.0
+        always_on_cost = always_on_kwh * energy_price_per_kwh
+
+        # Ersparnis
+        savings_kwh = always_on_kwh - dehumidifier_kwh
+        savings_cost = always_on_cost - dehumidifier_cost
+        savings_percent = (savings_kwh / always_on_kwh * 100) if always_on_kwh > 0 else 0
+
+        # Durchschnitt pro Event
+        avg_runtime_per_event = total_runtime_minutes / event_count if event_count > 0 else 0
+        avg_cost_per_event = total_cost / event_count if event_count > 0 else 0
+
+        return {
+            'period_days': days_back,
+            'event_count': event_count,
+            'dehumidifier': {
+                'runtime_hours': round(total_runtime_hours, 1),
+                'runtime_minutes': round(total_runtime_minutes, 0),
+                'kwh': round(dehumidifier_kwh, 2),
+                'cost_eur': round(dehumidifier_cost, 2),
+                'wattage': dehumidifier_wattage
+            },
+            'heater_extra': {
+                'runtime_hours': round(heater_extra_hours, 1),
+                'kwh': round(heater_extra_kwh, 2),
+                'cost_eur': round(heater_extra_cost, 2)
+            },
+            'total': {
+                'kwh': round(total_kwh, 2),
+                'cost_eur': round(total_cost, 2)
+            },
+            'comparison_always_on': {
+                'kwh': round(always_on_kwh, 1),
+                'cost_eur': round(always_on_cost, 2),
+                'savings_kwh': round(savings_kwh, 1),
+                'savings_cost_eur': round(savings_cost, 2),
+                'savings_percent': round(savings_percent, 1)
+            },
+            'per_event': {
+                'avg_runtime_minutes': round(avg_runtime_per_event, 1),
+                'avg_cost_eur': round(avg_cost_per_event, 3)
+            },
+            'energy_price_per_kwh': energy_price_per_kwh
         }
 
     def close(self):

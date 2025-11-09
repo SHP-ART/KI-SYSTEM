@@ -1865,6 +1865,223 @@ class WebInterface:
             """Seite: Badezimmer Analytics Dashboard"""
             return render_template('luftentfeuchten_analytics.html')
 
+        @self.app.route('/api/luftentfeuchten/learned-params', methods=['GET'])
+        def api_bathroom_learned_params():
+            """API: Hole Details zu gelernten Parametern"""
+            try:
+                # Hole Details für alle relevanten Parameter
+                params_info = {}
+                param_names = ['humidity_threshold_high', 'humidity_threshold_low', 'dehumidifier_delay']
+
+                for param_name in param_names:
+                    details = self.db.get_learned_parameter_details(param_name, min_confidence=0.0)
+                    if details:
+                        params_info[param_name] = {
+                            'value': details['value'],
+                            'confidence': details['confidence'],
+                            'samples_used': details['samples_used'],
+                            'timestamp': details['timestamp'],
+                            'reason': details['reason'],
+                            'is_learned': True
+                        }
+                    else:
+                        params_info[param_name] = {
+                            'is_learned': False
+                        }
+
+                # Zähle Events für Info
+                events_count = len(self.db.get_bathroom_events(days_back=30))
+
+                return jsonify({
+                    'learned_params': params_info,
+                    'events_last_30_days': events_count,
+                    'ready_for_optimization': events_count >= 5
+                })
+
+            except Exception as e:
+                logger.error(f"Error getting learned params: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @self.app.route('/api/luftentfeuchten/reset-learned', methods=['POST'])
+        def api_bathroom_reset_learned():
+            """API: Setze gelernte Parameter zurück (verwende wieder manuelle Werte)"""
+            try:
+                deleted_count = self.db.reset_learned_parameters()
+
+                logger.info(f"Learned parameters reset: {deleted_count} entries deleted")
+
+                return jsonify({
+                    'success': True,
+                    'message': f'{deleted_count} gelernte Parameter zurückgesetzt',
+                    'deleted_count': deleted_count
+                })
+
+            except Exception as e:
+                logger.error(f"Error resetting learned parameters: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @self.app.route('/api/luftentfeuchten/energy-stats', methods=['GET'])
+        def api_bathroom_energy_stats():
+            """API: Energie & Kosten-Statistiken"""
+            try:
+                import json
+                from pathlib import Path
+
+                # Hole Parameter aus Query oder Config
+                days_back = int(request.args.get('days', 30))
+
+                # Lade Config für Geräte-Leistungen
+                config_file = Path('data/luftentfeuchten_config.json')
+                dehumidifier_wattage = 400.0  # Default
+                heater_wattage = 2000.0  # Default
+                energy_price = 0.30  # Default EUR/kWh
+
+                if config_file.exists():
+                    with open(config_file, 'r') as f:
+                        config = json.load(f)
+                        dehumidifier_wattage = config.get('dehumidifier_wattage', 400.0)
+                        heater_wattage = config.get('heater_wattage', 2000.0)
+                        energy_price = config.get('energy_price_per_kwh', 0.30)
+
+                # Berechne Statistiken
+                stats = self.db.get_bathroom_energy_stats(
+                    days_back=days_back,
+                    dehumidifier_wattage=dehumidifier_wattage,
+                    heater_wattage=heater_wattage,
+                    energy_price_per_kwh=energy_price
+                )
+
+                return jsonify(stats)
+
+            except Exception as e:
+                logger.error(f"Error getting energy stats: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @self.app.route('/api/luftentfeuchten/alerts', methods=['GET'])
+        def api_bathroom_alerts():
+            """API: System-Gesundheits-Alerts"""
+            try:
+                from src.decision_engine.bathroom_analyzer import BathroomAnalyzer
+
+                days_back = int(request.args.get('days', 7))
+
+                analyzer = BathroomAnalyzer(self.db)
+                alerts = analyzer.check_system_health(days_back=days_back)
+
+                # Sortiere nach Severity (high > medium > low)
+                severity_order = {'high': 0, 'medium': 1, 'low': 2}
+                alerts.sort(key=lambda x: severity_order.get(x.get('severity', 'low'), 2))
+
+                return jsonify({
+                    'alerts': alerts,
+                    'count': len(alerts),
+                    'has_critical': any(a.get('severity') == 'high' for a in alerts),
+                    'days_checked': days_back
+                })
+
+            except Exception as e:
+                logger.error(f"Error getting bathroom alerts: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @self.app.route('/api/luftentfeuchten/preview', methods=['POST'])
+        def api_bathroom_preview():
+            """API: Live-Preview - Was würde das System jetzt tun?"""
+            try:
+                from src.decision_engine.bathroom_automation import BathroomAutomation
+                import json
+                from pathlib import Path
+
+                # Lade Config
+                config_file = Path('data/luftentfeuchten_config.json')
+                if not config_file.exists():
+                    return jsonify({'error': 'No configuration found'}), 400
+
+                with open(config_file, 'r') as f:
+                    config = json.load(f)
+
+                # Initialisiere Automation (ohne Speichern)
+                bathroom = BathroomAutomation(config, enable_learning=False)
+
+                # Hole aktuellen State
+                current_state = self.engine.collect_current_state()
+
+                # Hole Live-Sensor-Werte
+                humidity = bathroom._get_humidity(self.engine.platform)
+                temperature = bathroom._get_temperature(self.engine.platform)
+                motion = bathroom._check_motion(self.engine.platform)
+                door_closed = bathroom._check_door(self.engine.platform)
+
+                # Simuliere Entscheidungen (ohne Ausführung)
+                would_detect_shower = bathroom._detect_shower(humidity, motion, door_closed)
+
+                # Prüfe Luftentfeuchter-Aktion
+                dehumidifier_action = None
+                should_turn_on_dehumidifier = (humidity and humidity > bathroom.humidity_high) or would_detect_shower
+                should_turn_off_dehumidifier = humidity and humidity < bathroom.humidity_low
+
+                if should_turn_on_dehumidifier:
+                    dehumidifier_action = {
+                        'action': 'turn_on',
+                        'reason': f'Hohe Luftfeuchtigkeit ({humidity}% > {bathroom.humidity_high}%)',
+                        'would_execute': config.get('enabled', False)
+                    }
+                elif should_turn_off_dehumidifier and bathroom.dehumidifier_running:
+                    dehumidifier_action = {
+                        'action': 'turn_off',
+                        'reason': f'Luftfeuchtigkeit normalisiert ({humidity}% < {bathroom.humidity_low}%)',
+                        'would_execute': config.get('enabled', False)
+                    }
+                else:
+                    dehumidifier_action = {
+                        'action': 'no_change',
+                        'reason': f'Luftfeuchtigkeit OK ({humidity}%, Schwellwerte: {bathroom.humidity_low}%-{bathroom.humidity_high}%)',
+                        'would_execute': False
+                    }
+
+                # Prüfe Heizungs-Aktion
+                heater_action = None
+                if temperature and bathroom.dehumidifier_running:
+                    target = bathroom.target_temp + 1.0
+                    if abs(temperature - target) > 0.5:
+                        heater_action = {
+                            'action': 'set_temperature',
+                            'target_temperature': target,
+                            'reason': f'Entfeuchtung aktiv → Heizung auf {target}°C (aktuell: {temperature}°C)',
+                            'would_execute': config.get('enabled', False)
+                        }
+
+                if not heater_action and temperature:
+                    heater_action = {
+                        'action': 'no_change',
+                        'target_temperature': bathroom.target_temp,
+                        'reason': f'Keine Heizungs-Anpassung nötig (aktuell: {temperature}°C, Ziel: {bathroom.target_temp}°C)',
+                        'would_execute': False
+                    }
+
+                return jsonify({
+                    'current_state': {
+                        'humidity': humidity,
+                        'temperature': temperature,
+                        'motion_detected': motion,
+                        'door_closed': door_closed,
+                        'shower_would_be_detected': would_detect_shower
+                    },
+                    'thresholds': {
+                        'humidity_high': bathroom.humidity_high,
+                        'humidity_low': bathroom.humidity_low,
+                        'target_temperature': bathroom.target_temp
+                    },
+                    'actions': {
+                        'dehumidifier': dehumidifier_action,
+                        'heater': heater_action
+                    },
+                    'automation_enabled': config.get('enabled', False)
+                })
+
+            except Exception as e:
+                logger.error(f"Error in bathroom preview: {e}")
+                return jsonify({'error': str(e)}), 500
+
         # ===== System Update Endpoints =====
 
         @self.app.route('/api/system/version')

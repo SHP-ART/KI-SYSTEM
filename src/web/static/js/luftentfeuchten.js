@@ -513,6 +513,290 @@ function showToast(message, type = 'info') {
     }, 3000);
 }
 
+// Lade gelernte Parameter-Informationen
+async function loadLearnedParams() {
+    try {
+        const data = await fetchJSON('/api/luftentfeuchten/learned-params');
+
+        const learnedParams = data.learned_params || {};
+        const eventsCount = data.events_last_30_days || 0;
+        const readyForOptimization = data.ready_for_optimization || false;
+
+        // Prüfe ob irgendein Parameter gelernt wurde
+        const hasLearnedParams = Object.values(learnedParams).some(p => p.is_learned);
+
+        if (hasLearnedParams) {
+            // Zeige Info-Box
+            const infoBox = document.getElementById('learning-info-box');
+            const infoText = document.getElementById('learning-info-text');
+            const statusBadge = document.getElementById('learning-status-badge');
+
+            if (infoBox && infoText) {
+                let learnedCount = Object.values(learnedParams).filter(p => p.is_learned).length;
+
+                infoText.innerHTML = `
+                    Das System hat <strong>${learnedCount} Parameter</strong> aus <strong>${eventsCount} Events</strong> gelernt.
+                    Die Werte werden automatisch verwendet und überschreiben die manuellen Einstellungen.
+                `;
+                infoBox.style.display = 'block';
+            }
+
+            if (statusBadge) {
+                statusBadge.textContent = '🧠 Gelernte Werte aktiv';
+                statusBadge.className = 'active';
+                statusBadge.style.display = 'block';
+            }
+
+            // Zeige Parameter-Infos
+            displayParamInfo('humidity_threshold_high', learnedParams.humidity_threshold_high);
+            displayParamInfo('humidity_threshold_low', learnedParams.humidity_threshold_low);
+            displayParamInfo('dehumidifier_delay', learnedParams.dehumidifier_delay);
+        } else if (eventsCount > 0) {
+            // Es gibt Events, aber noch keine gelernten Parameter
+            const statusBadge = document.getElementById('learning-status-badge');
+            if (statusBadge) {
+                statusBadge.textContent = `📊 ${eventsCount} Events gesammelt`;
+                statusBadge.className = 'inactive';
+                statusBadge.style.display = 'block';
+            }
+        }
+
+    } catch (error) {
+        console.error('Error loading learned params:', error);
+    }
+}
+
+// Zeige Info für einen einzelnen Parameter
+function displayParamInfo(paramName, paramData) {
+    if (!paramData || !paramData.is_learned) {
+        return; // Kein gelernter Wert
+    }
+
+    // Map param name to UI element IDs
+    const idMap = {
+        'humidity_threshold_high': { source: 'humidity-high-source', info: 'humidity-high-learned-info' },
+        'humidity_threshold_low': { source: 'humidity-low-source', info: 'humidity-low-learned-info' },
+        'dehumidifier_delay': { source: 'delay-source', info: 'delay-learned-info' }
+    };
+
+    const ids = idMap[paramName];
+    if (!ids) return;
+
+    // Source Badge
+    const sourceBadge = document.getElementById(ids.source);
+    if (sourceBadge) {
+        sourceBadge.textContent = '🧠 Gelernt';
+        sourceBadge.className = 'param-source-badge learned';
+        sourceBadge.style.display = 'inline-block';
+    }
+
+    // Detail Info
+    const learnedInfo = document.getElementById(ids.info);
+    if (learnedInfo) {
+        const confidencePercent = Math.round(paramData.confidence * 100);
+        const date = new Date(paramData.timestamp).toLocaleDateString('de-DE');
+
+        learnedInfo.innerHTML = `
+            ℹ️ Optimiert aus ${paramData.samples_used} Events
+            (Konfidenz: ${confidencePercent}%, ${date})
+        `;
+        learnedInfo.style.display = 'block';
+    }
+}
+
+// Reset gelernte Parameter
+async function resetLearnedParams() {
+    if (!confirm('Möchten Sie wirklich alle gelernten Parameter zurücksetzen?\n\nDas System wird dann wieder die manuell konfigurierten Werte verwenden.')) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/luftentfeuchten/reset-learned', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast(`✅ ${data.message}`, 'success');
+
+            // Verstecke Info-Box und Badges
+            document.getElementById('learning-info-box').style.display = 'none';
+            document.getElementById('learning-status-badge').style.display = 'none';
+
+            // Verstecke alle Parameter-Infos
+            document.querySelectorAll('.param-source-badge').forEach(el => el.style.display = 'none');
+            document.querySelectorAll('.learned-param-info').forEach(el => el.style.display = 'none');
+
+            // Neu laden nach kurzer Verzögerung
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
+        } else {
+            showToast('❌ Fehler beim Zurücksetzen', 'error');
+        }
+    } catch (error) {
+        console.error('Error resetting learned params:', error);
+        showToast('❌ Netzwerkfehler', 'error');
+    }
+}
+
+// Lade Energie-Statistiken
+async function loadEnergyStats() {
+    try {
+        const data = await fetchJSON('/api/luftentfeuchten/energy-stats?days=30');
+
+        document.getElementById('energy-stats-loading').style.display = 'none';
+        document.getElementById('energy-stats-content').style.display = 'block';
+
+        // Update UI
+        document.getElementById('energy-runtime').textContent = data.dehumidifier.runtime_hours + ' h';
+        document.getElementById('energy-kwh').textContent = data.total.kwh + ' kWh';
+        document.getElementById('energy-cost').textContent = data.total.cost_eur.toFixed(2) + ' €';
+        document.getElementById('energy-savings').textContent = data.comparison_always_on.savings_percent + '%';
+        document.getElementById('energy-events-count').textContent = data.event_count;
+        document.getElementById('energy-avg-runtime').textContent = data.per_event.avg_runtime_minutes.toFixed(1);
+        document.getElementById('energy-avg-cost').textContent = data.per_event.avg_cost_eur.toFixed(3);
+
+    } catch (error) {
+        console.error('Error loading energy stats:', error);
+        document.getElementById('energy-stats-loading').textContent = 'Fehler beim Laden der Statistiken';
+    }
+}
+
+// Lade Alerts
+async function loadAlerts() {
+    try {
+        const data = await fetchJSON('/api/luftentfeuchten/alerts?days=7');
+
+        if (data.alerts && data.alerts.length > 0) {
+            const alertsCard = document.getElementById('alerts-card');
+            const alertsContent = document.getElementById('alerts-content');
+
+            let html = '';
+            data.alerts.forEach(alert => {
+                html += `
+                    <div class="alert-item severity-${alert.severity}">
+                        <div class="alert-title">${alert.title}</div>
+                        <div class="alert-message">${alert.message}</div>
+                    </div>
+                `;
+            });
+
+            alertsContent.innerHTML = html;
+            alertsCard.style.display = 'block';
+        }
+
+    } catch (error) {
+        console.error('Error loading alerts:', error);
+    }
+}
+
+// Live-Preview
+async function showPreview() {
+    try {
+        const modal = document.getElementById('preview-modal');
+        const content = document.getElementById('preview-content');
+
+        content.innerHTML = '<div style="text-align: center; padding: 20px;">Lade Preview...</div>';
+        modal.style.display = 'flex';
+
+        const response = await fetch('/api/luftentfeuchten/preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const data = await response.json();
+
+        if (data.error) {
+            content.innerHTML = `<div class="alert-item severity-high">Fehler: ${data.error}</div>`;
+            return;
+        }
+
+        // Build Preview HTML
+        let html = '';
+
+        // Current State
+        html += `
+            <div class="preview-section">
+                <h4>📊 Aktueller Zustand</h4>
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+                    <div><strong>Luftfeuchtigkeit:</strong> ${data.current_state.humidity || '--'}%</div>
+                    <div><strong>Temperatur:</strong> ${data.current_state.temperature || '--'}°C</div>
+                    <div><strong>Bewegung:</strong> ${data.current_state.motion_detected ? 'Ja' : 'Nein'}</div>
+                    <div><strong>Tür:</strong> ${data.current_state.door_closed ? 'Geschlossen' : 'Offen'}</div>
+                </div>
+                ${data.current_state.shower_would_be_detected ? '<div style="margin-top: 10px; color: #3b82f6; font-weight: 600;">🚿 Dusche würde erkannt werden!</div>' : ''}
+            </div>
+        `;
+
+        // Thresholds
+        html += `
+            <div class="preview-section">
+                <h4>📏 Schwellwerte</h4>
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+                    <div><strong>High:</strong> ${data.thresholds.humidity_high}%</div>
+                    <div><strong>Low:</strong> ${data.thresholds.humidity_low}%</div>
+                    <div><strong>Ziel-Temp:</strong> ${data.thresholds.target_temperature}°C</div>
+                </div>
+            </div>
+        `;
+
+        // Actions
+        html += '<div class="preview-section"><h4>🎯 Was würde passieren?</h4>';
+
+        // Dehumidifier Action
+        const dehum = data.actions.dehumidifier;
+        const dehumClass = dehum.action === 'turn_on' ? 'turn-on' : dehum.action === 'turn_off' ? 'turn-off' : 'no-change';
+        html += `
+            <div class="preview-action ${dehumClass}">
+                <div>
+                    <strong>💨 Luftentfeuchter:</strong><br>
+                    <span style="font-size: 0.9em; color: #6b7280;">${dehum.reason}</span>
+                </div>
+                <div>
+                    ${dehum.action === 'turn_on' ? '✅ EIN' : dehum.action === 'turn_off' ? '⏸️ AUS' : '➖ Keine Änderung'}
+                </div>
+            </div>
+        `;
+
+        // Heater Action
+        if (data.actions.heater) {
+            const heater = data.actions.heater;
+            const heaterClass = heater.action === 'set_temperature' ? 'turn-on' : 'no-change';
+            html += `
+                <div class="preview-action ${heaterClass}">
+                    <div>
+                        <strong>🔥 Heizung:</strong><br>
+                        <span style="font-size: 0.9em; color: #6b7280;">${heater.reason}</span>
+                    </div>
+                    <div>
+                        ${heater.action === 'set_temperature' ? '🌡️ ' + heater.target_temperature + '°C' : '➖ Keine Änderung'}
+                    </div>
+                </div>
+            `;
+        }
+
+        html += '</div>';
+
+        // Execution Note
+        if (!data.automation_enabled) {
+            html += `
+                <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px; border-radius: 6px; margin-top: 15px;">
+                    <strong>⚠️ Hinweis:</strong> Automation ist deaktiviert. Aktionen werden nicht ausgeführt.
+                </div>
+            `;
+        }
+
+        content.innerHTML = html;
+
+    } catch (error) {
+        console.error('Error loading preview:', error);
+        document.getElementById('preview-content').innerHTML = '<div class="alert-item severity-high">Fehler beim Laden der Preview</div>';
+    }
+}
+
 // Init
 document.addEventListener('DOMContentLoaded', async () => {
     setupSliders();
@@ -523,10 +807,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         statusSection.style.opacity = '0.6';
     }
 
-    // Lade Devices und Config parallel
+    // Lade Devices, Config und gelernte Parameter parallel
     await Promise.all([
         loadDevices(),
-        loadConfig()
+        loadConfig(),
+        loadLearnedParams(),
+        loadEnergyStats(),
+        loadAlerts()
     ]);
 
     // Lade Status nach Config (braucht Config-Daten)
@@ -540,6 +827,34 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Event Listeners
     document.getElementById('save-bathroom-config').addEventListener('click', saveConfig);
     document.getElementById('test-bathroom').addEventListener('click', testAutomation);
+
+    // Reset Button
+    const resetBtn = document.getElementById('reset-learned-btn');
+    if (resetBtn) {
+        resetBtn.addEventListener('click', resetLearnedParams);
+    }
+
+    // Preview Button
+    const previewBtn = document.getElementById('preview-btn');
+    if (previewBtn) {
+        previewBtn.addEventListener('click', showPreview);
+    }
+
+    // Close Preview Modal
+    const closePreviewBtn = document.getElementById('close-preview-btn');
+    if (closePreviewBtn) {
+        closePreviewBtn.addEventListener('click', () => {
+            document.getElementById('preview-modal').style.display = 'none';
+        });
+    }
+
+    // Dismiss Alerts
+    const dismissAlertsBtn = document.getElementById('dismiss-alerts-btn');
+    if (dismissAlertsBtn) {
+        dismissAlertsBtn.addEventListener('click', () => {
+            document.getElementById('alerts-card').style.display = 'none';
+        });
+    }
 
     // Event Listener für Raum-Filter
     const roomFilter = document.getElementById('room-filter');

@@ -90,11 +90,17 @@ python3 main.py web --host 0.0.0.0 --port 5000
 **Database** (`src/utils/database.py`)
 - SQLite-based storage for sensor data, decisions, and training history
 - Schema includes: sensor_data, external_data, decisions, training_history
+- Bathroom automation tables: bathroom_events, bathroom_measurements, bathroom_device_actions, bathroom_learned_parameters
 - 90-day retention policy (configurable)
 
 **Web Interface** (`src/web/app.py`)
 - Flask-based dashboard with templates in `src/web/templates/`
 - Real-time status, historical charts, manual control interface
+- Bathroom automation dashboard with analytics and self-learning optimization
+
+**Background Processes** (`src/background/`)
+- `data_collector.py`: Automated sensor data collection every 5 minutes
+- `bathroom_optimizer.py`: Daily optimization of bathroom automation thresholds (runs at 3:00 AM)
 
 ### Data Flow
 
@@ -148,6 +154,10 @@ python3 main.py web --host 0.0.0.0 --port 5000
 - external_data: timestamp, data_type, data (JSON)
 - decisions: timestamp, decision_type, input_data, output_decision, confidence, executed, result
 - training_history: timestamp, model_type, metrics (JSON)
+- bathroom_events: comprehensive tracking of shower/bath events with humidity, temperature, duration
+- bathroom_measurements: detailed measurements during bathroom events
+- bathroom_device_actions: log of all device actions (dehumidifier, fan, etc.)
+- bathroom_learned_parameters: stores optimized thresholds learned from historical data
 
 ## Testing Strategy
 
@@ -186,3 +196,25 @@ python3 main.py web --host 0.0.0.0 --port 5000
 3. For Home Assistant: verify long-lived access token hasn't expired
 4. For Homey: verify bearer token from athom-cli is current
 5. Check logs/ki_system.log for detailed error messages
+
+## Bathroom Automation System (v0.8+)
+
+The bathroom automation system is a self-learning feature that detects shower/bath events and controls dehumidifiers automatically.
+
+**Key Components:**
+- `bathroom_automation.py`: Main automation logic for event detection and device control
+- `bathroom_analyzer.py`: Analytics and pattern recognition for optimization
+- `bathroom_optimizer.py`: Daily background optimization job (runs at 3:00 AM)
+- Web UI at `/bathroom` for configuration and `/bathroom/analytics` for visualizations
+
+**How It Works:**
+1. Monitors humidity sensors for sudden increases (shower detection)
+2. Tracks event duration, peak humidity, temperature changes
+3. Controls dehumidifier based on learned thresholds
+4. Automatically optimizes thresholds based on historical data (requires min. 3 events, 70% confidence)
+5. Provides analytics: event statistics, trends, predictions, common shower times
+
+**Configuration:**
+- Stored in `data/bathroom_config.json`
+- Includes sensor IDs, device IDs, thresholds (high/low humidity, duration)
+- Can be configured via web UI

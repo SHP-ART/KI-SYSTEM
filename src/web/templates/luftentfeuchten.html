@@ -14,9 +14,29 @@
         </a>
     </div>
 
+    <!-- Anomalie-Alerts (falls vorhanden) -->
+    <div class="card alert-card" id="alerts-card" style="display: none; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-left: 4px solid #f59e0b;">
+        <div style="display: flex; justify-content: space-between; align-items: start;">
+            <div style="flex: 1;">
+                <h3 style="margin-top: 0;">⚠️ System-Warnungen</h3>
+                <div id="alerts-content">
+                    <!-- Wird per JavaScript gefüllt -->
+                </div>
+            </div>
+            <button id="dismiss-alerts-btn" class="btn btn-sm" style="background: transparent; color: #92400e; border: 1px solid #d97706; padding: 4px 10px;">
+                ✕ Schließen
+            </button>
+        </div>
+    </div>
+
     <!-- Status Card -->
     <div class="card status-card">
-        <h3>Aktueller Status</h3>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h3 style="margin: 0;">Aktueller Status</h3>
+            <button id="preview-btn" class="btn btn-sm" style="background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); color: white; padding: 6px 14px; font-size: 0.9em;">
+                👁️ Live-Preview
+            </button>
+        </div>
         <div class="status-grid">
             <div class="status-item">
                 <span class="status-icon" id="shower-status-icon">⏸️</span>
@@ -45,6 +65,51 @@
                     <div class="status-label">Temperatur</div>
                     <div class="status-value" id="current-temperature">--°C</div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Live-Preview Modal -->
+    <div id="preview-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="margin: 0;">👁️ Live-Preview: Was würde das System jetzt tun?</h3>
+                <button id="close-preview-btn" class="btn btn-sm" style="background: #e5e7eb; color: #374151;">✕</button>
+            </div>
+            <div id="preview-content">
+                <!-- Wird per JavaScript gefüllt -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Energie & Kosten Card -->
+    <div class="card energy-card" id="energy-card">
+        <h3>⚡ Energie & Kosten (letzte 30 Tage)</h3>
+        <div id="energy-stats-loading" style="text-align: center; padding: 20px; color: #6b7280;">
+            Lade Statistiken...
+        </div>
+        <div id="energy-stats-content" style="display: none;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 15px;">
+                <div class="stat-box">
+                    <div class="stat-label">Laufzeit</div>
+                    <div class="stat-value" id="energy-runtime">--h</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Verbrauch</div>
+                    <div class="stat-value" id="energy-kwh">-- kWh</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Kosten</div>
+                    <div class="stat-value" id="energy-cost">--€</div>
+                </div>
+                <div class="stat-box" style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);">
+                    <div class="stat-label">Ersparnis vs. 24/7</div>
+                    <div class="stat-value" id="energy-savings" style="color: #065f46;">--%</div>
+                </div>
+            </div>
+            <div style="font-size: 0.85em; color: #6b7280; padding: 10px; background: #f9fafb; border-radius: 4px;">
+                <strong>ℹ️ Info:</strong> Berechnung basiert auf <span id="energy-events-count">0</span> Events.
+                Pro Event: Ø <span id="energy-avg-runtime">0</span> Min Laufzeit, Ø <span id="energy-avg-cost">0</span>€ Kosten.
             </div>
         </div>
     </div>
@@ -208,22 +273,59 @@
         </div>
 
         <div class="form-section">
-            <h4>Schwellwerte</h4>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h4 style="margin: 0;">Schwellwerte</h4>
+                <div id="learning-status-badge" style="display: none;">
+                    <!-- Wird per JavaScript gefüllt -->
+                </div>
+            </div>
 
-            <div class="form-group">
-                <label>Hohe Luftfeuchtigkeit (Luftentfeuchter EIN)</label>
-                <div class="slider-group">
-                    <input type="range" id="humidity-high" min="50" max="90" value="70" class="slider">
-                    <span class="slider-value" id="humidity-high-value">70%</span>
+            <!-- Info-Box für selbstlernendes System -->
+            <div id="learning-info-box" style="display: none; background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border-left: 4px solid #3b82f6; border-radius: 6px; padding: 15px; margin-bottom: 20px;">
+                <div style="display: flex; align-items: start; gap: 12px;">
+                    <span style="font-size: 1.5em;">🧠</span>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; color: #1e40af; margin-bottom: 6px;">Selbstlernendes System aktiv</div>
+                        <div style="font-size: 0.9em; color: #1e40af; margin-bottom: 8px;" id="learning-info-text">
+                            <!-- Wird per JavaScript gefüllt -->
+                        </div>
+                        <button id="reset-learned-btn" class="btn btn-sm" style="background: #ef4444; color: white; padding: 4px 12px; font-size: 0.85em; margin-top: 4px;">
+                            🔄 Gelernte Werte zurücksetzen
+                        </button>
+                    </div>
                 </div>
             </div>
 
             <div class="form-group">
-                <label>Niedrige Luftfeuchtigkeit (Luftentfeuchter AUS)</label>
+                <label>
+                    Hohe Luftfeuchtigkeit (Luftentfeuchter EIN)
+                    <span id="humidity-high-source" class="param-source-badge" style="display: none;">
+                        <!-- Wird per JavaScript gefüllt -->
+                    </span>
+                </label>
+                <div class="slider-group">
+                    <input type="range" id="humidity-high" min="50" max="90" value="70" class="slider">
+                    <span class="slider-value" id="humidity-high-value">70%</span>
+                </div>
+                <small id="humidity-high-learned-info" class="learned-param-info" style="display: none; color: #3b82f6; margin-top: 4px;">
+                    <!-- Wird per JavaScript gefüllt -->
+                </small>
+            </div>
+
+            <div class="form-group">
+                <label>
+                    Niedrige Luftfeuchtigkeit (Luftentfeuchter AUS)
+                    <span id="humidity-low-source" class="param-source-badge" style="display: none;">
+                        <!-- Wird per JavaScript gefüllt -->
+                    </span>
+                </label>
                 <div class="slider-group">
                     <input type="range" id="humidity-low" min="40" max="80" value="60" class="slider">
                     <span class="slider-value" id="humidity-low-value">60%</span>
                 </div>
+                <small id="humidity-low-learned-info" class="learned-param-info" style="display: none; color: #3b82f6; margin-top: 4px;">
+                    <!-- Wird per JavaScript gefüllt -->
+                </small>
             </div>
 
             <div class="form-group">
@@ -235,11 +337,19 @@
             </div>
 
             <div class="form-group">
-                <label>Verzögerung vor Ausschalten (Minuten)</label>
+                <label>
+                    Verzögerung vor Ausschalten (Minuten)
+                    <span id="delay-source" class="param-source-badge" style="display: none;">
+                        <!-- Wird per JavaScript gefüllt -->
+                    </span>
+                </label>
                 <div class="slider-group">
                     <input type="range" id="dehumidifier-delay" min="0" max="30" value="5" class="slider">
                     <span class="slider-value" id="dehumidifier-delay-value">5 Min</span>
                 </div>
+                <small id="delay-learned-info" class="learned-param-info" style="display: none; color: #3b82f6; margin-top: 4px;">
+                    <!-- Wird per JavaScript gefüllt -->
+                </small>
             </div>
         </div>
 
@@ -372,6 +482,164 @@
 @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.6; }
+}
+
+/* Gelernte Parameter Styles */
+.param-source-badge {
+    font-size: 0.75em;
+    padding: 2px 8px;
+    border-radius: 12px;
+    margin-left: 8px;
+    font-weight: 600;
+}
+
+.param-source-badge.learned {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: white;
+}
+
+.param-source-badge.manual {
+    background: #e5e7eb;
+    color: #6b7280;
+}
+
+.learned-param-info {
+    display: block;
+    font-size: 0.85em;
+}
+
+#learning-status-badge {
+    padding: 6px 14px;
+    border-radius: 16px;
+    font-size: 0.85em;
+    font-weight: 600;
+}
+
+#learning-status-badge.active {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+}
+
+#learning-status-badge.inactive {
+    background: #e5e7eb;
+    color: #6b7280;
+}
+
+/* Energie & Kosten Stats */
+.stat-box {
+    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+    padding: 15px;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.stat-label {
+    font-size: 0.85em;
+    color: #6b7280;
+    margin-bottom: 5px;
+}
+
+.stat-value {
+    font-size: 1.6em;
+    font-weight: bold;
+    color: #1f2937;
+}
+
+/* Modal Styles */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 12px;
+    padding: 25px;
+    max-width: 600px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+/* Preview Styles */
+.preview-section {
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #f9fafb;
+    border-radius: 8px;
+    border-left: 4px solid #3b82f6;
+}
+
+.preview-section h4 {
+    margin: 0 0 10px 0;
+    color: #1f2937;
+    font-size: 1.05em;
+}
+
+.preview-action {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    background: white;
+    border-radius: 6px;
+    margin-bottom: 8px;
+}
+
+.preview-action.turn-on {
+    border-left: 4px solid #10b981;
+}
+
+.preview-action.turn-off {
+    border-left: 4px solid #ef4444;
+}
+
+.preview-action.no-change {
+    border-left: 4px solid #6b7280;
+}
+
+/* Alert Styles */
+.alert-item {
+    padding: 12px;
+    background: white;
+    border-radius: 6px;
+    margin-bottom: 10px;
+    border-left: 4px solid #f59e0b;
+}
+
+.alert-item.severity-high {
+    border-left-color: #ef4444;
+    background: #fef2f2;
+}
+
+.alert-item.severity-medium {
+    border-left-color: #f59e0b;
+    background: #fffbeb;
+}
+
+.alert-item.severity-low {
+    border-left-color: #3b82f6;
+    background: #eff6ff;
+}
+
+.alert-title {
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: #1f2937;
+}
+
+.alert-message {
+    font-size: 0.9em;
+    color: #4b5563;
 }
 </style>
 
