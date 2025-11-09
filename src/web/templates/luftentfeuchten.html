@@ -126,9 +126,14 @@
                 <div style="font-size: 11px; color: #1e40af; margin-top: 5px;">Dusch-/Bade-Vorgänge</div>
             </div>
             <div class="stat-box" style="background: linear-gradient(135deg, #fce7f3 0%, #fbcfe8 100%);">
-                <div class="stat-label">Messungen</div>
+                <div class="stat-label">Event-Messungen</div>
                 <div class="stat-value" id="data-measurements-count">--</div>
-                <div style="font-size: 11px; color: #9f1239; margin-top: 5px;">Sensor-Datenpunkte</div>
+                <div style="font-size: 11px; color: #9f1239; margin-top: 5px;">Während Events</div>
+            </div>
+            <div class="stat-box" style="background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);">
+                <div class="stat-label">Kontinuierliche</div>
+                <div class="stat-value" id="data-continuous-count">--</div>
+                <div style="font-size: 11px; color: #3730a3; margin-top: 5px;">Alle 60s</div>
             </div>
             <div class="stat-box" style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);">
                 <div class="stat-label">Geräteaktionen</div>
@@ -146,11 +151,12 @@
             <strong>ℹ️ Datenerfassung:</strong>
             <ul style="margin: 8px 0 0 20px; padding: 0;">
                 <li><strong>Events:</strong> Werden automatisch erkannt wenn Luftfeuchtigkeit stark ansteigt</li>
-                <li><strong>Messungen:</strong> Während eines Events alle 5 Minuten (Daemon-Modus) oder bei manuellen Aufrufen</li>
+                <li><strong>Event-Messungen:</strong> Während eines Events alle 5 Minuten (Daemon-Modus)</li>
+                <li><strong>Kontinuierliche Messungen:</strong> Temp & Luftfeuchtigkeit <strong>alle 60 Sekunden</strong> (immer aktiv, unabhängig von Events)</li>
                 <li><strong>Geräteaktionen:</strong> Bei jedem Ein-/Ausschalten von Luftentfeuchter oder Heizung</li>
             </ul>
             <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #e5e7eb;">
-                <strong>💾 Automatische Bereinigung:</strong> Alte Daten werden nach <strong>180 Tagen</strong> automatisch gelöscht (für Muster-Erkennung optimiert).
+                <strong>💾 Automatische Bereinigung:</strong> Events nach <strong>180 Tagen</strong>, kontinuierliche Messungen nach <strong>90 Tagen</strong>.
             </div>
         </div>
     </div>

@@ -909,9 +909,13 @@ async function loadDataStats() {
             document.getElementById('data-events-count').textContent =
                 data.events_count.toLocaleString('de-DE');
 
-            // Measurements Count
+            // Event Measurements Count
             document.getElementById('data-measurements-count').textContent =
                 data.measurements_count.toLocaleString('de-DE');
+
+            // Continuous Measurements Count (alle 60s)
+            document.getElementById('data-continuous-count').textContent =
+                data.continuous_measurements_count.toLocaleString('de-DE');
 
             // Actions Count
             document.getElementById('data-actions-count').textContent =
@@ -931,6 +935,7 @@ async function loadDataStats() {
         // Zeige Fehler an
         document.getElementById('data-events-count').textContent = 'Fehler';
         document.getElementById('data-measurements-count').textContent = 'Fehler';
+        document.getElementById('data-continuous-count').textContent = 'Fehler';
         document.getElementById('data-actions-count').textContent = 'Fehler';
         document.getElementById('data-age').textContent = 'Fehler';
     }

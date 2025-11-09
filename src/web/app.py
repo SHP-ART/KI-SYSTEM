@@ -22,6 +22,7 @@ from src.data_collector.background_collector import BackgroundDataCollector
 from src.background.bathroom_optimizer import BathroomOptimizer
 from src.background.ml_auto_trainer import MLAutoTrainer
 from src.background.heating_data_collector import HeatingDataCollector
+from src.background.bathroom_data_collector import BathroomDataCollector
 from src.background.database_maintenance import DatabaseMaintenanceJob
 from src.utils.database import Database
 
@@ -94,6 +95,17 @@ class WebInterface:
             logger.info("Heating Data Collector initialized")
         except Exception as e:
             logger.error(f"Failed to initialize Heating Data Collector: {e}")
+
+        # Initialisiere Bathroom Data Collector (sammelt alle 60 Sekunden)
+        self.bathroom_collector = None
+        try:
+            self.bathroom_collector = BathroomDataCollector(
+                engine=self.engine,
+                interval_seconds=60  # Alle 60 Sekunden
+            )
+            logger.info("Bathroom Data Collector initialized (60s interval)")
+        except Exception as e:
+            logger.error(f"Failed to initialize Bathroom Data Collector: {e}")
 
         # Initialisiere Database Maintenance Job (läuft täglich um 5:00 Uhr)
         self.db_maintenance = None
@@ -2503,6 +2515,10 @@ class WebInterface:
                 cursor.execute("SELECT COUNT(*) FROM bathroom_device_actions")
                 actions_count = cursor.fetchone()[0]
 
+                # Zähle kontinuierliche Messungen (60s-Intervall)
+                cursor.execute("SELECT COUNT(*) FROM bathroom_continuous_measurements")
+                continuous_measurements_count = cursor.fetchone()[0]
+
                 # Ältestes und neuestes Event
                 cursor.execute("""
                     SELECT MIN(start_time), MAX(start_time)
@@ -2531,6 +2547,7 @@ class WebInterface:
                     'events_count': events_count,
                     'measurements_count': measurements_count,
                     'actions_count': actions_count,
+                    'continuous_measurements_count': continuous_measurements_count,
                     'data_age': data_age,
                     'date_range': date_range,
                     'oldest_date': oldest,
@@ -3538,6 +3555,11 @@ class WebInterface:
             self.heating_collector.start()
             logger.info("Heating Data Collector started (collects every 15min, optimizes daily at 4:00)")
 
+        # Starte Bathroom Data Collector
+        if self.bathroom_collector:
+            self.bathroom_collector.start()
+            logger.info("Bathroom Data Collector started (collects every 60s)")
+
         # Starte Database Maintenance Job
         if self.db_maintenance:
             self.db_maintenance.start()
@@ -3562,6 +3584,10 @@ class WebInterface:
             if self.heating_collector:
                 self.heating_collector.stop()
                 logger.info("Heating Data Collector stopped")
+
+            if self.bathroom_collector:
+                self.bathroom_collector.stop()
+                logger.info("Bathroom Data Collector stopped")
 
             if self.db_maintenance:
                 self.db_maintenance.stop()

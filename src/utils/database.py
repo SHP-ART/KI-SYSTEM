@@ -136,6 +136,16 @@ class Database:
             )
         """)
 
+        # Badezimmer - Kontinuierliche Messungen (alle 60s)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS bathroom_continuous_measurements (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME NOT NULL,
+                humidity REAL,
+                temperature REAL
+            )
+        """)
+
         # Automatisierungs-Trigger (für neue Automation UI)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS automation_triggers (
@@ -498,6 +508,10 @@ class Database:
         cursor.execute("DELETE FROM bathroom_device_actions WHERE timestamp < ?", (bathroom_cutoff,))
         deleted_counts['bathroom_device_actions'] = cursor.rowcount
 
+        # Alte kontinuierliche Badezimmer-Messungen löschen (normale Retention)
+        cursor.execute("DELETE FROM bathroom_continuous_measurements WHERE timestamp < ?", (cutoff_date,))
+        deleted_counts['bathroom_continuous_measurements'] = cursor.rowcount
+
         # Alte Heizungs-Beobachtungen löschen
         cursor.execute("DELETE FROM heating_observations WHERE timestamp < ?", (cutoff_date,))
         deleted_counts['heating_observations'] = cursor.rowcount
@@ -554,6 +568,7 @@ class Database:
             'bathroom_measurements',
             'bathroom_device_actions',
             'bathroom_learned_parameters',
+            'bathroom_continuous_measurements',
             'heating_observations',
             'heating_insights',
             'heating_schedules'
@@ -684,6 +699,27 @@ class Database:
             temperature,
             motion,
             dehumidifier_on
+        ))
+
+        conn.commit()
+
+    def add_bathroom_continuous_measurement(self, humidity: float = None,
+                                           temperature: float = None):
+        """
+        Fügt eine kontinuierliche Badezimmer-Messung hinzu (alle 60s)
+        Unabhängig von Events - für Langzeit-Analyse
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            INSERT INTO bathroom_continuous_measurements
+            (timestamp, humidity, temperature)
+            VALUES (?, ?, ?)
+        """, (
+            datetime.now(),
+            humidity,
+            temperature
         ))
 
         conn.commit()
