@@ -129,6 +129,11 @@ class WebInterface:
             """Analytics & Verlaufs-Statistiken Seite"""
             return render_template('analytics.html')
 
+        @self.app.route('/heizung')
+        def heating_page():
+            """Heizungssteuerung Seite"""
+            return render_template('heating.html')
+
         @self.app.route('/luftentfeuchten')
         def bathroom_page():
             """Badezimmer Automatisierung Seite"""
