@@ -110,14 +110,19 @@ function populateDeviceSelectors() {
     const tempSensors = filterByRoom(allDevices.filter(d => hasCap(d, 'measure_temperature')));
     populateSelect('temperature-sensor', tempSensors);
 
-    // Luftentfeuchter (Switches/Sockets mit onoff)
+    // Luftentfeuchter (Nur einfache On/Off Geräte - keine Thermostate!)
     const dehumidifiers = filterByRoom(allDevices.filter(d => {
-        return hasCap(d, 'onoff') && (d.domain === 'switch' || d.domain === 'socket');
+        // Muss onoff haben
+        if (!hasCap(d, 'onoff')) return false;
+        // Darf KEIN Thermostat sein (kein target_temperature)
+        if (hasCap(d, 'target_temperature')) return false;
+        // Sollte switch oder socket sein
+        return d.domain === 'switch' || d.domain === 'socket';
     }));
     populateSelect('dehumidifier', dehumidifiers);
 
-    // Heizungen/Thermostate
-    const heaters = filterByRoom(allDevices.filter(d => d.domain === 'climate' || d.domain === 'thermostat'));
+    // Heizungen/Thermostate (mit target_temperature capability)
+    const heaters = filterByRoom(allDevices.filter(d => hasCap(d, 'target_temperature')));
     populateSelect('heater', heaters);
 
     // Bewegungssensoren
