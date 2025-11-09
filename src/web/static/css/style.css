@@ -1777,3 +1777,48 @@ input:checked + .slider:before {
     color: var(--text-secondary);
     line-height: 1.6;
 }
+
+/* Improved Predictions Styling */
+.suggestions ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.suggestions li {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: start;
+    gap: 0.5rem;
+}
+
+.suggestions li:last-child {
+    border-bottom: none;
+}
+
+.suggestion-icon {
+    font-size: 1.1em;
+    min-width: 20px;
+    display: inline-block;
+}
+
+.no-action-needed {
+    background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+    color: #065f46;
+    padding: 0.75rem;
+    border-radius: 6px;
+    text-align: center;
+    font-weight: 500;
+    margin: 0;
+}
+
+.no-data {
+    background: #f3f4f6;
+    color: #6b7280;
+    padding: 0.75rem;
+    border-radius: 6px;
+    text-align: center;
+    font-style: italic;
+    margin: 0;
+}

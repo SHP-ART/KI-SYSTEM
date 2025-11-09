@@ -97,10 +97,22 @@ async function updatePredictions() {
 
         // Energie
         const energy = data.predictions.energy;
-        document.getElementById('energy-confidence').style.width = `${energy.confidence * 100}%`;
+        const energyFill = document.getElementById('energy-confidence');
+        energyFill.style.width = `${energy.confidence * 100}%`;
         document.getElementById('energy-conf-text').textContent = `${Math.round(energy.confidence * 100)}%`;
         document.getElementById('energy-optimization').textContent = energy.optimization;
         document.getElementById('savings-potential').textContent = energy.savings_potential;
+
+        // Farbe basierend auf Status
+        if (energy.status === 'savings_recommended') {
+            energyFill.style.background = 'linear-gradient(90deg, #10b981, #059669)';
+        } else if (energy.status === 'opportunity') {
+            energyFill.style.background = 'linear-gradient(90deg, #3b82f6, #2563eb)';
+        } else if (energy.status === 'optimal') {
+            energyFill.style.background = 'linear-gradient(90deg, #3b82f6, #2563eb)';
+        } else {
+            energyFill.style.background = 'linear-gradient(90deg, #6b7280, #4b5563)';
+        }
 
     } catch (error) {
         console.error('Error updating predictions:', error);
@@ -109,22 +121,58 @@ async function updatePredictions() {
 
 // Hilfsfunktion: Update einzelne Vorhersage
 function updatePrediction(type, prediction) {
-    // Konfidenz-Balken
-    document.getElementById(`${type}-confidence`).style.width = `${prediction.confidence * 100}%`;
+    // Konfidenz-Balken mit Farbe basierend auf Status
+    const confidenceFill = document.getElementById(`${type}-confidence`);
+    confidenceFill.style.width = `${prediction.confidence * 100}%`;
     document.getElementById(`${type}-conf-text`).textContent = `${Math.round(prediction.confidence * 100)}%`;
+
+    // Farbe basierend auf Status
+    const status = prediction.status || 'optimal';
+    if (status === 'action_recommended') {
+        confidenceFill.style.background = 'linear-gradient(90deg, #f59e0b, #d97706)';
+    } else if (status === 'savings_possible') {
+        confidenceFill.style.background = 'linear-gradient(90deg, #10b981, #059669)';
+    } else if (status === 'optimal') {
+        confidenceFill.style.background = 'linear-gradient(90deg, #3b82f6, #2563eb)';
+    } else {
+        confidenceFill.style.background = 'linear-gradient(90deg, #6b7280, #4b5563)';
+    }
 
     // Vorschläge
     const suggestionsEl = document.getElementById(`${type}-suggestions`);
     if (prediction.suggested_actions && prediction.suggested_actions.length > 0) {
-        suggestionsEl.innerHTML = '<ul>' +
-            prediction.suggested_actions.map(action => `<li>${action}</li>`).join('') +
-            '</ul>';
+        let html = '<ul>';
+        prediction.suggested_actions.forEach(action => {
+            // Icon basierend auf Inhalt
+            let icon = '•';
+            if (action.includes('💚') || action.includes('optimal') || action.includes('gut')) {
+                icon = '✓';
+            } else if (action.includes('💸') || action.includes('reduzieren') || action.includes('ausschalten')) {
+                icon = '⚠';
+            } else if (action.includes('🌙')) {
+                icon = '🌙';
+            } else if (action.includes('🏠')) {
+                icon = '🏠';
+            }
+
+            html += `<li><span class="suggestion-icon">${icon}</span> ${action}</li>`;
+        });
+        html += '</ul>';
+        suggestionsEl.innerHTML = html;
     } else {
-        suggestionsEl.textContent = 'Keine Vorschläge verfügbar';
+        // Bessere Darstellung wenn keine Aktionen nötig
+        if (status === 'optimal') {
+            suggestionsEl.innerHTML = '<div class="no-action-needed">✓ Alles optimal - keine Aktionen erforderlich</div>';
+        } else {
+            suggestionsEl.innerHTML = '<div class="no-data">Keine Daten verfügbar</div>';
+        }
     }
 
     // Begründung
-    document.getElementById(`${type}-reasoning`).textContent = prediction.reasoning;
+    const reasoningEl = document.getElementById(`${type}-reasoning`);
+    if (reasoningEl) {
+        reasoningEl.textContent = prediction.reasoning;
+    }
 }
 
 // Update Präsenz-Status

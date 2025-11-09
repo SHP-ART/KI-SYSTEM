@@ -271,24 +271,133 @@ class WebInterface:
                 if isinstance(recommendations, list):
                     recommendations = {'general': recommendations}
 
-                # Simuliere Vorhersagen (würde normalerweise vom ML-Modell kommen)
+                # Hole aktuellen State für intelligente Vorhersagen
                 state = self.engine.collect_current_state()
+
+                # === BELEUCHTUNG ===
+                lighting_actions = []
+                lighting_confidence = 0.0
+                lighting_status = 'optimal'
+
+                # Prüfe Helligkeit
+                brightness = state.get('sensors', {}).get('brightness')
+                hour = datetime.now().hour
+
+                if brightness is not None:
+                    if brightness < 100 and 6 <= hour < 22:
+                        lighting_actions.append(f'Helligkeit niedrig ({brightness} lux) - Lichter könnten eingeschaltet werden')
+                        lighting_confidence = 0.85
+                        lighting_status = 'action_recommended'
+                    elif brightness > 800:
+                        lighting_actions.append(f'Sehr hell ({brightness} lux) - Lichter können ausgeschaltet bleiben')
+                        lighting_confidence = 0.90
+                        lighting_status = 'optimal'
+                    else:
+                        lighting_confidence = 0.75
+                        lighting_status = 'optimal'
+                else:
+                    lighting_confidence = 0.50
+
+                # Nachtmodus
+                if hour < 6 or hour >= 22:
+                    lighting_actions.append('🌙 Nachtmodus: Gedimmte Beleuchtung empfohlen')
+                    lighting_confidence = max(lighting_confidence, 0.80)
+
+                # === HEIZUNG ===
+                heating_actions = []
+                heating_confidence = 0.0
+                heating_status = 'optimal'
+
+                outdoor_temp = state.get('weather', {}).get('temperature')
+                indoor_temp = state.get('sensors', {}).get('temperature')
+                energy_price = state.get('energy', {}).get('current_price')
+
+                if outdoor_temp is not None and indoor_temp is not None:
+                    temp_diff = indoor_temp - outdoor_temp
+
+                    if outdoor_temp < 10:
+                        if indoor_temp < 20:
+                            heating_actions.append(f'Innentemperatur niedrig ({indoor_temp:.1f}°C) - Heizung hochdrehen empfohlen')
+                            heating_confidence = 0.85
+                            heating_status = 'action_recommended'
+                        elif indoor_temp > 23:
+                            heating_actions.append(f'Komfortable Temperatur ({indoor_temp:.1f}°C) - Heizung kann reduziert werden')
+                            heating_confidence = 0.80
+                            heating_status = 'savings_possible'
+                        else:
+                            heating_actions.append(f'Temperatur optimal ({indoor_temp:.1f}°C)')
+                            heating_confidence = 0.90
+                            heating_status = 'optimal'
+                    elif outdoor_temp > 18:
+                        heating_actions.append(f'Mildes Wetter ({outdoor_temp:.1f}°C) - Heizung kann ausgeschaltet bleiben')
+                        heating_confidence = 0.95
+                        heating_status = 'optimal'
+                    else:
+                        heating_confidence = 0.70
+
+                    # Energiepreis-Hinweis
+                    if energy_price:
+                        if energy_price < 0.20:
+                            heating_actions.append(f'💚 Günstiger Strompreis ({energy_price:.3f}€/kWh) - guter Zeitpunkt zum Heizen')
+                        elif energy_price > 0.35:
+                            heating_actions.append(f'💸 Hoher Strompreis ({energy_price:.3f}€/kWh) - Heizung wenn möglich reduzieren')
+                            heating_status = 'savings_possible'
+                else:
+                    heating_confidence = 0.50
+
+                # === ENERGIE-OPTIMIERUNG ===
+                energy_optimization = ''
+                savings_potential = '0%'
+                energy_confidence = 0.0
+                energy_status = 'optimal'
+
+                if energy_price:
+                    if energy_price < 0.20:
+                        energy_optimization = f'💚 Niedrige Energiepreise ({energy_price:.3f}€/kWh) - guter Zeitpunkt für energieintensive Geräte'
+                        savings_potential = '20%'
+                        energy_confidence = 0.85
+                        energy_status = 'opportunity'
+                    elif energy_price < 0.30:
+                        energy_optimization = f'Moderate Energiepreise ({energy_price:.3f}€/kWh) - normale Nutzung empfohlen'
+                        savings_potential = '10%'
+                        energy_confidence = 0.75
+                        energy_status = 'optimal'
+                    else:
+                        energy_optimization = f'💸 Hohe Energiepreise ({energy_price:.3f}€/kWh) - nicht-essentielle Geräte später nutzen'
+                        savings_potential = '25%'
+                        energy_confidence = 0.90
+                        energy_status = 'savings_recommended'
+                else:
+                    energy_optimization = 'Energiepreis-Daten nicht verfügbar'
+                    savings_potential = '0%'
+                    energy_confidence = 0.50
+                    energy_status = 'unknown'
+
+                # Presence-basierte Empfehlungen
+                if state.get('presence', {}).get('count', 0) == 0:
+                    lighting_actions.append('🏠 Niemand zuhause - alle Lichter ausschalten empfohlen')
+                    heating_actions.append('🏠 Niemand zuhause - Heizung auf Abwesenheitsmodus setzen')
+                    lighting_status = 'savings_possible'
+                    heating_status = 'savings_possible'
 
                 predictions = {
                     'lighting': {
-                        'suggested_actions': recommendations.get('lighting', recommendations.get('general', [])),
-                        'confidence': 0.85,
-                        'reasoning': 'Basierend auf Tageszeit, Helligkeit und bisherigem Verhalten'
+                        'suggested_actions': lighting_actions,
+                        'confidence': lighting_confidence,
+                        'status': lighting_status,
+                        'reasoning': f'Basierend auf Helligkeit ({brightness if brightness else "unbekannt"} lux), Tageszeit ({hour}:00) und Präsenz'
                     },
                     'heating': {
-                        'suggested_actions': recommendations.get('heating', []),
-                        'confidence': 0.78,
-                        'reasoning': 'Basierend auf Außentemperatur, Energiepreis und Komfort-Präferenzen'
+                        'suggested_actions': heating_actions,
+                        'confidence': heating_confidence,
+                        'status': heating_status,
+                        'reasoning': f'Außen: {outdoor_temp if outdoor_temp else "?"}°C, Innen: {indoor_temp if indoor_temp else "?"}°C, Energiepreis: {f"{energy_price:.3f}€/kWh" if energy_price else "unbekannt"}'
                     },
                     'energy': {
-                        'optimization': 'Niedrige Energiepreise - guter Zeitpunkt für Heizen',
-                        'savings_potential': '15%',
-                        'confidence': 0.72
+                        'optimization': energy_optimization,
+                        'savings_potential': savings_potential,
+                        'confidence': energy_confidence,
+                        'status': energy_status
                     }
                 }
 
