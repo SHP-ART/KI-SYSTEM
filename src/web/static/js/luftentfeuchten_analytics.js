@@ -316,9 +316,16 @@ function renderTrendChart() {
 }
 
 function renderPeakHours() {
+    // Sichere Prüfung auf hourly_pattern
+    if (!analyticsData.patterns.hourly_pattern || !analyticsData.patterns.hourly_pattern.peak_hours) {
+        document.getElementById('peak-hours-chart').innerHTML =
+            '<p style="color: #6b7280;">Nicht genug Daten für Analyse</p>';
+        return;
+    }
+
     const peakHours = analyticsData.patterns.hourly_pattern.peak_hours;
 
-    if (!peakHours || peakHours.length === 0) {
+    if (peakHours.length === 0) {
         document.getElementById('peak-hours-chart').innerHTML =
             '<p style="color: #6b7280;">Nicht genug Daten für Analyse</p>';
         return;
@@ -346,9 +353,16 @@ function renderPeakHours() {
 }
 
 function renderWeekdayDistribution() {
+    // Sichere Prüfung auf weekly_pattern
+    if (!analyticsData.patterns.weekly_pattern || !analyticsData.patterns.weekly_pattern.distribution) {
+        document.getElementById('weekday-chart').innerHTML =
+            '<p style="color: #6b7280;">Nicht genug Daten für Analyse</p>';
+        return;
+    }
+
     const weekdayDist = analyticsData.patterns.weekly_pattern.distribution;
 
-    if (!weekdayDist || weekdayDist.length === 0) {
+    if (weekdayDist.length === 0) {
         document.getElementById('weekday-chart').innerHTML =
             '<p style="color: #6b7280;">Nicht genug Daten für Analyse</p>';
         return;
