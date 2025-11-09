@@ -2853,6 +2853,100 @@ class WebInterface:
                 logger.error(f"Error triggering update: {e}")
                 return jsonify({'success': False, 'error': str(e)}), 500
 
+        # === DATENBANK-MANAGEMENT ENDPOINTS ===
+
+        @self.app.route('/api/database/status')
+        def database_status():
+            """Gibt den aktuellen Status der Datenbank zurück"""
+            try:
+                db_info = self.db.get_database_size()
+
+                # Retention-Einstellung aus Config
+                retention_days = self.config.get('database.retention_days', 90)
+
+                # Maintenance Job Status
+                maintenance_status = {}
+                if self.db_maintenance:
+                    status = self.db_maintenance.get_status()
+                    maintenance_status = {
+                        'running': status['running'],
+                        'last_cleanup': status['last_cleanup'],
+                        'last_vacuum': status['last_vacuum'],
+                        'retention_days': status['retention_days'],
+                        'next_run_hour': status['run_hour']
+                    }
+
+                return jsonify({
+                    'success': True,
+                    'database': {
+                        'file_size_mb': db_info['file_size_mb'],
+                        'file_size_bytes': db_info['file_size_bytes'],
+                        'total_rows': db_info['total_rows'],
+                        'table_counts': db_info['table_counts'],
+                        'oldest_data': db_info['oldest_data'],
+                        'newest_data': db_info['newest_data'],
+                        'file_path': db_info['file_path']
+                    },
+                    'settings': {
+                        'retention_days': retention_days
+                    },
+                    'maintenance': maintenance_status
+                })
+            except Exception as e:
+                logger.error(f"Error getting database status: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
+
+        @self.app.route('/api/database/cleanup', methods=['POST'])
+        def database_cleanup():
+            """Führt manuelles Cleanup der Datenbank aus"""
+            try:
+                data = request.json or {}
+                retention_days = data.get('retention_days')
+
+                # Verwende Config-Wert wenn nicht angegeben
+                if retention_days is None:
+                    retention_days = self.config.get('database.retention_days', 90)
+
+                deleted_counts = self.db.cleanup_old_data(retention_days=retention_days)
+
+                return jsonify({
+                    'success': True,
+                    'deleted_rows': sum(deleted_counts.values()),
+                    'details': deleted_counts,
+                    'message': f'Cleanup abgeschlossen: {sum(deleted_counts.values())} Zeilen gelöscht'
+                })
+            except Exception as e:
+                logger.error(f"Error during cleanup: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
+
+        @self.app.route('/api/database/vacuum', methods=['POST'])
+        def database_vacuum():
+            """Führt VACUUM auf der Datenbank aus (Optimierung)"""
+            try:
+                # Speichere Größe vor VACUUM
+                before_info = self.db.get_database_size()
+                before_size = before_info['file_size_mb']
+
+                # Führe VACUUM aus
+                self.db.vacuum_database()
+
+                # Speichere Größe nach VACUUM
+                after_info = self.db.get_database_size()
+                after_size = after_info['file_size_mb']
+
+                freed_mb = before_size - after_size
+
+                return jsonify({
+                    'success': True,
+                    'before_size_mb': before_size,
+                    'after_size_mb': after_size,
+                    'freed_mb': round(freed_mb, 2),
+                    'message': f'VACUUM abgeschlossen: {round(freed_mb, 2)} MB freigegeben'
+                })
+            except Exception as e:
+                logger.error(f"Error during vacuum: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
+
     def _calculate_heating_analytics(self, days_back: int) -> dict:
         """Berechnet umfassende Heizungs-Analytics"""
         from datetime import datetime, timedelta
@@ -3362,100 +3456,6 @@ class WebInterface:
             })
 
         return trends
-
-    # === DATENBANK-MANAGEMENT ENDPOINTS ===
-
-    @self.app.route('/api/database/status')
-    def database_status():
-        """Gibt den aktuellen Status der Datenbank zurück"""
-        try:
-            db_info = self.db.get_database_size()
-
-            # Retention-Einstellung aus Config
-            retention_days = self.config.get('database.retention_days', 90)
-
-            # Maintenance Job Status
-            maintenance_status = {}
-            if self.db_maintenance:
-                status = self.db_maintenance.get_status()
-                maintenance_status = {
-                    'running': status['running'],
-                    'last_cleanup': status['last_cleanup'],
-                    'last_vacuum': status['last_vacuum'],
-                    'retention_days': status['retention_days'],
-                    'next_run_hour': status['run_hour']
-                }
-
-            return jsonify({
-                'success': True,
-                'database': {
-                    'file_size_mb': db_info['file_size_mb'],
-                    'file_size_bytes': db_info['file_size_bytes'],
-                    'total_rows': db_info['total_rows'],
-                    'table_counts': db_info['table_counts'],
-                    'oldest_data': db_info['oldest_data'],
-                    'newest_data': db_info['newest_data'],
-                    'file_path': db_info['file_path']
-                },
-                'settings': {
-                    'retention_days': retention_days
-                },
-                'maintenance': maintenance_status
-            })
-        except Exception as e:
-            logger.error(f"Error getting database status: {e}")
-            return jsonify({'success': False, 'error': str(e)}), 500
-
-    @self.app.route('/api/database/cleanup', methods=['POST'])
-    def database_cleanup():
-        """Führt manuelles Cleanup der Datenbank aus"""
-        try:
-            data = request.json or {}
-            retention_days = data.get('retention_days')
-
-            # Verwende Config-Wert wenn nicht angegeben
-            if retention_days is None:
-                retention_days = self.config.get('database.retention_days', 90)
-
-            deleted_counts = self.db.cleanup_old_data(retention_days=retention_days)
-
-            return jsonify({
-                'success': True,
-                'deleted_rows': sum(deleted_counts.values()),
-                'details': deleted_counts,
-                'message': f'Cleanup abgeschlossen: {sum(deleted_counts.values())} Zeilen gelöscht'
-            })
-        except Exception as e:
-            logger.error(f"Error during cleanup: {e}")
-            return jsonify({'success': False, 'error': str(e)}), 500
-
-    @self.app.route('/api/database/vacuum', methods=['POST'])
-    def database_vacuum():
-        """Führt VACUUM auf der Datenbank aus (Optimierung)"""
-        try:
-            # Speichere Größe vor VACUUM
-            before_info = self.db.get_database_size()
-            before_size = before_info['file_size_mb']
-
-            # Führe VACUUM aus
-            self.db.vacuum_database()
-
-            # Speichere Größe nach VACUUM
-            after_info = self.db.get_database_size()
-            after_size = after_info['file_size_mb']
-
-            freed_mb = before_size - after_size
-
-            return jsonify({
-                'success': True,
-                'before_size_mb': before_size,
-                'after_size_mb': after_size,
-                'freed_mb': round(freed_mb, 2),
-                'message': f'VACUUM abgeschlossen: {round(freed_mb, 2)} MB freigegeben'
-            })
-        except Exception as e:
-            logger.error(f"Error during vacuum: {e}")
-            return jsonify({'success': False, 'error': str(e)}), 500
 
     def run(self, host='0.0.0.0', port=5000, debug=False):
         """Starte den Web-Server"""
