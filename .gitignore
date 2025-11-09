@@ -42,13 +42,24 @@ ENV/
 
 # Data and Models
 data/*.db
+data/*.db-*
 data/*.sqlite
 data/*.sqlite3
 data/*_config.json
 data/heating_*.json
+data/settings_*.json
+data/ml_training_status.json
+data/sensor_config.json
+data/bathroom_config.json
+data/luftentfeuchten_config.json
 models/*.pkl
 models/*.h5
 models/*.joblib
+
+# Backups
+data/backups/
+*.backup
+*.bak
 
 # Logs
 logs/

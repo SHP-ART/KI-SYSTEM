@@ -157,6 +157,45 @@ Wichtige Einstellungen:
 - `data_collection.sensors`: Deine Sensor-Entity-IDs
 - `models.energy_optimizer`: Komfort vs. Energiesparen
 
+## 🔄 Updates & Daten-Persistenz
+
+### Updates installieren
+
+```bash
+# Hole neueste Version vom Repository
+git pull origin main
+
+# Aktualisiere Dependencies (falls nötig)
+pip install -r requirements.txt --upgrade
+```
+
+### ✅ Deine Daten bleiben erhalten!
+
+**Alle wichtigen Dateien sind automatisch vor Updates geschützt** und werden nicht von Git überschrieben:
+
+| Was bleibt erhalten | Speicherort |
+|---------------------|-------------|
+| 🗄️ **Datenbank** | `data/ki_system.db` |
+| ⚙️ **Einstellungen** | `data/*.json` |
+| 🧠 **Trainierte ML-Modelle** | `models/*.pkl` |
+| 🔑 **Credentials** | `.env` |
+| 📝 **Logs** | `logs/` |
+
+**Kein manuelles Backup vor Updates nötig!** Siehe [PERSISTENCE.md](PERSISTENCE.md) für Details.
+
+### Nach einem Update
+
+```bash
+# Web-App neu starten
+python3 main.py web
+
+# Logs prüfen
+tail -f logs/ki_system.log
+
+# Einstellungen überprüfen
+open http://localhost:5000/settings
+```
+
 ## Web-Dashboard
 
 ### Web-Interface starten
