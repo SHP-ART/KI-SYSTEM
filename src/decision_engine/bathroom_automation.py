@@ -47,6 +47,10 @@ class BathroomAutomation:
         self.humidity_low = config.get('humidity_threshold_low', 60.0)
         self.target_temp = config.get('target_temperature', 22.0)
 
+        # Heizungs-Boost Einstellungen
+        self.heating_boost_enabled = config.get('heating_boost_enabled', True)
+        self.heating_boost_delta = config.get('heating_boost_delta', 1.0)
+
         # Verzögerung bevor Luftentfeuchter ausschaltet
         self.dehumidifier_delay_minutes = config.get('dehumidifier_delay', 5)
 
@@ -331,16 +335,16 @@ class BathroomAutomation:
             return None
 
         # Ziel-Temperatur anpassen
-        if dehumidifier_running:
-            # Während Entfeuchtung: +1°C für bessere Trocknung
-            target = self.target_temp + 1.0
+        if dehumidifier_running and self.heating_boost_enabled:
+            # Während Entfeuchtung: Boost aktivieren (konfigurierbar)
+            target = self.target_temp + self.heating_boost_delta
         else:
             target = self.target_temp
 
         # Nur anpassen wenn Abweichung > 0.5°C
         if abs(temperature - target) > 0.5:
-            reason = f'Target temperature adjustment (dehumidifier: {dehumidifier_running})'
-            logger.info(f"🌡️ Adjusting heating to {target}°C (current: {temperature}°C)")
+            reason = f'Target temperature adjustment (boost: {self.heating_boost_enabled and dehumidifier_running})'
+            logger.info(f"🌡️ Adjusting heating to {target}°C (current: {temperature}°C, boost: {self.heating_boost_delta if dehumidifier_running and self.heating_boost_enabled else 0}°C)")
 
             # Protokolliere Aktion
             self._log_device_action('heater', heater_id, 'set_temperature', reason, platform)

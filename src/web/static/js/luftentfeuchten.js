@@ -177,8 +177,16 @@ async function loadConfig() {
             // Schwellwerte
             setSlider('humidity-high', config.humidity_threshold_high || 70);
             setSlider('humidity-low', config.humidity_threshold_low || 60);
-            setSlider('target-temperature', config.target_temperature || 22);
             setSlider('dehumidifier-delay', config.dehumidifier_delay || 5);
+
+            // Heizung
+            setSlider('target-temperature', config.target_temperature || 22);
+            setSlider('heating-boost-delta', config.heating_boost_delta || 1);
+            const heatingBoostEnabled = document.getElementById('heating-boost-enabled');
+            if (heatingBoostEnabled) {
+                heatingBoostEnabled.checked = config.heating_boost_enabled !== false; // Default: true
+                setupHeatingBoostToggle(); // Trigger toggle logic
+            }
 
             // Energie-Werte (Tab: Erweitert)
             const dehumWattage = document.getElementById('dehumidifier-wattage');
@@ -224,8 +232,11 @@ async function saveConfig() {
             window_sensor_id: document.getElementById('window-sensor').value || null,
             humidity_threshold_high: parseFloat(document.getElementById('humidity-high').value),
             humidity_threshold_low: parseFloat(document.getElementById('humidity-low').value),
-            target_temperature: parseFloat(document.getElementById('target-temperature').value),
             dehumidifier_delay: parseInt(document.getElementById('dehumidifier-delay').value),
+            // Heizung
+            target_temperature: parseFloat(document.getElementById('target-temperature').value),
+            heating_boost_enabled: document.getElementById('heating-boost-enabled').checked,
+            heating_boost_delta: parseFloat(document.getElementById('heating-boost-delta').value),
             // Energie-Werte (nur Luftentfeuchter, keine Heizung bei Zentralheizung)
             dehumidifier_wattage: parseFloat(document.getElementById('dehumidifier-wattage').value),
             energy_price_per_kwh: parseFloat(document.getElementById('energy-price').value)
@@ -323,6 +334,9 @@ function updateSliderValue(sliderId) {
         suffix = '°C';
     } else if (sliderId.includes('delay')) {
         suffix = ' Min';
+    } else if (sliderId === 'heating-boost-delta') {
+        suffix = '°C';
+        value = '+' + value; // Plus-Zeichen für Erhöhung
     }
 
     valueSpan.textContent = value + suffix;
@@ -330,7 +344,7 @@ function updateSliderValue(sliderId) {
 
 // Setup Slider-Listeners
 function setupSliders() {
-    const sliders = ['humidity-high', 'humidity-low', 'target-temperature', 'dehumidifier-delay'];
+    const sliders = ['humidity-high', 'humidity-low', 'target-temperature', 'dehumidifier-delay', 'heating-boost-delta'];
     sliders.forEach(sliderId => {
         const slider = document.getElementById(sliderId);
         if (slider) {
@@ -338,6 +352,29 @@ function setupSliders() {
             updateSliderValue(sliderId);
         }
     });
+}
+
+// Setup Heating Boost Toggle
+function setupHeatingBoostToggle() {
+    const toggle = document.getElementById('heating-boost-enabled');
+    const boostGroup = document.getElementById('boost-temp-group');
+
+    if (toggle && boostGroup) {
+        toggle.addEventListener('change', () => {
+            if (toggle.checked) {
+                boostGroup.style.display = 'block';
+            } else {
+                boostGroup.style.display = 'none';
+            }
+        });
+
+        // Initial state
+        if (toggle.checked) {
+            boostGroup.style.display = 'block';
+        } else {
+            boostGroup.style.display = 'none';
+        }
+    }
 }
 
 // Live Sensor Status laden
@@ -866,6 +903,7 @@ function setupTabs() {
 document.addEventListener('DOMContentLoaded', async () => {
     setupSliders();
     setupTabs();
+    setupHeatingBoostToggle();
 
     // Zeige Lade-Indikator
     const statusSection = document.querySelector('.status-grid');
