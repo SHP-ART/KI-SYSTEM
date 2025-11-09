@@ -1,0 +1,26 @@
+# Systemd Service für KI Smart Home
+# Installation: siehe AUTOSTART.md
+
+[Unit]
+Description=KI Smart Home Web Interface
+After=network.target
+
+[Service]
+Type=simple
+User=YOUR_USERNAME
+WorkingDirectory=/path/to/KI-SYSTEM
+Environment="PATH=/path/to/KI-SYSTEM/venv/bin"
+ExecStart=/path/to/KI-SYSTEM/venv/bin/python main.py web --host 0.0.0.0 --port 5000
+Restart=always
+RestartSec=10
+
+# Logging
+StandardOutput=append:/path/to/KI-SYSTEM/logs/webapp.log
+StandardError=append:/path/to/KI-SYSTEM/logs/webapp_error.log
+
+# Sicherheit
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -21,6 +21,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (currentMode === 'optimization') {
         loadOptimizationData();
     }
+
+    // Lade Heizungs-Analytics
+    loadHeatingAnalytics();
 });
 
 // Event Listeners einrichten
@@ -47,6 +50,11 @@ function setupEventListeners() {
     document.getElementById('room-filter')?.addEventListener('change', (e) => {
         currentRoomFilter = e.target.value;
         renderHeaters();
+    });
+
+    // Analytics Zeitraum Selector
+    document.getElementById('analytics-timeframe')?.addEventListener('change', () => {
+        loadHeatingAnalytics();
     });
 
     // Speichern
@@ -779,6 +787,295 @@ function renderStatistics(stats) {
         const dataDays = stats.period_days || 0;
         document.getElementById('monitoring-data-days').textContent = dataDays > 0 ? dataDays + ' Tage' : 'Keine Daten';
     }
+}
+
+// === HEIZUNGS-ANALYTICS FUNKTIONEN ===
+
+let heatingTimesChart = null;
+let roomComparisonChart = null;
+let weatherCorrelationChart = null;
+
+// Lade Heizungs-Analytics
+async function loadHeatingAnalytics() {
+    const timeframeSelect = document.getElementById('analytics-timeframe');
+    if (!timeframeSelect) return;
+
+    const days = parseInt(timeframeSelect.value) || 14;
+
+    try {
+        const data = await fetchJSON(`/api/heating/analytics?days=${days}`);
+
+        if (data.sufficient_data) {
+            // Rendere alle Analytics
+            renderCostEstimates(data.cost_estimates);
+            renderHeatingTimes(data.heating_times);
+            renderTemperatureEfficiency(data.temperature_efficiency);
+            renderRoomComparison(data.room_comparison);
+            renderWeatherCorrelation(data.weather_correlation);
+
+            // Zeige Analytics-Section
+            document.querySelector('.heating-analytics-card')?.classList.remove('hidden');
+        } else {
+            // Zeige Info-Nachricht
+            console.log('Nicht genug Daten für Analytics');
+        }
+    } catch (error) {
+        console.error('Error loading heating analytics:', error);
+    }
+}
+
+// Rendere Kosten-Schätzungen
+function renderCostEstimates(costData) {
+    if (!costData) return;
+
+    document.getElementById('cost-daily').textContent =
+        (costData.daily_cost || 0).toFixed(2) + '€';
+    document.getElementById('cost-monthly').textContent =
+        (costData.monthly_cost || 0).toFixed(2) + '€';
+    document.getElementById('cost-yearly').textContent =
+        (costData.yearly_cost || 0).toFixed(0) + '€';
+    document.getElementById('heating-hours').textContent =
+        (costData.total_heating_hours || 0).toFixed(1) + 'h';
+}
+
+// Rendere Heizzeiten-Chart
+function renderHeatingTimes(heatingTimesData) {
+    if (!heatingTimesData || !heatingTimesData.hourly_breakdown) return;
+
+    const ctx = document.getElementById('heating-times-chart');
+    if (!ctx) return;
+
+    // Zerstöre existierenden Chart
+    if (heatingTimesChart) {
+        heatingTimesChart.destroy();
+    }
+
+    const hours = Array.from({ length: 24 }, (_, i) => i);
+    const percentages = hours.map(h => heatingTimesData.hourly_breakdown[h] || 0);
+
+    heatingTimesChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: hours.map(h => h + ':00'),
+            datasets: [{
+                label: 'Heizaktivität (%)',
+                data: percentages,
+                backgroundColor: percentages.map(p => {
+                    if (p > 70) return '#ef4444'; // Hoch - Rot
+                    if (p > 40) return '#f59e0b'; // Mittel - Orange
+                    return '#10b981'; // Niedrig - Grün
+                }),
+                borderColor: '#1f2937',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: (context) => `${context.parsed.y.toFixed(1)}% der Zeit aktiv`
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    title: { display: true, text: 'Heizaktivität (%)' }
+                },
+                x: {
+                    title: { display: true, text: 'Uhrzeit' }
+                }
+            }
+        }
+    });
+
+    // Zeige Peak-Zeiten
+    if (heatingTimesData.peak_hours && heatingTimesData.peak_hours.length > 0) {
+        const peakHoursText = heatingTimesData.peak_hours.join(', ');
+        console.log('Peak Heizzeiten:', peakHoursText);
+    }
+}
+
+// Rendere Temperatur-Effizienz
+function renderTemperatureEfficiency(efficiencyData) {
+    if (!efficiencyData) return;
+
+    const score = efficiencyData.efficiency_score || 0;
+    const scoreText = document.getElementById('efficiency-score-text');
+    const scoreCircle = document.getElementById('efficiency-score-circle');
+
+    if (scoreText) {
+        scoreText.textContent = score.toFixed(0);
+    }
+
+    if (scoreCircle) {
+        // Animiere den Kreis (314 = Umfang bei r=50)
+        const circumference = 314;
+        const offset = circumference - (score / 100) * circumference;
+        scoreCircle.style.strokeDashoffset = offset;
+
+        // Farbe basierend auf Score
+        let color = '#10b981'; // Grün
+        if (score < 60) color = '#f59e0b'; // Orange
+        if (score < 40) color = '#ef4444'; // Rot
+        scoreCircle.setAttribute('stroke', color);
+    }
+
+    // Zeige Details
+    const avgDiff = efficiencyData.avg_temp_difference || 0;
+    const efficiencyDetails = document.getElementById('efficiency-details');
+    if (efficiencyDetails) {
+        efficiencyDetails.innerHTML = `
+            <div class="efficiency-detail">
+                <span class="label">Ø Zieltemperatur:</span>
+                <span class="value">${(efficiencyData.avg_target_temp || 0).toFixed(1)}°C</span>
+            </div>
+            <div class="efficiency-detail">
+                <span class="label">Ø Ist-Temperatur:</span>
+                <span class="value">${(efficiencyData.avg_actual_temp || 0).toFixed(1)}°C</span>
+            </div>
+            <div class="efficiency-detail">
+                <span class="label">Ø Differenz:</span>
+                <span class="value">${avgDiff.toFixed(1)}°C</span>
+            </div>
+        `;
+    }
+}
+
+// Rendere Raum-Vergleich
+function renderRoomComparison(roomData) {
+    if (!roomData || roomData.length === 0) return;
+
+    const ctx = document.getElementById('room-comparison-chart');
+    if (!ctx) return;
+
+    // Zerstöre existierenden Chart
+    if (roomComparisonChart) {
+        roomComparisonChart.destroy();
+    }
+
+    const rooms = roomData.map(r => r.room_name);
+    const heatingPercent = roomData.map(r => r.heating_percent);
+    const avgTemp = roomData.map(r => r.avg_temp);
+
+    roomComparisonChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: rooms,
+            datasets: [
+                {
+                    label: 'Heizaktivität (%)',
+                    data: heatingPercent,
+                    backgroundColor: 'rgba(239, 68, 68, 0.6)',
+                    borderColor: '#ef4444',
+                    borderWidth: 1,
+                    yAxisID: 'y-percent'
+                },
+                {
+                    label: 'Ø Temperatur (°C)',
+                    data: avgTemp,
+                    backgroundColor: 'rgba(59, 130, 246, 0.6)',
+                    borderColor: '#3b82f6',
+                    borderWidth: 1,
+                    yAxisID: 'y-temp'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: true, position: 'top' }
+            },
+            scales: {
+                'y-percent': {
+                    type: 'linear',
+                    position: 'left',
+                    beginAtZero: true,
+                    max: 100,
+                    title: { display: true, text: 'Heizaktivität (%)' }
+                },
+                'y-temp': {
+                    type: 'linear',
+                    position: 'right',
+                    beginAtZero: false,
+                    title: { display: true, text: 'Temperatur (°C)' },
+                    grid: { drawOnChartArea: false }
+                }
+            }
+        }
+    });
+}
+
+// Rendere Wetter-Korrelation
+function renderWeatherCorrelation(weatherData) {
+    if (!weatherData || weatherData.length === 0) return;
+
+    const ctx = document.getElementById('weather-correlation-chart');
+    if (!ctx) return;
+
+    // Zerstöre existierenden Chart
+    if (weatherCorrelationChart) {
+        weatherCorrelationChart.destroy();
+    }
+
+    const labels = weatherData.map(w => w.temp_range);
+    const heatingPercent = weatherData.map(w => w.heating_percent);
+
+    // Farben basierend auf Temperatur-Bereich
+    const colors = weatherData.map(w => {
+        const temp = parseFloat(w.temp_range.split('-')[0]); // Nimm untere Grenze
+        if (temp < 0) return '#3b82f6'; // Blau (kalt)
+        if (temp < 10) return '#10b981'; // Grün (kühl)
+        if (temp < 15) return '#f59e0b'; // Orange (mild)
+        return '#ef4444'; // Rot (warm)
+    });
+
+    weatherCorrelationChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Heizaktivität (%)',
+                data: heatingPercent,
+                backgroundColor: colors,
+                borderColor: '#1f2937',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: (context) => {
+                            const dataPoint = weatherData[context.dataIndex];
+                            return [
+                                `Heizaktivität: ${context.parsed.y.toFixed(1)}%`,
+                                `Ø Außentemp: ${dataPoint.avg_outdoor_temp.toFixed(1)}°C`
+                            ];
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    title: { display: true, text: 'Heizaktivität (%)' }
+                },
+                x: {
+                    title: { display: true, text: 'Außentemperatur-Bereich (°C)' }
+                }
+            }
+        }
+    });
 }
 
 // Hilfsfunktion für API-Aufrufe

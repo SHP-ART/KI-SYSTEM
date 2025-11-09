@@ -455,18 +455,136 @@ class Database:
         conn.commit()
 
     def cleanup_old_data(self, retention_days: int = 90):
-        """Löscht alte Daten basierend auf Retention-Policy"""
+        """Löscht alte Daten basierend auf Retention-Policy
+
+        Args:
+            retention_days: Anzahl der Tage, die Daten aufbewahrt werden sollen (Standard: 90)
+
+        Returns:
+            Dict mit Anzahl der gelöschten Zeilen pro Tabelle
+        """
         conn = self._get_connection()
         cursor = conn.cursor()
 
         cutoff_date = datetime.now() - timedelta(days=retention_days)
+        deleted_counts = {}
 
+        # Alte Sensor-Daten löschen
         cursor.execute("DELETE FROM sensor_data WHERE timestamp < ?", (cutoff_date,))
+        deleted_counts['sensor_data'] = cursor.rowcount
+
+        # Alte externe Daten löschen
         cursor.execute("DELETE FROM external_data WHERE timestamp < ?", (cutoff_date,))
+        deleted_counts['external_data'] = cursor.rowcount
+
+        # Alte Entscheidungen löschen
         cursor.execute("DELETE FROM decisions WHERE timestamp < ?", (cutoff_date,))
+        deleted_counts['decisions'] = cursor.rowcount
+
+        # Alte Badezimmer-Events löschen (behalte mehr Daten für Muster-Erkennung)
+        bathroom_retention = max(retention_days, 180)  # Mind. 6 Monate
+        bathroom_cutoff = datetime.now() - timedelta(days=bathroom_retention)
+        cursor.execute("DELETE FROM bathroom_events WHERE start_time < ?", (bathroom_cutoff,))
+        deleted_counts['bathroom_events'] = cursor.rowcount
+
+        # Alte Badezimmer-Messungen löschen (nur behalten wenn Event noch existiert)
+        cursor.execute("""
+            DELETE FROM bathroom_measurements
+            WHERE event_id NOT IN (SELECT id FROM bathroom_events)
+        """)
+        deleted_counts['bathroom_measurements'] = cursor.rowcount
+
+        # Alte Badezimmer-Aktionen löschen
+        cursor.execute("DELETE FROM bathroom_device_actions WHERE timestamp < ?", (bathroom_cutoff,))
+        deleted_counts['bathroom_device_actions'] = cursor.rowcount
+
+        # Alte Heizungs-Beobachtungen löschen
+        cursor.execute("DELETE FROM heating_observations WHERE timestamp < ?", (cutoff_date,))
+        deleted_counts['heating_observations'] = cursor.rowcount
+
+        # Alte Heizungs-Insights löschen (nur die ältesten, behalte mind. 30 Tage)
+        insights_retention = max(retention_days, 30)
+        insights_cutoff = datetime.now() - timedelta(days=insights_retention)
+        cursor.execute("DELETE FROM heating_insights WHERE timestamp < ?", (insights_cutoff,))
+        deleted_counts['heating_insights'] = cursor.rowcount
 
         conn.commit()
-        logger.info(f"Cleaned up data older than {retention_days} days")
+
+        total_deleted = sum(deleted_counts.values())
+        logger.info(f"Cleaned up {total_deleted} rows older than {retention_days} days: {deleted_counts}")
+
+        return deleted_counts
+
+    def vacuum_database(self):
+        """Optimiert die Datenbank durch VACUUM (gibt Speicher frei und reorganisiert)"""
+        conn = self._get_connection()
+
+        # VACUUM kann nicht in einer Transaktion laufen
+        conn.isolation_level = None
+        cursor = conn.cursor()
+
+        logger.info("Running VACUUM on database...")
+        cursor.execute("VACUUM")
+
+        conn.isolation_level = ''
+        logger.info("Database VACUUM completed")
+
+    def get_database_size(self) -> Dict[str, Any]:
+        """Gibt Informationen über die Datenbankgröße zurück
+
+        Returns:
+            Dict mit Dateigröße, Anzahl Zeilen pro Tabelle, etc.
+        """
+        import os
+
+        # Dateigröße in MB
+        file_size_bytes = os.path.getsize(self.db_path)
+        file_size_mb = file_size_bytes / (1024 * 1024)
+
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        # Zähle Zeilen in jeder Tabelle
+        tables = [
+            'sensor_data',
+            'external_data',
+            'decisions',
+            'training_history',
+            'bathroom_events',
+            'bathroom_measurements',
+            'bathroom_device_actions',
+            'bathroom_learned_parameters',
+            'heating_observations',
+            'heating_insights',
+            'heating_schedules'
+        ]
+
+        table_counts = {}
+        for table in tables:
+            try:
+                cursor.execute(f"SELECT COUNT(*) FROM {table}")
+                count = cursor.fetchone()[0]
+                table_counts[table] = count
+            except sqlite3.OperationalError:
+                # Tabelle existiert nicht
+                table_counts[table] = 0
+
+        # Ältester und neuester Eintrag
+        cursor.execute("""
+            SELECT MIN(timestamp), MAX(timestamp)
+            FROM sensor_data
+        """)
+        oldest, newest = cursor.fetchone()
+
+        return {
+            'file_size_mb': round(file_size_mb, 2),
+            'file_size_bytes': file_size_bytes,
+            'total_rows': sum(table_counts.values()),
+            'table_counts': table_counts,
+            'oldest_data': oldest,
+            'newest_data': newest,
+            'file_path': str(self.db_path)
+        }
 
     # === BADEZIMMER AUTOMATISIERUNG - METHODEN ===
 
@@ -691,6 +809,51 @@ class Database:
         cursor.execute(query, (start_time,))
 
         return [dict(row) for row in cursor.fetchall()]
+
+    def get_sensor_data_timeseries(self, sensor_id: str, hours_back: int = 6) -> List[Dict]:
+        """Holt Zeitreihen-Daten für einen Sensor"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        start_time = datetime.now() - timedelta(hours=hours_back)
+
+        cursor.execute("""
+            SELECT timestamp, value, unit
+            FROM sensor_data
+            WHERE sensor_id = ? AND timestamp >= ?
+            ORDER BY timestamp ASC
+        """, (sensor_id, start_time))
+
+        return [dict(row) for row in cursor.fetchall()]
+
+    def create_manual_bathroom_event(self, start_time: datetime, end_time: datetime,
+                                     peak_humidity: float, notes: str = None) -> int:
+        """Erstellt ein manuelles Badezimmer-Event (z.B. nachträglich eingetragen)"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        duration_minutes = (end_time - start_time).total_seconds() / 60
+
+        cursor.execute("""
+            INSERT INTO bathroom_events
+            (start_time, end_time, duration_minutes, peak_humidity,
+             start_humidity, avg_humidity, day_of_week, hour_of_day, event_type)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'manual')
+        """, (
+            start_time,
+            end_time,
+            duration_minutes,
+            peak_humidity,
+            peak_humidity - 10,  # Schätzung
+            peak_humidity - 5,   # Schätzung
+            start_time.weekday(),
+            start_time.hour,
+        ))
+
+        conn.commit()
+        event_id = cursor.lastrowid
+        logger.info(f"Manual bathroom event created: {event_id} at {start_time}")
+        return event_id
 
     def get_bathroom_statistics(self, days_back: int = 30) -> Dict:
         """Berechnet Statistiken für Badezimmer-Automatisierung"""
