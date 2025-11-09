@@ -2414,6 +2414,55 @@ class WebInterface:
                 logger.error(f"Error collecting heating data: {e}")
                 return jsonify({'error': str(e)}), 500
 
+        # ===== Analytics Endpoints =====
+
+        @self.app.route('/api/analytics/comfort')
+        def api_analytics_comfort():
+            """Hole Komfort-Metriken"""
+            try:
+                hours_back = int(request.args.get('hours', 168))  # Default: 7 Tage
+
+                # Hole Sensordaten
+                sensor_data = self.db.get_sensor_data(hours_back=hours_back)
+
+                # Berechne Komfort-Score
+                comfort_metrics = self._calculate_comfort_metrics(sensor_data, hours_back)
+
+                return jsonify({
+                    'success': True,
+                    **comfort_metrics
+                })
+
+            except Exception as e:
+                logger.error(f"Error getting comfort analytics: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @self.app.route('/api/analytics/ml-performance')
+        def api_analytics_ml_performance():
+            """Hole ML-Model Performance Metriken"""
+            try:
+                days_back = int(request.args.get('days', 30))
+
+                # Hole Training History
+                training_history = self._get_training_history(days_back)
+
+                # Hole Entscheidungs-Statistiken
+                decision_stats = self._get_decision_statistics(days_back)
+
+                # Hole Confidence-Scores über Zeit
+                confidence_trends = self._get_confidence_trends(days_back)
+
+                return jsonify({
+                    'success': True,
+                    'training_history': training_history,
+                    'decision_stats': decision_stats,
+                    'confidence_trends': confidence_trends
+                })
+
+            except Exception as e:
+                logger.error(f"Error getting ML performance analytics: {e}")
+                return jsonify({'error': str(e)}), 500
+
         # ===== System Update Endpoints =====
 
         @self.app.route('/api/system/version')
@@ -2559,6 +2608,235 @@ class WebInterface:
             except Exception as e:
                 logger.error(f"Error triggering update: {e}")
                 return jsonify({'success': False, 'error': str(e)}), 500
+
+    def _calculate_comfort_metrics(self, sensor_data: list, hours_back: int) -> dict:
+        """Berechnet Komfort-Metriken aus Sensordaten"""
+        from datetime import datetime, timedelta
+        import statistics
+
+        # Gruppiere nach Sensor-Typ
+        temps = [s for s in sensor_data if s['sensor_type'] == 'temperature']
+        humids = [s for s in sensor_data if s['sensor_type'] == 'humidity']
+        motion = [s for s in sensor_data if s['sensor_type'] == 'motion']
+
+        # Komfort-Score berechnen (0-100)
+        comfort_score = 0
+        comfort_details = []
+
+        if temps:
+            temp_values = [t['value'] for t in temps if t['value']]
+            avg_temp = statistics.mean(temp_values) if temp_values else 20.0
+
+            # Ideal: 20-22°C
+            if 20 <= avg_temp <= 22:
+                temp_score = 100
+                comfort_details.append("Temperatur ideal")
+            elif 18 <= avg_temp < 20 or 22 < avg_temp <= 24:
+                temp_score = 75
+                comfort_details.append("Temperatur gut")
+            elif 16 <= avg_temp < 18 or 24 < avg_temp <= 26:
+                temp_score = 50
+                comfort_details.append("Temperatur akzeptabel")
+            else:
+                temp_score = 25
+                comfort_details.append("Temperatur suboptimal")
+
+            comfort_score += temp_score * 0.5  # 50% Gewichtung
+        else:
+            avg_temp = None
+
+        if humids:
+            humid_values = [h['value'] for h in humids if h['value']]
+            avg_humid = statistics.mean(humid_values) if humid_values else 50.0
+
+            # Ideal: 40-60%
+            if 40 <= avg_humid <= 60:
+                humid_score = 100
+                comfort_details.append("Luftfeuchtigkeit ideal")
+            elif 30 <= avg_humid < 40 or 60 < avg_humid <= 70:
+                humid_score = 75
+                comfort_details.append("Luftfeuchtigkeit gut")
+            else:
+                humid_score = 50
+                comfort_details.append("Luftfeuchtigkeit suboptimal")
+
+            comfort_score += humid_score * 0.5  # 50% Gewichtung
+        else:
+            avg_humid = None
+
+        # Anwesenheits-Muster
+        presence_pattern = []
+        if motion:
+            # Gruppiere nach Stunden
+            now = datetime.now()
+            for hour in range(24):
+                hour_start = now - timedelta(hours=hours_back - hour)
+                hour_motion = [m for m in motion if
+                             datetime.fromisoformat(m['timestamp']).hour == hour_start.hour]
+                presence_pattern.append({
+                    'hour': hour,
+                    'activity': len(hour_motion)
+                })
+
+        # Schlafqualität-Indikator (Nachttemperaturen 22-6 Uhr)
+        night_temps = []
+        if temps:
+            for t in temps:
+                ts = datetime.fromisoformat(t['timestamp'])
+                if 22 <= ts.hour or ts.hour < 6:
+                    if t['value']:
+                        night_temps.append(t['value'])
+
+        sleep_quality = None
+        if night_temps:
+            avg_night_temp = statistics.mean(night_temps)
+            # Ideal für Schlaf: 16-19°C
+            if 16 <= avg_night_temp <= 19:
+                sleep_quality = {
+                    'score': 100,
+                    'avg_temp': round(avg_night_temp, 1),
+                    'rating': 'Ideal',
+                    'description': 'Optimale Temperatur für erholsamen Schlaf'
+                }
+            elif 14 <= avg_night_temp < 16 or 19 < avg_night_temp <= 21:
+                sleep_quality = {
+                    'score': 75,
+                    'avg_temp': round(avg_night_temp, 1),
+                    'rating': 'Gut',
+                    'description': 'Temperatur leicht außerhalb des optimalen Bereichs'
+                }
+            else:
+                sleep_quality = {
+                    'score': 50,
+                    'avg_temp': round(avg_night_temp, 1),
+                    'rating': 'Verbesserungswürdig',
+                    'description': 'Temperatur könnte Schlafqualität beeinträchtigen'
+                }
+
+        return {
+            'comfort_score': round(comfort_score, 1),
+            'comfort_details': comfort_details,
+            'avg_temperature': round(avg_temp, 1) if avg_temp else None,
+            'avg_humidity': round(avg_humid, 1) if avg_humid else None,
+            'presence_pattern': presence_pattern[:24],  # Nur letzte 24h
+            'sleep_quality': sleep_quality,
+            'period_hours': hours_back
+        }
+
+    def _get_training_history(self, days_back: int) -> list:
+        """Holt Training History der ML-Modelle"""
+        from datetime import datetime, timedelta
+
+        conn = self.db._get_connection()
+        cursor = conn.cursor()
+
+        start_time = datetime.now() - timedelta(days=days_back)
+
+        cursor.execute("""
+            SELECT timestamp, model_name, model_type, metrics
+            FROM training_history
+            WHERE timestamp >= ?
+            ORDER BY timestamp DESC
+            LIMIT 50
+        """, (start_time,))
+
+        history = []
+        for row in cursor.fetchall():
+            row_dict = dict(row)
+            # Parse metrics JSON
+            if row_dict.get('metrics'):
+                try:
+                    row_dict['metrics'] = json.loads(row_dict['metrics'])
+                except:
+                    pass
+            history.append(row_dict)
+
+        return history
+
+    def _get_decision_statistics(self, days_back: int) -> dict:
+        """Berechnet Statistiken über KI-Entscheidungen"""
+        from datetime import datetime, timedelta
+
+        conn = self.db._get_connection()
+        cursor = conn.cursor()
+
+        start_time = datetime.now() - timedelta(days=days_back)
+
+        # Gesamt-Statistiken
+        cursor.execute("""
+            SELECT
+                COUNT(*) as total_decisions,
+                SUM(CASE WHEN executed = 1 THEN 1 ELSE 0 END) as executed_decisions,
+                AVG(confidence) as avg_confidence,
+                decision_type,
+                COUNT(*) as count_per_type
+            FROM decisions
+            WHERE timestamp >= ?
+            GROUP BY decision_type
+        """, (start_time,))
+
+        type_stats = []
+        total_decisions = 0
+        executed_decisions = 0
+
+        for row in cursor.fetchall():
+            row_dict = dict(row)
+            type_stats.append(row_dict)
+            total_decisions += row_dict['count_per_type']
+            executed_decisions += row_dict.get('executed_decisions', 0)
+
+        # Durchschnittliche Confidence
+        cursor.execute("""
+            SELECT AVG(confidence) as avg_confidence
+            FROM decisions
+            WHERE timestamp >= ?
+        """, (start_time,))
+
+        result = cursor.fetchone()
+        avg_confidence = result['avg_confidence'] if result else 0.0
+
+        return {
+            'total_decisions': total_decisions,
+            'executed_decisions': executed_decisions,
+            'execution_rate': round((executed_decisions / total_decisions * 100), 1) if total_decisions > 0 else 0,
+            'avg_confidence': round(avg_confidence, 3) if avg_confidence else 0,
+            'by_type': type_stats,
+            'period_days': days_back
+        }
+
+    def _get_confidence_trends(self, days_back: int) -> list:
+        """Holt Confidence-Score Trends über Zeit"""
+        from datetime import datetime, timedelta
+
+        conn = self.db._get_connection()
+        cursor = conn.cursor()
+
+        start_time = datetime.now() - timedelta(days=days_back)
+
+        cursor.execute("""
+            SELECT
+                DATE(timestamp) as date,
+                AVG(confidence) as avg_confidence,
+                MIN(confidence) as min_confidence,
+                MAX(confidence) as max_confidence,
+                COUNT(*) as decision_count
+            FROM decisions
+            WHERE timestamp >= ? AND confidence IS NOT NULL
+            GROUP BY DATE(timestamp)
+            ORDER BY date ASC
+        """, (start_time,))
+
+        trends = []
+        for row in cursor.fetchall():
+            trends.append({
+                'date': row['date'],
+                'avg_confidence': round(row['avg_confidence'], 3),
+                'min_confidence': round(row['min_confidence'], 3),
+                'max_confidence': round(row['max_confidence'], 3),
+                'decision_count': row['decision_count']
+            })
+
+        return trends
 
     def run(self, host='0.0.0.0', port=5000, debug=False):
         """Starte den Web-Server"""

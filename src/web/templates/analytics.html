@@ -42,8 +42,100 @@
         <button id="refresh-charts" class="btn btn-primary">Aktualisieren</button>
     </div>
 
+    <!-- Komfort-Metriken Section -->
+    <div class="card comfort-metrics-card">
+        <h3>✨ Komfort-Metriken</h3>
+
+        <!-- Komfort-Score -->
+        <div class="comfort-score-container">
+            <div class="score-circle">
+                <svg width="120" height="120">
+                    <circle cx="60" cy="60" r="50" fill="none" stroke="#e5e7eb" stroke-width="10"/>
+                    <circle id="comfort-score-circle" cx="60" cy="60" r="50" fill="none" stroke="#10b981"
+                            stroke-width="10" stroke-dasharray="314" stroke-dashoffset="314"
+                            transform="rotate(-90 60 60)" style="transition: stroke-dashoffset 1s ease;"/>
+                    <text x="60" y="70" text-anchor="middle" font-size="24" font-weight="bold" id="comfort-score-text">--</text>
+                </svg>
+                <div class="score-label">Komfort-Score</div>
+            </div>
+
+            <div class="comfort-details">
+                <h4>Details:</h4>
+                <div id="comfort-details-list">
+                    <div class="loading">Lade...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Schlafqualität -->
+        <div class="sleep-quality-section">
+            <h4>🌙 Schlafqualität-Indikator</h4>
+            <div id="sleep-quality-content">
+                <div class="loading">Lade...</div>
+            </div>
+        </div>
+
+        <!-- Anwesenheits-Muster -->
+        <div class="presence-section">
+            <h4>👥 Anwesenheits-Muster (24h)</h4>
+            <div class="chart-container" style="height: 200px;">
+                <canvas id="presence-chart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- ML-Performance Section -->
+    <div class="card ml-performance-card">
+        <h3>🤖 ML-Model Performance</h3>
+
+        <!-- Performance Übersicht -->
+        <div class="ml-stats-grid">
+            <div class="ml-stat-card">
+                <div class="ml-stat-icon">📊</div>
+                <div class="ml-stat-content">
+                    <div class="ml-stat-label">Entscheidungen</div>
+                    <div class="ml-stat-value" id="ml-total-decisions">--</div>
+                    <div class="ml-stat-sub" id="ml-execution-rate">--% ausgeführt</div>
+                </div>
+            </div>
+
+            <div class="ml-stat-card">
+                <div class="ml-stat-icon">🎯</div>
+                <div class="ml-stat-content">
+                    <div class="ml-stat-label">Ø Confidence</div>
+                    <div class="ml-stat-value" id="ml-avg-confidence">--</div>
+                    <div class="ml-stat-sub">Höher = Sicherer</div>
+                </div>
+            </div>
+
+            <div class="ml-stat-card">
+                <div class="ml-stat-icon">🔄</div>
+                <div class="ml-stat-content">
+                    <div class="ml-stat-label">Trainings</div>
+                    <div class="ml-stat-value" id="ml-training-count">--</div>
+                    <div class="ml-stat-sub" id="ml-last-training">Letztes: --</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Confidence Trend -->
+        <div class="confidence-trend-section">
+            <h4>📈 Confidence-Score Entwicklung</h4>
+            <div class="chart-container">
+                <canvas id="confidence-chart"></canvas>
+            </div>
+        </div>
+
+        <!-- Entscheidungs-Typ Verteilung -->
+        <div class="decision-types-section">
+            <h4>🎭 Entscheidungen nach Typ</h4>
+            <div class="chart-container" style="height: 300px;">
+                <canvas id="decision-types-chart"></canvas>
+            </div>
+        </div>
+    </div>
+
     <!-- Charts Grid -->
-    <div class="charts-grid">
         <!-- Temperature Chart -->
         <div class="card chart-card">
             <h3>🌡️ Temperatur-Verlauf</h3>
@@ -98,6 +190,157 @@
         </div>
     </div>
 </div>
+
+<style>
+/* Komfort-Metriken Styles */
+.comfort-metrics-card {
+    margin-bottom: 20px;
+}
+
+.comfort-score-container {
+    display: flex;
+    gap: 30px;
+    align-items: center;
+    margin-bottom: 30px;
+    flex-wrap: wrap;
+}
+
+.score-circle {
+    text-align: center;
+}
+
+.score-label {
+    margin-top: 10px;
+    font-weight: 600;
+    color: #6b7280;
+}
+
+.comfort-details {
+    flex: 1;
+    min-width: 300px;
+}
+
+.comfort-details h4 {
+    margin-top: 0;
+    margin-bottom: 10px;
+}
+
+.comfort-detail-item {
+    padding: 8px 12px;
+    background: #f3f4f6;
+    border-radius: 6px;
+    margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.comfort-detail-item.ideal {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.comfort-detail-item.good {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.sleep-quality-section, .presence-section {
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.sleep-quality-card {
+    padding: 15px;
+    background: linear-gradient(135deg, #f0f9ff 0%, #ffffff 100%);
+    border-radius: 8px;
+    border-left: 4px solid #3b82f6;
+}
+
+.sleep-quality-score {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 10px;
+}
+
+.sleep-score-badge {
+    font-size: 2em;
+    font-weight: 700;
+    padding: 10px 20px;
+    border-radius: 8px;
+    background: white;
+}
+
+.sleep-score-badge.ideal {
+    color: #10b981;
+}
+
+.sleep-score-badge.good {
+    color: #3b82f6;
+}
+
+.sleep-score-badge.improve {
+    color: #f59e0b;
+}
+
+/* ML-Performance Styles */
+.ml-performance-card {
+    margin-bottom: 20px;
+}
+
+.ml-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin-bottom: 30px;
+}
+
+.ml-stat-card {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 20px;
+    background: linear-gradient(135deg, #faf5ff 0%, #ffffff 100%);
+    border-radius: 12px;
+    border: 1px solid #e9d5ff;
+}
+
+.ml-stat-icon {
+    font-size: 2.5em;
+}
+
+.ml-stat-content {
+    flex: 1;
+}
+
+.ml-stat-label {
+    font-size: 0.85em;
+    color: #6b7280;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.ml-stat-value {
+    font-size: 2em;
+    font-weight: 700;
+    color: #1f2937;
+    margin: 5px 0;
+}
+
+.ml-stat-sub {
+    font-size: 0.85em;
+    color: #9ca3af;
+}
+
+.confidence-trend-section, .decision-types-section {
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid #e5e7eb;
+}
+</style>
 
 <!-- Chart.js CDN -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>

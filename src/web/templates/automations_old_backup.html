@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+
+{% block title %}Automatisierungen - KI Smart Home{% endblock %}
+
+{% block content %}
+<div class="automations-page">
+    <h2>Automatisierungen & Regeln</h2>
+
+    <!-- Präsenz-Status -->
+    <div class="card">
+        <h3>Präsenz-Status</h3>
+        <div class="presence-status">
+            <div class="status-indicator">
+                <span class="presence-dot" id="presence-dot"></span>
+                <span id="presence-text">Wird ermittelt...</span>
+            </div>
+            <div class="presence-details">
+                <p>Letzte Bewegung: <span id="last-motion">--</span></p>
+                <p>Präsenz-Modus: <span id="presence-mode">Automatisch</span></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Geräte-Verwaltung -->
+    <div class="card">
+        <h3>Geräte-Verwaltung</h3>
+        <p>Wählen Sie, welche Geräte das KI-System überwachen und steuern darf:</p>
+
+        <div class="device-management-tabs">
+            <button class="tab-btn active" data-tab="learning">Zu lernende Geräte</button>
+            <button class="tab-btn" data-tab="control">Steuerbare Geräte</button>
+            <button class="tab-btn" data-tab="automation">Automatisierungs-Geräte</button>
+        </div>
+
+        <div class="tab-content" id="learning-tab">
+            <p class="tab-description">Diese Geräte werden für ML-Training verwendet:</p>
+            <div id="learning-devices" class="device-list"></div>
+        </div>
+
+        <div class="tab-content hidden" id="control-tab">
+            <p class="tab-description">Das System darf diese Geräte automatisch steuern:</p>
+            <div id="control-devices" class="device-list"></div>
+        </div>
+
+        <div class="tab-content hidden" id="automation-tab">
+            <p class="tab-description">Geräte für spezielle Automatisierungen (z.B. Abwesenheit):</p>
+            <div id="automation-devices" class="device-list"></div>
+        </div>
+
+        <button class="btn btn-primary" id="save-device-config">Konfiguration speichern</button>
+    </div>
+
+    <!-- Automatisierungs-Regeln -->
+    <div class="card">
+        <h3>Automatisierungs-Regeln</h3>
+
+        <!-- Abwesenheits-Regel -->
+        <div class="automation-rule">
+            <div class="rule-header">
+                <h4>🏠 Abwesenheits-Modus</h4>
+                <label class="switch">
+                    <input type="checkbox" id="away-mode-enabled">
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div class="rule-content">
+                <p>Wenn niemand zuhause ist (keine Bewegung für X Minuten):</p>
+                <div class="rule-config">
+                    <div class="form-group">
+                        <label>Inaktivität (Minuten):</label>
+                        <input type="number" id="away-timeout" value="30" min="5" max="180">
+                    </div>
+                    <div class="form-group">
+                        <label>Aktionen:</label>
+                        <div class="checkbox-group">
+                            <label><input type="checkbox" id="away-lights-off" checked> Alle Lichter ausschalten</label>
+                            <label><input type="checkbox" id="away-sockets-off" checked> Steckdosen ausschalten</label>
+                            <label><input type="checkbox" id="away-heating-eco"> Heizung auf Eco-Modus</label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Ausnahmen (Geräte, die AN bleiben):</label>
+                        <select id="away-exceptions" multiple size="5">
+                            <!-- Wird dynamisch gefüllt -->
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Anwesenheits-Regel -->
+        <div class="automation-rule">
+            <div class="rule-header">
+                <h4>👋 Willkommens-Modus</h4>
+                <label class="switch">
+                    <input type="checkbox" id="arrival-mode-enabled">
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div class="rule-content">
+                <p>Wenn jemand nach Hause kommt (Bewegung erkannt nach Abwesenheit):</p>
+                <div class="rule-config">
+                    <div class="form-group">
+                        <label>Aktionen:</label>
+                        <div class="checkbox-group">
+                            <label><input type="checkbox" id="arrival-lights-on" checked> Lichter einschalten (je nach Tageszeit)</label>
+                            <label><input type="checkbox" id="arrival-sockets-on" checked> Steckdosen einschalten</label>
+                            <label><input type="checkbox" id="arrival-heating-comfort"> Heizung auf Komfort-Modus</label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Nur zwischen:</label>
+                        <input type="time" id="arrival-time-from" value="06:00">
+                        <span>und</span>
+                        <input type="time" id="arrival-time-to" value="23:00">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Nacht-Modus -->
+        <div class="automation-rule">
+            <div class="rule-header">
+                <h4>🌙 Nacht-Modus</h4>
+                <label class="switch">
+                    <input type="checkbox" id="night-mode-enabled">
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div class="rule-content">
+                <p>Automatisch in der Nacht aktivieren:</p>
+                <div class="rule-config">
+                    <div class="form-group">
+                        <label>Zeitplan:</label>
+                        <input type="time" id="night-time-from" value="22:00">
+                        <span>bis</span>
+                        <input type="time" id="night-time-to" value="06:00">
+                    </div>
+                    <div class="form-group">
+                        <label>Aktionen:</label>
+                        <div class="checkbox-group">
+                            <label><input type="checkbox" id="night-lights-dim" checked> Lichter dimmen (30%)</label>
+                            <label><input type="checkbox" id="night-no-automation"> Keine automatischen Änderungen</label>
+                            <label><input type="checkbox" id="night-heating-lower"> Heizung reduzieren (18°C)</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <button class="btn btn-primary" id="save-automations">Regeln speichern</button>
+    </div>
+
+    <!-- Automation Log -->
+    <div class="card">
+        <h3>Letzte Automatisierungen</h3>
+        <div id="automation-log" class="automation-log">
+            <p class="empty-state">Noch keine automatischen Aktionen durchgeführt.</p>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/automations.js') }}"></script>
+{% endblock %}

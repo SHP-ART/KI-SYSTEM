@@ -268,11 +268,306 @@ function hideNoDataMessage() {
     });
 }
 
+// === KOMFORT-METRIKEN ===
+
+let presenceChart = null;
+
+async function updateComfortMetrics() {
+    try {
+        const hoursBack = parseInt(document.getElementById('time-range').value);
+        const data = await fetchJSON(`/api/analytics/comfort?hours=${hoursBack}`);
+
+        // Komfort-Score Circle
+        const score = data.comfort_score || 0;
+        const scoreText = document.getElementById('comfort-score-text');
+        const scoreCircle = document.getElementById('comfort-score-circle');
+
+        scoreText.textContent = score.toFixed(0);
+
+        // Animiere Circle (314 = 2*PI*50)
+        const offset = 314 - (314 * score / 100);
+        scoreCircle.style.strokeDashoffset = offset;
+
+        // Farbe basierend auf Score
+        if (score >= 80) {
+            scoreCircle.style.stroke = '#10b981'; // Grün
+        } else if (score >= 60) {
+            scoreCircle.style.stroke = '#3b82f6'; // Blau
+        } else if (score >= 40) {
+            scoreCircle.style.stroke = '#f59e0b'; // Orange
+        } else {
+            scoreCircle.style.stroke = '#ef4444'; // Rot
+        }
+
+        // Komfort-Details
+        const detailsList = document.getElementById('comfort-details-list');
+        if (data.comfort_details && data.comfort_details.length > 0) {
+            detailsList.innerHTML = data.comfort_details.map(detail => {
+                const isIdeal = detail.includes('ideal');
+                const isGood = detail.includes('gut');
+                const cssClass = isIdeal ? 'ideal' : (isGood ? 'good' : '');
+                return `<div class="comfort-detail-item ${cssClass}">
+                    ${isIdeal ? '✅' : (isGood ? '👍' : '⚠️')} ${detail}
+                </div>`;
+            }).join('');
+        } else {
+            detailsList.innerHTML = '<div class="info">Keine Daten verfügbar</div>';
+        }
+
+        // Schlafqualität
+        const sleepContent = document.getElementById('sleep-quality-content');
+        if (data.sleep_quality) {
+            const sq = data.sleep_quality;
+            const ratingClass = sq.rating === 'Ideal' ? 'ideal' : (sq.rating === 'Gut' ? 'good' : 'improve');
+
+            sleepContent.innerHTML = `
+                <div class="sleep-quality-card">
+                    <div class="sleep-quality-score">
+                        <div class="sleep-score-badge ${ratingClass}">${sq.score}</div>
+                        <div>
+                            <div style="font-weight: 700; font-size: 1.1em; margin-bottom: 5px;">${sq.rating}</div>
+                            <div style="color: #6b7280;">Ø Nachttemperatur: ${sq.avg_temp}°C</div>
+                        </div>
+                    </div>
+                    <div style="color: #6b7280; font-size: 0.9em;">${sq.description}</div>
+                </div>
+            `;
+        } else {
+            sleepContent.innerHTML = '<div class="info">Nicht genug Nachtdaten verfügbar</div>';
+        }
+
+        // Anwesenheits-Muster Chart
+        if (data.presence_pattern && data.presence_pattern.length > 0) {
+            renderPresenceChart(data.presence_pattern);
+        }
+
+    } catch (error) {
+        console.error('Error updating comfort metrics:', error);
+    }
+}
+
+function renderPresenceChart(presenceData) {
+    const ctx = document.getElementById('presence-chart');
+    if (!ctx) return;
+
+    if (presenceChart) {
+        presenceChart.destroy();
+    }
+
+    const labels = presenceData.map(p => `${p.hour}:00`);
+    const values = presenceData.map(p => p.activity);
+
+    presenceChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Aktivität',
+                data: values,
+                backgroundColor: 'rgba(59, 130, 246, 0.5)',
+                borderColor: 'rgba(59, 130, 246, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        precision: 0
+                    }
+                }
+            }
+        }
+    });
+}
+
+// === ML-PERFORMANCE ===
+
+let confidenceChart = null;
+let decisionTypesChart = null;
+
+async function updateMLPerformance() {
+    try {
+        const daysBack = 30; // Fester Zeitraum für ML-Performance
+        const data = await fetchJSON(`/api/analytics/ml-performance?days=${daysBack}`);
+
+        // Statistiken
+        document.getElementById('ml-total-decisions').textContent =
+            (data.decision_stats.total_decisions || 0).toLocaleString('de-DE');
+
+        document.getElementById('ml-execution-rate').textContent =
+            `${data.decision_stats.execution_rate || 0}% ausgeführt`;
+
+        document.getElementById('ml-avg-confidence').textContent =
+            (data.decision_stats.avg_confidence || 0).toFixed(3);
+
+        document.getElementById('ml-training-count').textContent =
+            (data.training_history.length || 0);
+
+        if (data.training_history.length > 0) {
+            const lastTraining = new Date(data.training_history[0].timestamp);
+            document.getElementById('ml-last-training').textContent =
+                `Letztes: ${lastTraining.toLocaleDateString('de-DE')}`;
+        } else {
+            document.getElementById('ml-last-training').textContent = 'Letztes: Noch keins';
+        }
+
+        // Confidence Trend Chart
+        if (data.confidence_trends && data.confidence_trends.length > 0) {
+            renderConfidenceChart(data.confidence_trends);
+        }
+
+        // Decision Types Chart
+        if (data.decision_stats.by_type && data.decision_stats.by_type.length > 0) {
+            renderDecisionTypesChart(data.decision_stats.by_type);
+        }
+
+    } catch (error) {
+        console.error('Error updating ML performance:', error);
+    }
+}
+
+function renderConfidenceChart(trendsData) {
+    const ctx = document.getElementById('confidence-chart');
+    if (!ctx) return;
+
+    if (confidenceChart) {
+        confidenceChart.destroy();
+    }
+
+    const labels = trendsData.map(t => new Date(t.date).toLocaleDateString('de-DE', {month: 'short', day: 'numeric'}));
+    const avgValues = trendsData.map(t => t.avg_confidence);
+    const minValues = trendsData.map(t => t.min_confidence);
+    const maxValues = trendsData.map(t => t.max_confidence);
+
+    confidenceChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Durchschnitt',
+                    data: avgValues,
+                    borderColor: 'rgba(59, 130, 246, 1)',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                },
+                {
+                    label: 'Min',
+                    data: minValues,
+                    borderColor: 'rgba(239, 68, 68, 0.5)',
+                    borderDash: [5, 5],
+                    pointRadius: 0,
+                    tension: 0.4
+                },
+                {
+                    label: 'Max',
+                    data: maxValues,
+                    borderColor: 'rgba(16, 185, 129, 0.5)',
+                    borderDash: [5, 5],
+                    pointRadius: 0,
+                    tension: 0.4
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.dataset.label}: ${context.parsed.y.toFixed(3)}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    min: 0,
+                    max: 1,
+                    ticks: {
+                        callback: function(value) {
+                            return value.toFixed(2);
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function renderDecisionTypesChart(typesData) {
+    const ctx = document.getElementById('decision-types-chart');
+    if (!ctx) return;
+
+    if (decisionTypesChart) {
+        decisionTypesChart.destroy();
+    }
+
+    const labels = typesData.map(t => t.decision_type || 'Unbekannt');
+    const values = typesData.map(t => t.count_per_type);
+
+    const colors = [
+        'rgba(59, 130, 246, 0.7)',   // Blau
+        'rgba(16, 185, 129, 0.7)',   // Grün
+        'rgba(245, 158, 11, 0.7)',   // Orange
+        'rgba(239, 68, 68, 0.7)',    // Rot
+        'rgba(139, 92, 246, 0.7)',   // Lila
+        'rgba(236, 72, 153, 0.7)'    // Pink
+    ];
+
+    decisionTypesChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: values,
+                backgroundColor: colors,
+                borderWidth: 2,
+                borderColor: '#ffffff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'right'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = ((context.parsed / total) * 100).toFixed(1);
+                            return `${context.label}: ${context.parsed} (${percentage}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
 // Aktualisiere alle Charts
 function updateAllCharts() {
     const hoursBack = parseInt(document.getElementById('time-range').value);
     updateTemperatureChart(hoursBack);
     updateHumidityChart(hoursBack);
+    updateComfortMetrics();
+    updateMLPerformance();
 }
 
 // Init
