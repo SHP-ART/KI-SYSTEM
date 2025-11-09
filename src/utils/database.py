@@ -878,6 +878,30 @@ class Database:
 
         return [dict(row) for row in cursor.fetchall()]
 
+    def get_bathroom_humidity_timeseries(self, hours_back: int = 6) -> List[Dict]:
+        """Holt kontinuierliche Luftfeuchtigkeitsdaten aus bathroom_continuous_measurements
+
+        Diese Methode ist speziell für die Live-Anzeige von Badezimmer-Luftfeuchtigkeit gedacht
+        und nutzt die kontinuierlichen Messungen (alle 60s), nicht die sensor_data Tabelle.
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        start_time = datetime.now() - timedelta(hours=hours_back)
+
+        cursor.execute("""
+            SELECT
+                timestamp,
+                humidity as value,
+                '%' as unit
+            FROM bathroom_continuous_measurements
+            WHERE timestamp >= ?
+              AND humidity IS NOT NULL
+            ORDER BY timestamp ASC
+        """, (start_time,))
+
+        return [dict(row) for row in cursor.fetchall()]
+
     def create_manual_bathroom_event(self, start_time: datetime, end_time: datetime,
                                      peak_humidity: float, notes: str = None) -> int:
         """Erstellt ein manuelles Badezimmer-Event (z.B. nachträglich eingetragen)"""

@@ -2411,52 +2411,31 @@ class WebInterface:
 
         @self.app.route('/api/luftentfeuchten/sensor-timeseries', methods=['GET'])
         def api_bathroom_sensor_timeseries():
-            """API: Zeitreihen-Daten für Luftfeuchtigkeit im Bad"""
+            """API: Zeitreihen-Daten für Luftfeuchtigkeit im Bad
+
+            Verwendet die kontinuierlichen Messungen (alle 60s) aus bathroom_continuous_measurements
+            statt der gemischten sensor_data Tabelle, um saubere Zeitreihen ohne Zickzack-Muster zu liefern.
+            """
             try:
-                import json
-                from pathlib import Path
-
-                # Lade Config um sensor_id zu bekommen
-                config_file = Path('data/luftentfeuchten_config.json')
-                if not config_file.exists():
-                    logger.warning("Bathroom config not found - user needs to configure bathroom automation")
-                    return jsonify({
-                        'error': 'No configuration found',
-                        'message': 'Bitte konfigurieren Sie zuerst die Badezimmer-Automatisierung unter /luftentfeuchten',
-                        'data': []
-                    }), 400
-
-                with open(config_file, 'r') as f:
-                    config = json.load(f)
-
-                # Korrekt: humidity_sensor_id ist direkt im Root der Config
-                humidity_sensor_id = config.get('humidity_sensor_id')
-                if not humidity_sensor_id:
-                    logger.warning("Humidity sensor not configured in bathroom config")
-                    return jsonify({
-                        'error': 'Humidity sensor not configured',
-                        'message': 'Bitte wählen Sie einen Luftfeuchtigkeits-Sensor in der Badezimmer-Konfiguration aus',
-                        'data': []
-                    }), 400
-
                 # Hole Zeitraum aus Query-Parametern
                 hours = int(request.args.get('hours', 6))
 
-                # Hole Sensor-Daten
-                data = self.db.get_sensor_data_timeseries(humidity_sensor_id, hours_back=hours)
+                # Hole kontinuierliche Messungen (alle 60s)
+                data = self.db.get_bathroom_humidity_timeseries(hours_back=hours)
 
                 if not data or len(data) == 0:
-                    logger.info(f"No sensor data found for {humidity_sensor_id} in last {hours} hours")
+                    logger.info(f"No continuous humidity measurements found in last {hours} hours")
 
                 return jsonify({
-                    'sensor_id': humidity_sensor_id,
+                    'source': 'bathroom_continuous_measurements',
+                    'interval': '60s',
                     'hours': hours,
                     'data': data,
                     'count': len(data)
                 })
 
             except Exception as e:
-                logger.error(f"Error getting sensor timeseries: {e}")
+                logger.error(f"Error getting bathroom humidity timeseries: {e}")
                 return jsonify({'error': str(e)}), 500
 
         @self.app.route('/api/luftentfeuchten/manual-event', methods=['POST'])
