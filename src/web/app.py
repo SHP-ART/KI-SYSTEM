@@ -2535,6 +2535,13 @@ class WebInterface:
                     from datetime import datetime
                     oldest_dt = datetime.fromisoformat(oldest) if isinstance(oldest, str) else oldest
                     newest_dt = datetime.fromisoformat(newest) if isinstance(newest, str) else newest
+
+                    # Entferne Timezone-Info falls vorhanden, um offset-naive/aware Fehler zu vermeiden
+                    if oldest_dt.tzinfo is not None:
+                        oldest_dt = oldest_dt.replace(tzinfo=None)
+                    if newest_dt.tzinfo is not None:
+                        newest_dt = newest_dt.replace(tzinfo=None)
+
                     days = (datetime.now() - oldest_dt).days
                     data_age = f"{days} Tage"
 
@@ -2937,7 +2944,7 @@ class WebInterface:
                 db_info = self.db.get_database_size()
 
                 # Retention-Einstellung aus Config
-                retention_days = self.config.get('database.retention_days', 90)
+                retention_days = self.engine.config.get('database.retention_days', 90) if self.engine else 90
 
                 # Maintenance Job Status
                 maintenance_status = {}
@@ -2980,7 +2987,7 @@ class WebInterface:
 
                 # Verwende Config-Wert wenn nicht angegeben
                 if retention_days is None:
-                    retention_days = self.config.get('database.retention_days', 90)
+                    retention_days = self.engine.config.get('database.retention_days', 90) if self.engine else 90
 
                 deleted_counts = self.db.cleanup_old_data(retention_days=retention_days)
 
