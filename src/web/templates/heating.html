@@ -70,6 +70,17 @@
         <div id="quick-action-result" class="action-result"></div>
     </div>
 
+    <!-- Fenster-Sensoren -->
+    <div class="card">
+        <h3>🪟 Fenster-Status</h3>
+        <p class="card-description">
+            Übersicht aller Fenster-Sensoren. <strong>⚠️ Bei offenem Fenster sollte die Heizung aus sein!</strong>
+        </p>
+        <div id="windows-container" class="windows-display">
+            <div class="loading">Lade Fenster-Sensoren...</div>
+        </div>
+    </div>
+
     <!-- Filter -->
     <div class="card">
         <h3>🔍 Filter & Ansicht</h3>
@@ -515,6 +526,74 @@
 .state-value {
     color: #1f2937;
     font-weight: 600;
+}
+
+.windows-display {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 15px;
+    margin-top: 15px;
+}
+
+.window-card {
+    background: white;
+    border: 2px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 15px;
+    text-align: center;
+    transition: all 0.2s;
+}
+
+.window-card.open {
+    border-color: #f59e0b;
+    background: linear-gradient(135deg, #fffbeb 0%, #ffffff 100%);
+}
+
+.window-card.closed {
+    border-color: #10b981;
+    background: linear-gradient(135deg, #ecfdf5 0%, #ffffff 100%);
+}
+
+.window-icon {
+    font-size: 2.5em;
+    margin-bottom: 10px;
+}
+
+.window-name {
+    font-weight: 600;
+    color: #1f2937;
+    margin-bottom: 5px;
+}
+
+.window-status {
+    font-size: 0.9em;
+    font-weight: 600;
+    padding: 5px 10px;
+    border-radius: 6px;
+    display: inline-block;
+    margin-top: 5px;
+}
+
+.window-status.open {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.window-status.closed {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.window-room {
+    font-size: 0.85em;
+    color: #6b7280;
+    margin-top: 5px;
+}
+
+.card-description {
+    color: #6b7280;
+    font-size: 0.9em;
+    margin-bottom: 15px;
 }
 </style>
 
