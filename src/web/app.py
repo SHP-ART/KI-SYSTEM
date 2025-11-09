@@ -2429,7 +2429,8 @@ class WebInterface:
                 with open(config_file, 'r') as f:
                     config = json.load(f)
 
-                humidity_sensor_id = config.get('sensors', {}).get('humidity')
+                # Korrekt: humidity_sensor_id ist direkt im Root der Config
+                humidity_sensor_id = config.get('humidity_sensor_id')
                 if not humidity_sensor_id:
                     logger.warning("Humidity sensor not configured in bathroom config")
                     return jsonify({
