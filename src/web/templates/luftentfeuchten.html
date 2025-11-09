@@ -376,32 +376,40 @@
             <div class="form-section">
                 <h4>Energie-Berechnung</h4>
                 <p style="color: #6b7280; font-size: 0.9em; margin-bottom: 15px;">
-                    Diese Werte werden für die Energie- und Kostenberechnung verwendet.
+                    Diese Werte werden für die Energie- und Kostenberechnung des Luftentfeuchters verwendet.
                 </p>
 
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
                     <div class="form-group">
                         <label>Luftentfeuchter Leistung (Watt)</label>
                         <input type="number" id="dehumidifier-wattage" class="form-input" value="400" min="100" max="2000" step="50">
-                        <small style="color: #6b7280; margin-top: 4px; display: block;">Standard: 400W</small>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Heizung Leistung (Watt)</label>
-                        <input type="number" id="heater-wattage" class="form-input" value="2000" min="500" max="5000" step="100">
-                        <small style="color: #6b7280; margin-top: 4px; display: block;">Standard: 2000W</small>
+                        <small style="color: #6b7280; margin-top: 4px; display: block;">
+                            Typische Werte: 300-600W<br>
+                            Prüfen Sie das Typenschild Ihres Geräts
+                        </small>
                     </div>
 
                     <div class="form-group">
                         <label>Strompreis (€/kWh)</label>
                         <input type="number" id="energy-price" class="form-input" value="0.30" min="0.01" max="1.00" step="0.01">
-                        <small style="color: #6b7280; margin-top: 4px; display: block;">Standard: 0.30€/kWh</small>
+                        <small style="color: #6b7280; margin-top: 4px; display: block;">
+                            Durchschnitt Deutschland: 0.30-0.40€/kWh<br>
+                            Siehe Ihre Stromrechnung
+                        </small>
                     </div>
                 </div>
 
-                <div style="background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 6px; padding: 12px; margin-top: 20px;">
+                <div style="background: #eff6ff; border-left: 4px solid #3b82f6; border-radius: 6px; padding: 12px; margin-top: 20px;">
+                    <small style="color: #1e40af;">
+                        <strong>ℹ️ Hinweis:</strong> Die Heizung (Zentralheizung) wird nicht in die Berechnung einbezogen,
+                        da diese nicht direkt gemessen werden kann. Die Kosten beziehen sich nur auf den Luftentfeuchter.
+                    </small>
+                </div>
+
+                <div style="background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 6px; padding: 12px; margin-top: 15px;">
                     <small style="color: #92400e;">
-                        <strong>ℹ️ Hinweis:</strong> Diese Werte beeinflussen nur die Anzeige der Energie-Statistiken, nicht die Automation selbst.
+                        <strong>💡 Tipp:</strong> Bei älteren Luftentfeuchtern kann die Leistungsaufnahme höher sein.
+                        Moderne Geräte mit Kompressor liegen meist bei 300-400W.
                     </small>
                 </div>
             </div>

@@ -2042,21 +2042,19 @@ class WebInterface:
                 # Lade Config für Geräte-Leistungen
                 config_file = Path('data/luftentfeuchten_config.json')
                 dehumidifier_wattage = 400.0  # Default
-                heater_wattage = 2000.0  # Default
                 energy_price = 0.30  # Default EUR/kWh
 
                 if config_file.exists():
                     with open(config_file, 'r') as f:
                         config = json.load(f)
                         dehumidifier_wattage = config.get('dehumidifier_wattage', 400.0)
-                        heater_wattage = config.get('heater_wattage', 2000.0)
                         energy_price = config.get('energy_price_per_kwh', 0.30)
 
-                # Berechne Statistiken
+                # Berechne Statistiken (nur Luftentfeuchter, keine Heizung)
                 stats = self.db.get_bathroom_energy_stats(
                     days_back=days_back,
                     dehumidifier_wattage=dehumidifier_wattage,
-                    heater_wattage=heater_wattage,
+                    heater_wattage=0.0,  # Zentralheizung nicht messbar
                     energy_price_per_kwh=energy_price
                 )
 

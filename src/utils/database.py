@@ -677,7 +677,7 @@ class Database:
 
     def get_bathroom_energy_stats(self, days_back: int = 30,
                                    dehumidifier_wattage: float = 400.0,
-                                   heater_wattage: float = 2000.0,
+                                   heater_wattage: float = 0.0,
                                    energy_price_per_kwh: float = 0.30) -> Dict:
         """
         Berechnet Energie-Statistiken für Badezimmer-Automatisierung
@@ -685,7 +685,7 @@ class Database:
         Args:
             days_back: Zeitraum in Tagen
             dehumidifier_wattage: Leistung des Luftentfeuchters in Watt (Standard: 400W)
-            heater_wattage: Leistung der Heizung in Watt (Standard: 2000W)
+            heater_wattage: Wird nicht verwendet (Zentralheizung nicht messbar)
             energy_price_per_kwh: Strompreis pro kWh in EUR (Standard: 0.30€)
         """
         conn = self._get_connection()
@@ -709,19 +709,18 @@ class Database:
         # Umrechnung in Stunden
         total_runtime_hours = total_runtime_minutes / 60.0
 
-        # Energieverbrauch berechnen
+        # Energieverbrauch berechnen (nur Luftentfeuchter)
         dehumidifier_kwh = (total_runtime_hours * dehumidifier_wattage) / 1000.0
         dehumidifier_cost = dehumidifier_kwh * energy_price_per_kwh
 
-        # Geschätzter Heizungs-Mehrverbrauch (während Entfeuchtung +1°C)
-        # Annahme: Heizung läuft durchschnittlich 30% der Entfeuchtungszeit
-        heater_extra_hours = total_runtime_hours * 0.3
-        heater_extra_kwh = (heater_extra_hours * heater_wattage) / 1000.0
-        heater_extra_cost = heater_extra_kwh * energy_price_per_kwh
+        # Hinweis: Heizungskosten werden NICHT berechnet, da:
+        # 1. Bei Zentralheizung nicht direkt messbar
+        # 2. Temperaturanpassung im Bad hat minimalen Einfluss auf Gesamtverbrauch
+        # 3. Nur der Luftentfeuchter hat einen messbaren, direkten Stromverbrauch
 
-        # Gesamtkosten
-        total_kwh = dehumidifier_kwh + heater_extra_kwh
-        total_cost = dehumidifier_cost + heater_extra_cost
+        # Gesamtkosten (nur Luftentfeuchter)
+        total_kwh = dehumidifier_kwh
+        total_cost = dehumidifier_cost
 
         # Vergleich: Wenn Luftentfeuchter immer an wäre (24/7)
         hours_in_period = days_back * 24
@@ -747,11 +746,6 @@ class Database:
                 'cost_eur': round(dehumidifier_cost, 2),
                 'wattage': dehumidifier_wattage
             },
-            'heater_extra': {
-                'runtime_hours': round(heater_extra_hours, 1),
-                'kwh': round(heater_extra_kwh, 2),
-                'cost_eur': round(heater_extra_cost, 2)
-            },
             'total': {
                 'kwh': round(total_kwh, 2),
                 'cost_eur': round(total_cost, 2)
@@ -767,7 +761,8 @@ class Database:
                 'avg_runtime_minutes': round(avg_runtime_per_event, 1),
                 'avg_cost_eur': round(avg_cost_per_event, 3)
             },
-            'energy_price_per_kwh': energy_price_per_kwh
+            'energy_price_per_kwh': energy_price_per_kwh,
+            'note': 'Nur Luftentfeuchter-Verbrauch. Heizungskosten (Zentralheizung) nicht einberechnet.'
         }
 
     def close(self):

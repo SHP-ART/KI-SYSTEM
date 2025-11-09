@@ -172,11 +172,9 @@ async function loadConfig() {
 
             // Energie-Werte (Tab: Erweitert)
             const dehumWattage = document.getElementById('dehumidifier-wattage');
-            const heaterWattage = document.getElementById('heater-wattage');
             const energyPrice = document.getElementById('energy-price');
 
             if (dehumWattage) dehumWattage.value = config.dehumidifier_wattage || 400;
-            if (heaterWattage) heaterWattage.value = config.heater_wattage || 2000;
             if (energyPrice) energyPrice.value = config.energy_price_per_kwh || 0.30;
 
             // Enabled
@@ -217,9 +215,8 @@ async function saveConfig() {
             humidity_threshold_low: parseFloat(document.getElementById('humidity-low').value),
             target_temperature: parseFloat(document.getElementById('target-temperature').value),
             dehumidifier_delay: parseInt(document.getElementById('dehumidifier-delay').value),
-            // Energie-Werte
+            // Energie-Werte (nur Luftentfeuchter, keine Heizung bei Zentralheizung)
             dehumidifier_wattage: parseFloat(document.getElementById('dehumidifier-wattage').value),
-            heater_wattage: parseFloat(document.getElementById('heater-wattage').value),
             energy_price_per_kwh: parseFloat(document.getElementById('energy-price').value)
         };
 
