@@ -329,10 +329,219 @@ async function installUpdate() {
 document.getElementById('check-update').addEventListener('click', checkForUpdates);
 document.getElementById('install-update').addEventListener('click', installUpdate);
 
+// ===== ML Training Status Functions =====
+
+// Lade ML Status
+async function loadMLStatus() {
+    try {
+        const data = await fetchJSON('/api/ml/status');
+
+        if (data.success) {
+            // Lighting Model Status
+            const lightingStatus = data.lighting;
+            updateModelStatus('lighting', lightingStatus);
+
+            // Temperature Model Status
+            const tempStatus = data.temperature;
+            updateModelStatus('temp', tempStatus);
+
+            // Auto-Trainer Status
+            const trainerStatus = data.auto_trainer;
+            const trainerEl = document.getElementById('autotrainer-status');
+            if (trainerStatus.enabled) {
+                trainerEl.innerHTML = `
+                    <span class="status-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #10b981; margin-right: 6px;"></span>
+                    Aktiv
+                `;
+            } else {
+                trainerEl.innerHTML = `
+                    <span class="status-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ef4444; margin-right: 6px;"></span>
+                    Deaktiviert
+                `;
+            }
+
+            // Next run info
+            const nextRunEl = document.getElementById('autotrainer-next-run');
+            if (trainerStatus.last_run) {
+                nextRunEl.textContent = `Letzter Run: ${trainerStatus.last_run}`;
+            } else {
+                nextRunEl.textContent = 'Noch nie gelaufen';
+            }
+
+            // Update settings
+            document.getElementById('autotrainer-enabled').checked = trainerStatus.enabled;
+            document.getElementById('training-hour').value = trainerStatus.run_hour;
+
+        } else {
+            console.error('Error loading ML status:', data.error);
+        }
+    } catch (error) {
+        console.error('Error loading ML status:', error);
+    }
+}
+
+function updateModelStatus(modelType, status) {
+    const prefix = modelType === 'lighting' ? 'lighting' : 'temp';
+    const statusEl = document.getElementById(`${prefix}-model-status`);
+    const dataCountEl = document.getElementById(`${prefix}-data-count`);
+    const lastTrainedEl = document.getElementById(`${prefix}-last-trained`);
+
+    // Status Text und Farbe
+    let statusText = 'Warte auf Daten';
+    let statusColor = '#fbbf24'; // yellow
+
+    if (status.trained) {
+        statusText = 'Trainiert ✓';
+        statusColor = '#10b981'; // green
+    } else if (status.ready) {
+        statusText = 'Bereit zum Training';
+        statusColor = '#3b82f6'; // blue
+    }
+
+    statusEl.innerHTML = `
+        <span class="status-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${statusColor}; margin-right: 6px;"></span>
+        ${statusText}
+    `;
+
+    // Data Count
+    const unit = modelType === 'lighting' ? 'Events' : 'Readings';
+    dataCountEl.textContent = `${status.data_count} / ${status.required} ${unit}`;
+
+    // Last Trained
+    if (status.last_trained) {
+        lastTrainedEl.textContent = `Trainiert: ${status.last_trained}`;
+    } else {
+        lastTrainedEl.textContent = 'Nie trainiert';
+    }
+}
+
+// Lade Training History
+async function loadTrainingHistory() {
+    const historyEl = document.getElementById('training-history');
+
+    try {
+        historyEl.innerHTML = '<div class="loading">Lade Verlauf...</div>';
+        const data = await fetchJSON('/api/ml/training-history');
+
+        if (data.success && data.history.length > 0) {
+            let historyHTML = '<table style="width: 100%; border-collapse: collapse;">';
+            historyHTML += '<thead><tr style="border-bottom: 2px solid #e5e7eb;">';
+            historyHTML += '<th style="text-align: left; padding: 8px;">Zeit</th>';
+            historyHTML += '<th style="text-align: left; padding: 8px;">Modell</th>';
+            historyHTML += '<th style="text-align: right; padding: 8px;">Genauigkeit</th>';
+            historyHTML += '<th style="text-align: right; padding: 8px;">Samples</th>';
+            historyHTML += '<th style="text-align: right; padding: 8px;">Dauer</th>';
+            historyHTML += '</tr></thead><tbody>';
+
+            data.history.forEach((record, index) => {
+                const bgColor = index % 2 === 0 ? '#f9fafb' : 'white';
+                const accuracy = (record.accuracy * 100).toFixed(1);
+                const time = record.training_time ? record.training_time.toFixed(1) + 's' : '--';
+
+                historyHTML += `<tr style="background: ${bgColor};">`;
+                historyHTML += `<td style="padding: 8px;">${record.timestamp}</td>`;
+                historyHTML += `<td style="padding: 8px;">${record.model_name}</td>`;
+                historyHTML += `<td style="padding: 8px; text-align: right;">${accuracy}%</td>`;
+                historyHTML += `<td style="padding: 8px; text-align: right;">${record.samples_used}</td>`;
+                historyHTML += `<td style="padding: 8px; text-align: right;">${time}</td>`;
+                historyHTML += '</tr>';
+            });
+
+            historyHTML += '</tbody></table>';
+            historyEl.innerHTML = historyHTML;
+        } else {
+            historyEl.innerHTML = '<p class="empty-state">Noch keine Trainings durchgeführt</p>';
+        }
+    } catch (error) {
+        console.error('Error loading training history:', error);
+        historyEl.innerHTML = '<p class="error">Fehler beim Laden der Historie</p>';
+    }
+}
+
+// Manual Training
+document.getElementById('manual-train').addEventListener('click', async () => {
+    const resultEl = document.getElementById('ml-training-result');
+    const btn = document.getElementById('manual-train');
+
+    if (!confirm('Manuelles Training starten?\n\nDies kann einige Minuten dauern.\nEs werden nur Modelle trainiert, für die genug Daten vorhanden sind.')) {
+        return;
+    }
+
+    try {
+        btn.disabled = true;
+        resultEl.textContent = 'Training wird gestartet... Bitte warten...';
+        resultEl.className = 'action-result';
+        resultEl.style.display = 'block';
+
+        const response = await fetch('/api/ml/train', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: 'all' })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            let resultText = '✓ Training abgeschlossen:\n\n';
+
+            if (data.results.lighting) {
+                if (data.results.lighting.success) {
+                    resultText += `• Lighting Model: Erfolgreich (${(data.results.lighting.accuracy * 100).toFixed(1)}% Genauigkeit)\n`;
+                } else {
+                    resultText += `• Lighting Model: ${data.results.lighting.error || 'Nicht genug Daten'}\n`;
+                }
+            }
+
+            if (data.results.temperature) {
+                if (data.results.temperature.success) {
+                    resultText += `• Temperature Model: Erfolgreich (R² = ${data.results.temperature.r2_score.toFixed(3)})\n`;
+                } else {
+                    resultText += `• Temperature Model: ${data.results.temperature.error || 'Nicht genug Daten'}\n`;
+                }
+            }
+
+            resultEl.textContent = resultText;
+            resultEl.className = 'action-result success';
+
+            // Aktualisiere Status
+            setTimeout(() => {
+                loadMLStatus();
+                loadTrainingHistory();
+            }, 1000);
+
+        } else {
+            resultEl.textContent = '✗ Fehler: ' + (data.error || 'Unbekannter Fehler');
+            resultEl.className = 'action-result error';
+        }
+
+    } catch (error) {
+        resultEl.textContent = '✗ Fehler beim Training: ' + error.message;
+        resultEl.className = 'action-result error';
+    } finally {
+        btn.disabled = false;
+    }
+});
+
+// Refresh ML Status
+document.getElementById('refresh-ml-status').addEventListener('click', () => {
+    loadMLStatus();
+});
+
+// Training History Details Toggle
+const historyDetails = document.querySelector('details');
+if (historyDetails) {
+    historyDetails.addEventListener('toggle', (e) => {
+        if (e.target.open) {
+            loadTrainingHistory();
+        }
+    });
+}
+
 // Init
 document.addEventListener('DOMContentLoaded', () => {
     loadConfig();
     loadSensorConfig();
     loadVersion();
     checkForUpdates(); // Auto-check beim Laden
+    loadMLStatus(); // Lade ML Status
 });

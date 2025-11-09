@@ -126,6 +126,89 @@
             </div>
         </div>
 
+        <!-- ML Training & KI-Status -->
+        <div class="card settings-card">
+            <h3>🤖 ML Training & KI-Status</h3>
+            <p class="card-description">
+                Das System trainiert automatisch Machine Learning Modelle,  sobald genug Daten gesammelt wurden.
+            </p>
+
+            <div class="ml-status-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 20px 0;">
+                <!-- Lighting Model Status -->
+                <div class="ml-model-status" style="background: #f9fafb; padding: 15px; border-radius: 8px; border-left: 4px solid #667eea;">
+                    <div style="font-size: 12px; color: #6b7280; margin-bottom: 5px;">LIGHTING MODEL</div>
+                    <div id="lighting-model-status" style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">
+                        <span class="status-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #fbbf24; margin-right: 6px;"></span>
+                        Warte auf Daten
+                    </div>
+                    <div style="font-size: 13px; color: #6b7280;">
+                        <div id="lighting-data-count">0 / 100 Events</div>
+                        <div id="lighting-last-trained" style="margin-top: 4px;">Nie trainiert</div>
+                    </div>
+                </div>
+
+                <!-- Temperature Model Status -->
+                <div class="ml-model-status" style="background: #f9fafb; padding: 15px; border-radius: 8px; border-left: 4px solid #ec4899;">
+                    <div style="font-size: 12px; color: #6b7280; margin-bottom: 5px;">TEMPERATURE MODEL</div>
+                    <div id="temp-model-status" style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">
+                        <span class="status-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #fbbf24; margin-right: 6px;"></span>
+                        Warte auf Daten
+                    </div>
+                    <div style="font-size: 13px; color: #6b7280;">
+                        <div id="temp-data-count">0 / 200 Readings</div>
+                        <div id="temp-last-trained" style="margin-top: 4px;">Nie trainiert</div>
+                    </div>
+                </div>
+
+                <!-- Auto-Trainer Status -->
+                <div class="ml-model-status" style="background: #f9fafb; padding: 15px; border-radius: 8px; border-left: 4px solid #10b981;">
+                    <div style="font-size: 12px; color: #6b7280; margin-bottom: 5px;">AUTO-TRAINER</div>
+                    <div id="autotrainer-status" style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">
+                        <span class="status-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #10b981; margin-right: 6px;"></span>
+                        Aktiv
+                    </div>
+                    <div style="font-size: 13px; color: #6b7280;">
+                        <div>Läuft täglich um 2:00 Uhr</div>
+                        <div id="autotrainer-next-run" style="margin-top: 4px;">Nächster Run: Morgen</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Training Settings -->
+            <div class="form-group" style="margin-top: 20px;">
+                <h4 style="font-size: 14px; margin-bottom: 10px;">⚙️ Auto-Trainer Einstellungen</h4>
+                <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                    <label style="display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" id="autotrainer-enabled" checked>
+                        <span>Automatisches Training aktivieren</span>
+                    </label>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <label for="training-hour">Trainingszeit:</label>
+                        <input type="number" id="training-hour" min="0" max="23" value="2" style="width: 60px; padding: 5px;">
+                        <span>:00 Uhr</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="action-buttons" style="margin-top: 15px;">
+                <button class="btn btn-primary" id="manual-train">Jetzt manuell trainieren</button>
+                <button class="btn btn-secondary" id="refresh-ml-status">Status aktualisieren</button>
+                <button class="btn btn-secondary" id="save-ml-settings" style="display: none;">Einstellungen speichern</button>
+            </div>
+            <div id="ml-training-result" class="action-result"></div>
+
+            <!-- Training History -->
+            <details style="margin-top: 20px;">
+                <summary style="cursor: pointer; font-weight: 600; padding: 10px; background: #f9fafb; border-radius: 6px;">
+                    📊 Trainingshistorie anzeigen
+                </summary>
+                <div id="training-history" style="margin-top: 10px; font-size: 13px;">
+                    <div class="loading">Lade Verlauf...</div>
+                </div>
+            </details>
+        </div>
+
         <!-- System Updates -->
         <div class="card settings-card">
             <h3>System-Updates</h3>

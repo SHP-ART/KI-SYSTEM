@@ -1,0 +1,377 @@
+"""
+Background Task: Automatisches ML-Training
+Trainiert Lighting und Temperature Modelle sobald genug Daten vorhanden sind
+"""
+
+import threading
+import time
+import json
+from pathlib import Path
+from datetime import datetime, timedelta
+from loguru import logger
+from typing import Dict, Optional
+
+from src.utils.database import Database
+from src.models.lighting_model import LightingModel
+from src.models.temperature_model import TemperatureModel
+
+
+class MLAutoTrainer:
+    """
+    Background-Prozess für automatisches ML-Training
+
+    - Läuft täglich um 2:00 Uhr
+    - Prüft ob genug Trainingsdaten vorhanden sind
+    - Trainiert Modelle automatisch
+    - Speichert Trainingshistorie
+    """
+
+    # Minimale Daten-Anforderungen
+    MIN_LIGHTING_SAMPLES = 100      # Mindestens 100 Licht-Events
+    MIN_TEMPERATURE_SAMPLES = 200   # Mindestens 200 Temperatur-Readings
+    MIN_DAYS_DATA = 3               # Mindestens 3 Tage Daten
+
+    def __init__(self, run_at_hour: int = 2):
+        """
+        Args:
+            run_at_hour: Uhrzeit für tägliche Ausführung (default: 2 = 2:00 Uhr)
+        """
+        self.run_at_hour = run_at_hour
+        self.running = False
+        self.thread = None
+        self.last_run = None
+        self.db = Database()
+        self.status_file = Path('data/ml_training_status.json')
+
+    def start(self):
+        """Startet den Background-Prozess"""
+        if self.running:
+            logger.warning("MLAutoTrainer is already running")
+            return
+
+        self.running = True
+        self.thread = threading.Thread(target=self._run_loop, daemon=True)
+        self.thread.start()
+        logger.info(f"MLAutoTrainer started (runs daily at {self.run_at_hour}:00)")
+
+    def stop(self):
+        """Stoppt den Background-Prozess"""
+        self.running = False
+        if self.thread:
+            self.thread.join(timeout=5)
+        logger.info("MLAutoTrainer stopped")
+
+    def _run_loop(self):
+        """Haupt-Loop des Background-Prozesses"""
+        while self.running:
+            try:
+                # Prüfe ob es Zeit für Training ist
+                if self._should_run_now():
+                    logger.info("🤖 Starting automatic ML training check...")
+                    self._check_and_train()
+                    self.last_run = datetime.now()
+
+                # Warte 1 Stunde bevor nächster Check
+                time.sleep(3600)
+
+            except Exception as e:
+                logger.error(f"Error in MLAutoTrainer loop: {e}")
+                time.sleep(60)  # Bei Fehler 1 Minute warten
+
+    def _should_run_now(self) -> bool:
+        """
+        Prüft ob jetzt trainiert werden soll
+
+        Returns:
+            True wenn es Zeit ist zu trainieren
+        """
+        now = datetime.now()
+
+        # Prüfe ob bereits heute gelaufen
+        if self.last_run:
+            if self.last_run.date() == now.date():
+                return False
+
+        # Prüfe ob es die richtige Stunde ist
+        if now.hour == self.run_at_hour:
+            return True
+
+        return False
+
+    def _check_and_train(self):
+        """Prüft Daten und trainiert Modelle falls möglich"""
+
+        # Lade aktuellen Status
+        status = self._load_status()
+
+        # Prüfe Lighting Model
+        if self._should_train_lighting(status):
+            logger.info("📊 Sufficient data for Lighting Model - starting training...")
+            success = self._train_lighting_model()
+            if success:
+                status['lighting_last_trained'] = datetime.now().isoformat()
+                status['lighting_trained'] = True
+                logger.success("✅ Lighting Model trained successfully!")
+            else:
+                logger.warning("❌ Lighting Model training failed")
+
+        # Prüfe Temperature Model
+        if self._should_train_temperature(status):
+            logger.info("📊 Sufficient data for Temperature Model - starting training...")
+            success = self._train_temperature_model()
+            if success:
+                status['temperature_last_trained'] = datetime.now().isoformat()
+                status['temperature_trained'] = True
+                logger.success("✅ Temperature Model trained successfully!")
+            else:
+                logger.warning("❌ Temperature Model training failed")
+
+        # Speichere Status
+        self._save_status(status)
+
+    def _should_train_lighting(self, status: Dict) -> bool:
+        """
+        Prüft ob Lighting Model trainiert werden soll
+
+        Args:
+            status: Aktueller Trainingsstatus
+
+        Returns:
+            True wenn Training sinnvoll ist
+        """
+        # Bereits vor weniger als 24 Stunden trainiert?
+        last_trained = status.get('lighting_last_trained')
+        if last_trained:
+            last_trained_dt = datetime.fromisoformat(last_trained)
+            if datetime.now() - last_trained_dt < timedelta(hours=24):
+                return False
+
+        # Prüfe ob genug Daten vorhanden
+        try:
+            # Zähle Licht-Events (decisions wo device_type = light)
+            result = self.db.execute(
+                "SELECT COUNT(*) as count FROM decisions WHERE device_id LIKE '%light%' OR device_id LIKE '%lamp%'"
+            )
+            light_events = result[0]['count'] if result else 0
+
+            # Prüfe Datenzeitraum
+            result = self.db.execute(
+                "SELECT MIN(timestamp) as first_reading FROM sensor_data"
+            )
+            if result and result[0]['first_reading']:
+                first_reading = datetime.fromisoformat(result[0]['first_reading'])
+                days_of_data = (datetime.now() - first_reading).days
+            else:
+                days_of_data = 0
+
+            logger.info(f"Lighting data check: {light_events} events, {days_of_data} days")
+
+            # Training möglich?
+            return (light_events >= self.MIN_LIGHTING_SAMPLES and
+                   days_of_data >= self.MIN_DAYS_DATA)
+
+        except Exception as e:
+            logger.error(f"Error checking lighting data: {e}")
+            return False
+
+    def _should_train_temperature(self, status: Dict) -> bool:
+        """
+        Prüft ob Temperature Model trainiert werden soll
+
+        Args:
+            status: Aktueller Trainingsstatus
+
+        Returns:
+            True wenn Training sinnvoll ist
+        """
+        # Bereits vor weniger als 24 Stunden trainiert?
+        last_trained = status.get('temperature_last_trained')
+        if last_trained:
+            last_trained_dt = datetime.fromisoformat(last_trained)
+            if datetime.now() - last_trained_dt < timedelta(hours=24):
+                return False
+
+        # Prüfe ob genug Daten vorhanden
+        try:
+            # Zähle Temperatur-Readings
+            result = self.db.execute(
+                "SELECT COUNT(*) as count FROM sensor_data WHERE sensor_id LIKE '%temp%' OR sensor_id LIKE '%temperature%'"
+            )
+            temp_readings = result[0]['count'] if result else 0
+
+            # Prüfe Datenzeitraum
+            result = self.db.execute(
+                "SELECT MIN(timestamp) as first_reading FROM sensor_data"
+            )
+            if result and result[0]['first_reading']:
+                first_reading = datetime.fromisoformat(result[0]['first_reading'])
+                days_of_data = (datetime.now() - first_reading).days
+            else:
+                days_of_data = 0
+
+            logger.info(f"Temperature data check: {temp_readings} readings, {days_of_data} days")
+
+            # Training möglich?
+            return (temp_readings >= self.MIN_TEMPERATURE_SAMPLES and
+                   days_of_data >= self.MIN_DAYS_DATA)
+
+        except Exception as e:
+            logger.error(f"Error checking temperature data: {e}")
+            return False
+
+    def _train_lighting_model(self) -> bool:
+        """
+        Trainiert das Lighting Model
+
+        Returns:
+            True bei Erfolg
+        """
+        try:
+            # Hole Trainingsdaten aus DB
+            sensor_data = []
+            result = self.db.execute(
+                "SELECT timestamp, sensor_id, value FROM sensor_data ORDER BY timestamp DESC LIMIT 10000"
+            )
+            for row in result:
+                sensor_data.append({
+                    'timestamp': row['timestamp'],
+                    'sensor_id': row['sensor_id'],
+                    'value': row['value']
+                })
+
+            # Hole Licht-Entscheidungen
+            light_states = []
+            result = self.db.execute(
+                "SELECT timestamp, device_id, action, state_before, state_after FROM decisions WHERE device_id LIKE '%light%' ORDER BY timestamp DESC LIMIT 5000"
+            )
+            for row in result:
+                light_states.append({
+                    'timestamp': row['timestamp'],
+                    'device_id': row['device_id'],
+                    'action': row['action'],
+                    'state': 1 if row.get('state_after') else 0
+                })
+
+            if len(light_states) < self.MIN_LIGHTING_SAMPLES:
+                logger.warning(f"Not enough light events: {len(light_states)} < {self.MIN_LIGHTING_SAMPLES}")
+                return False
+
+            # Erstelle und trainiere Modell
+            model = LightingModel(model_type="random_forest")
+            X, y = model.prepare_training_data(sensor_data, light_states)
+
+            if len(X) < 50:
+                logger.warning(f"Not enough training samples after preparation: {len(X)}")
+                return False
+
+            metrics = model.train(X, y)
+
+            # Speichere Modell
+            models_dir = Path('models')
+            models_dir.mkdir(exist_ok=True)
+            model.save_model(str(models_dir / 'lighting_model.pkl'))
+
+            # Speichere Metriken
+            self._save_training_metrics('lighting', metrics)
+
+            logger.info(f"Lighting Model trained with accuracy: {metrics.get('accuracy', 0):.2f}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error training lighting model: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return False
+
+    def _train_temperature_model(self) -> bool:
+        """
+        Trainiert das Temperature Model
+
+        Returns:
+            True bei Erfolg
+        """
+        try:
+            # Hole Trainingsdaten aus DB
+            sensor_data = []
+            result = self.db.execute(
+                "SELECT timestamp, sensor_id, value FROM sensor_data WHERE sensor_id LIKE '%temp%' ORDER BY timestamp DESC LIMIT 10000"
+            )
+            for row in result:
+                sensor_data.append({
+                    'timestamp': row['timestamp'],
+                    'sensor_id': row['sensor_id'],
+                    'value': row['value']
+                })
+
+            if len(sensor_data) < self.MIN_TEMPERATURE_SAMPLES:
+                logger.warning(f"Not enough temperature readings: {len(sensor_data)} < {self.MIN_TEMPERATURE_SAMPLES}")
+                return False
+
+            # Erstelle und trainiere Modell
+            model = TemperatureModel(model_type="gradient_boosting")
+            X, y = model.prepare_training_data(sensor_data)
+
+            if len(X) < 50:
+                logger.warning(f"Not enough training samples after preparation: {len(X)}")
+                return False
+
+            metrics = model.train(X, y)
+
+            # Speichere Modell
+            models_dir = Path('models')
+            models_dir.mkdir(exist_ok=True)
+            model.save_model(str(models_dir / 'temperature_model.pkl'))
+
+            # Speichere Metriken
+            self._save_training_metrics('temperature', metrics)
+
+            logger.info(f"Temperature Model trained with R²: {metrics.get('r2_score', 0):.2f}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error training temperature model: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return False
+
+    def _load_status(self) -> Dict:
+        """Lädt aktuellen Trainingsstatus"""
+        if self.status_file.exists():
+            try:
+                with open(self.status_file, 'r') as f:
+                    return json.load(f)
+            except Exception as e:
+                logger.warning(f"Could not load training status: {e}")
+
+        return {
+            'lighting_trained': False,
+            'lighting_last_trained': None,
+            'temperature_trained': False,
+            'temperature_last_trained': None
+        }
+
+    def _save_status(self, status: Dict):
+        """Speichert Trainingsstatus"""
+        try:
+            self.status_file.parent.mkdir(exist_ok=True)
+            with open(self.status_file, 'w') as f:
+                json.dump(status, f, indent=2)
+        except Exception as e:
+            logger.error(f"Could not save training status: {e}")
+
+    def _save_training_metrics(self, model_name: str, metrics: Dict):
+        """Speichert Trainingsmetriken in DB"""
+        try:
+            self.db.execute(
+                "INSERT INTO training_history (timestamp, model_name, accuracy, samples_used, training_time) VALUES (?, ?, ?, ?, ?)",
+                (
+                    datetime.now().isoformat(),
+                    model_name,
+                    metrics.get('accuracy', metrics.get('r2_score', 0)),
+                    metrics.get('samples_used', 0),
+                    metrics.get('training_time', 0)
+                )
+            )
+            logger.info(f"Training metrics saved for {model_name}")
+        except Exception as e:
+            logger.warning(f"Could not save training metrics: {e}")

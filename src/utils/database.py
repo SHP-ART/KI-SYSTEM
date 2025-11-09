@@ -136,6 +136,16 @@ class Database:
             )
         """)
 
+        # Automatisierungs-Trigger (für neue Automation UI)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS automation_triggers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                rule_name TEXT NOT NULL,
+                trigger_time DATETIME NOT NULL,
+                action TEXT NOT NULL
+            )
+        """)
+
         # Erstelle Indizes für bessere Performance
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_sensor_timestamp

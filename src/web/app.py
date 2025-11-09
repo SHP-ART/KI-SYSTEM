@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from src.decision_engine.engine import DecisionEngine
 from src.data_collector.background_collector import BackgroundDataCollector
 from src.background.bathroom_optimizer import BathroomOptimizer
+from src.background.ml_auto_trainer import MLAutoTrainer
 from src.utils.database import Database
 
 
@@ -68,6 +69,16 @@ class WebInterface:
         except Exception as e:
             logger.error(f"Failed to initialize Bathroom Optimizer: {e}")
 
+        # Initialisiere ML Auto-Trainer (läuft täglich um 2:00 Uhr)
+        self.ml_auto_trainer = None
+        try:
+            self.ml_auto_trainer = MLAutoTrainer(
+                run_at_hour=2  # 2:00 Uhr morgens (vor Bathroom Optimizer)
+            )
+            logger.info("ML Auto-Trainer initialized")
+        except Exception as e:
+            logger.error(f"Failed to initialize ML Auto-Trainer: {e}")
+
         # Registriere Routen
         self._register_routes()
 
@@ -93,6 +104,11 @@ class WebInterface:
         def automations_page():
             """Automatisierungs-Seite"""
             return render_template('automations.html')
+
+        @self.app.route('/automations_new')
+        def automations_new_page():
+            """Neue Automatisierungs-Seite mit verbessertem UI"""
+            return render_template('automations_new.html')
 
         @self.app.route('/rooms')
         def rooms_page():
@@ -314,6 +330,152 @@ class WebInterface:
                 # Update Konfiguration
                 # TODO: Implementiere Config-Update
                 return jsonify({'success': True, 'message': 'Config update coming soon'})
+
+        # === ML Training Status API ===
+
+        @self.app.route('/api/ml/status', methods=['GET'])
+        def api_ml_status():
+            """API: ML Training Status abrufen"""
+            try:
+                import json
+                from pathlib import Path
+                from datetime import datetime
+
+                # Lade Training Status
+                status_file = Path('data/ml_training_status.json')
+                if status_file.exists():
+                    with open(status_file, 'r') as f:
+                        training_status = json.load(f)
+                else:
+                    training_status = {
+                        'lighting_trained': False,
+                        'lighting_last_trained': None,
+                        'temperature_trained': False,
+                        'temperature_last_trained': None
+                    }
+
+                # Zähle verfügbare Daten
+                lighting_count = 0
+                temp_count = 0
+                days_of_data = 0
+
+                try:
+                    # Lighting events
+                    result = self.db.execute(
+                        "SELECT COUNT(*) as count FROM decisions WHERE device_id LIKE '%light%' OR device_id LIKE '%lamp%'"
+                    )
+                    lighting_count = result[0]['count'] if result else 0
+
+                    # Temperature readings
+                    result = self.db.execute(
+                        "SELECT COUNT(*) as count FROM sensor_data WHERE sensor_id LIKE '%temp%' OR sensor_id LIKE '%temperature%'"
+                    )
+                    temp_count = result[0]['count'] if result else 0
+
+                    # Days of data
+                    result = self.db.execute(
+                        "SELECT MIN(timestamp) as first_reading FROM sensor_data"
+                    )
+                    if result and result[0]['first_reading']:
+                        first_reading = datetime.fromisoformat(result[0]['first_reading'])
+                        days_of_data = (datetime.now() - first_reading).days
+                except Exception as e:
+                    logger.warning(f"Could not count ML data: {e}")
+
+                # Check if models exist
+                lighting_model_exists = Path('models/lighting_model.pkl').exists()
+                temp_model_exists = Path('models/temperature_model.pkl').exists()
+
+                return jsonify({
+                    'lighting': {
+                        'trained': lighting_model_exists or training_status.get('lighting_trained', False),
+                        'last_trained': training_status.get('lighting_last_trained'),
+                        'data_count': lighting_count,
+                        'required': 100,
+                        'ready': lighting_count >= 100 and days_of_data >= 3
+                    },
+                    'temperature': {
+                        'trained': temp_model_exists or training_status.get('temperature_trained', False),
+                        'last_trained': training_status.get('temperature_last_trained'),
+                        'data_count': temp_count,
+                        'required': 200,
+                        'ready': temp_count >= 200 and days_of_data >= 3
+                    },
+                    'auto_trainer': {
+                        'enabled': True,  # TODO: Load from config
+                        'run_hour': 2,     # TODO: Load from config
+                        'last_run': None   # TODO: Load from status
+                    },
+                    'days_of_data': days_of_data
+                })
+
+            except Exception as e:
+                logger.error(f"Error getting ML status: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @self.app.route('/api/ml/train', methods=['POST'])
+        def api_ml_train():
+            """API: Manuelles ML Training starten"""
+            try:
+                data = request.json
+                model_type = data.get('model', 'all')  # 'lighting', 'temperature', or 'all'
+
+                result_msg = []
+
+                # Training für Auto-Trainer delegieren
+                if self.ml_auto_trainer:
+                    logger.info(f"Manual training requested for: {model_type}")
+
+                    if model_type in ['lighting', 'all']:
+                        success = self.ml_auto_trainer._train_lighting_model()
+                        if success:
+                            result_msg.append("✓ Lighting Model erfolgreich trainiert")
+                        else:
+                            result_msg.append("✗ Lighting Model Training fehlgeschlagen (evtl. nicht genug Daten)")
+
+                    if model_type in ['temperature', 'all']:
+                        success = self.ml_auto_trainer._train_temperature_model()
+                        if success:
+                            result_msg.append("✓ Temperature Model erfolgreich trainiert")
+                        else:
+                            result_msg.append("✗ Temperature Model Training fehlgeschlagen (evtl. nicht genug Daten)")
+
+                    return jsonify({
+                        'success': True,
+                        'message': '\n'.join(result_msg) if result_msg else 'Training abgeschlossen'
+                    })
+                else:
+                    return jsonify({
+                        'success': False,
+                        'message': 'ML Auto-Trainer nicht verfügbar'
+                    }), 500
+
+            except Exception as e:
+                logger.error(f"Error during manual training: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @self.app.route('/api/ml/training-history', methods=['GET'])
+        def api_ml_training_history():
+            """API: Training History abrufen"""
+            try:
+                history = []
+                result = self.db.execute(
+                    "SELECT timestamp, model_name, accuracy, samples_used, training_time FROM training_history ORDER BY timestamp DESC LIMIT 20"
+                )
+                for row in result:
+                    history.append({
+                        'timestamp': row['timestamp'],
+                        'model': row['model_name'],
+                        'accuracy': round(row['accuracy'], 3) if row['accuracy'] else 0,
+                        'samples': row['samples_used'],
+                        'time': round(row['training_time'], 2) if row['training_time'] else 0
+                    })
+
+                return jsonify({'history': history})
+
+            except Exception as e:
+                logger.warning(f"Could not get training history: {e}")
+                return jsonify({'history': []})
 
         @self.app.route('/api/sensors/available', methods=['GET'])
         def api_get_available_sensors():
@@ -567,6 +729,297 @@ class WebInterface:
             except Exception as e:
                 logger.error(f"Error getting presence status: {e}")
                 return jsonify({'error': str(e)}), 500
+
+        # === Neue Automatisierungs-API (für automations_new.html) ===
+
+        @self.app.route('/api/automation/scene/activate', methods=['POST'])
+        def api_scene_activate():
+            """API: Aktiviere eine Schnellaktion/Szene"""
+            try:
+                data = request.json
+                scene = data.get('scene')
+                actions = data.get('actions', [])
+
+                logger.info(f"Activating scene: {scene}")
+
+                # Führe Aktionen aus
+                platform = self.engine.platform
+                results = []
+
+                for action in actions:
+                    action_type = action.get('type')
+                    device_target = action.get('devices')
+                    command = action.get('action')
+                    value = action.get('value')
+
+                    try:
+                        if device_target == 'all':
+                            # Hole alle Geräte des Typs
+                            if action_type == 'lights':
+                                entities = platform.get_all_entities('light')
+                                for entity_id in entities:
+                                    if command == 'on':
+                                        platform.control_device(entity_id, 'turn_on', {'brightness': value} if value else {})
+                                    elif command == 'off':
+                                        platform.control_device(entity_id, 'turn_off', {})
+                                    elif command == 'dim':
+                                        platform.control_device(entity_id, 'turn_on', {'brightness': value})
+                                results.append(f"{action_type} {command}")
+
+                            elif action_type == 'sockets':
+                                entities = platform.get_all_entities('socket')
+                                for entity_id in entities:
+                                    if command == 'on':
+                                        platform.control_device(entity_id, 'turn_on', {})
+                                    elif command == 'off':
+                                        platform.control_device(entity_id, 'turn_off', {})
+                                results.append(f"{action_type} {command}")
+
+                        else:
+                            results.append(f"{action_type} {command} (not implemented)")
+
+                    except Exception as e:
+                        logger.warning(f"Failed to execute action {action}: {e}")
+                        results.append(f"{action_type} failed")
+
+                # Log trigger in database
+                try:
+                    from datetime import datetime
+                    self.db.execute(
+                        "INSERT INTO automation_triggers (rule_name, trigger_time, action) VALUES (?, ?, ?)",
+                        (scene, datetime.now().isoformat(), f"Scene activated: {', '.join(results)}")
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to log trigger: {e}")
+
+                return jsonify({
+                    'success': True,
+                    'scene': scene,
+                    'results': results
+                })
+
+            except Exception as e:
+                logger.error(f"Error activating scene: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @self.app.route('/api/automation/status', methods=['GET'])
+        def api_automation_status():
+            """API: Live-Status Dashboard"""
+            try:
+                from datetime import datetime, timedelta
+
+                # Zähle aktive Regeln
+                active_rules = 0
+                rules_file = Path('data/automation_rules.json')
+                if rules_file.exists():
+                    import json
+                    with open(rules_file, 'r') as f:
+                        rules_data = json.load(f)
+                        active_rules = len([r for r in rules_data.get('rules', []) if r.get('enabled', False)])
+
+                # Zähle heutige Trigger
+                today_triggers = 0
+                try:
+                    today = datetime.now().date()
+                    result = self.db.execute(
+                        "SELECT COUNT(*) as count FROM automation_triggers WHERE DATE(trigger_time) = ?",
+                        (today.isoformat(),)
+                    )
+                    if result:
+                        today_triggers = result[0]['count']
+                except Exception as e:
+                    logger.debug(f"Could not count triggers: {e}")
+
+                # Präsenz-Status
+                presence = 'unknown'
+                try:
+                    platform = self.engine.platform
+                    if hasattr(platform, 'get_presence_status'):
+                        presence_data = platform.get_presence_status()
+                        presence = 'home' if presence_data.get('anyone_home', False) else 'away'
+                except Exception as e:
+                    logger.debug(f"Could not get presence: {e}")
+
+                # Aktueller Modus
+                current_mode = 'Normal'
+                from datetime import datetime
+                hour = datetime.now().hour
+                if 22 <= hour or hour < 6:
+                    current_mode = 'Nacht'
+                elif presence == 'away':
+                    current_mode = 'Abwesend'
+
+                return jsonify({
+                    'active_rules': active_rules,
+                    'today_triggers': today_triggers,
+                    'presence': presence,
+                    'current_mode': current_mode
+                })
+
+            except Exception as e:
+                logger.error(f"Error getting automation status: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @self.app.route('/api/automation/triggers/recent', methods=['GET'])
+        def api_automation_triggers_recent():
+            """API: Letzte Auslösungen"""
+            try:
+                from datetime import datetime, timedelta
+
+                # Hole letzte 10 Trigger
+                triggers = []
+                try:
+                    result = self.db.execute(
+                        "SELECT rule_name, trigger_time, action FROM automation_triggers ORDER BY trigger_time DESC LIMIT 10"
+                    )
+                    for row in result:
+                        time_obj = datetime.fromisoformat(row['trigger_time'])
+                        triggers.append({
+                            'rule_name': row['rule_name'],
+                            'time': time_obj.strftime('%H:%M'),
+                            'action': row['action']
+                        })
+                except Exception as e:
+                    logger.debug(f"Could not get triggers: {e}")
+
+                return jsonify({
+                    'triggers': triggers
+                })
+
+            except Exception as e:
+                logger.error(f"Error getting recent triggers: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @self.app.route('/api/automation/rules', methods=['GET', 'POST'])
+        def api_automation_rules_list():
+            """API: Regeln auflisten und erstellen"""
+            import json
+            rules_file = Path('data/automation_rules.json')
+
+            if request.method == 'GET':
+                # Lade alle Regeln
+                if rules_file.exists():
+                    with open(rules_file, 'r') as f:
+                        data = json.load(f)
+                        return jsonify({'rules': data.get('rules', [])})
+                else:
+                    return jsonify({'rules': []})
+
+            elif request.method == 'POST':
+                # Neue Regel erstellen
+                new_rule = request.json
+
+                # Generiere ID
+                import uuid
+                new_rule['id'] = str(uuid.uuid4())
+
+                # Lade existierende Regeln
+                if rules_file.exists():
+                    with open(rules_file, 'r') as f:
+                        data = json.load(f)
+                else:
+                    data = {'rules': []}
+
+                # Füge neue Regel hinzu
+                data['rules'].append(new_rule)
+
+                # Speichere
+                rules_file.parent.mkdir(exist_ok=True)
+                with open(rules_file, 'w') as f:
+                    json.dump(data, f, indent=2)
+
+                logger.info(f"New automation rule created: {new_rule.get('name')}")
+
+                return jsonify({
+                    'success': True,
+                    'rule': new_rule
+                })
+
+        @self.app.route('/api/automation/rules/<rule_id>', methods=['GET', 'PUT', 'DELETE'])
+        def api_automation_rule_detail(rule_id):
+            """API: Einzelne Regel abrufen, bearbeiten oder löschen"""
+            import json
+            rules_file = Path('data/automation_rules.json')
+
+            if not rules_file.exists():
+                return jsonify({'error': 'No rules found'}), 404
+
+            with open(rules_file, 'r') as f:
+                data = json.load(f)
+
+            rules = data.get('rules', [])
+            rule = next((r for r in rules if r['id'] == rule_id), None)
+
+            if not rule:
+                return jsonify({'error': 'Rule not found'}), 404
+
+            if request.method == 'GET':
+                return jsonify(rule)
+
+            elif request.method == 'PUT':
+                # Aktualisiere Regel
+                updated_rule = request.json
+                updated_rule['id'] = rule_id  # ID beibehalten
+
+                # Ersetze Regel
+                rules = [r if r['id'] != rule_id else updated_rule for r in rules]
+                data['rules'] = rules
+
+                with open(rules_file, 'w') as f:
+                    json.dump(data, f, indent=2)
+
+                logger.info(f"Automation rule updated: {updated_rule.get('name')}")
+
+                return jsonify({
+                    'success': True,
+                    'rule': updated_rule
+                })
+
+            elif request.method == 'DELETE':
+                # Lösche Regel
+                rules = [r for r in rules if r['id'] != rule_id]
+                data['rules'] = rules
+
+                with open(rules_file, 'w') as f:
+                    json.dump(data, f, indent=2)
+
+                logger.info(f"Automation rule deleted: {rule_id}")
+
+                return jsonify({
+                    'success': True
+                })
+
+        @self.app.route('/api/automation/rules/<rule_id>/toggle', methods=['POST'])
+        def api_automation_rule_toggle(rule_id):
+            """API: Regel aktivieren/deaktivieren"""
+            import json
+            rules_file = Path('data/automation_rules.json')
+
+            if not rules_file.exists():
+                return jsonify({'error': 'No rules found'}), 404
+
+            with open(rules_file, 'r') as f:
+                data = json.load(f)
+
+            rules = data.get('rules', [])
+            rule = next((r for r in rules if r['id'] == rule_id), None)
+
+            if not rule:
+                return jsonify({'error': 'Rule not found'}), 404
+
+            # Toggle enabled
+            rule['enabled'] = not rule.get('enabled', False)
+
+            # Speichere
+            with open(rules_file, 'w') as f:
+                json.dump(data, f, indent=2)
+
+            logger.info(f"Automation rule toggled: {rule.get('name')} -> {rule['enabled']}")
+
+            return jsonify({
+                'success': True,
+                'enabled': rule['enabled']
+            })
 
         # === Rooms Endpunkte ===
 
@@ -1379,6 +1832,11 @@ class WebInterface:
             self.background_collector.start()
             logger.info("Background Data Collector started")
 
+        # Starte ML Auto-Trainer
+        if self.ml_auto_trainer:
+            self.ml_auto_trainer.start()
+            logger.info("ML Auto-Trainer started (runs daily at 2:00)")
+
         # Starte Bathroom Optimizer
         if self.bathroom_optimizer:
             self.bathroom_optimizer.start()
@@ -1391,6 +1849,10 @@ class WebInterface:
             if self.background_collector:
                 self.background_collector.stop()
                 logger.info("Background Data Collector stopped")
+
+            if self.ml_auto_trainer:
+                self.ml_auto_trainer.stop()
+                logger.info("ML Auto-Trainer stopped")
 
             if self.bathroom_optimizer:
                 self.bathroom_optimizer.stop()

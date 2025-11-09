@@ -1,0 +1,537 @@
+{% extends "base.html" %}
+
+{% block title %}Automatisierungen - KI Smart Home{% endblock %}
+
+{% block content %}
+<div class="automations-page">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <div>
+            <h2>⚡ Automatisierungen & Regeln</h2>
+            <p class="subtitle">Intelligente Steuerung deines Smart Homes</p>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <button class="btn btn-secondary" id="btn-templates">📋 Vorlagen</button>
+            <button class="btn btn-primary" id="btn-new-rule">+ Neue Regel</button>
+        </div>
+    </div>
+
+    <!-- Schnellaktionen / Szenen -->
+    <div class="card">
+        <h3>🎬 Schnellaktionen</h3>
+        <div class="scenes-grid">
+            <div class="scene-card" data-scene="movie">
+                <div class="scene-icon">🎬</div>
+                <div class="scene-name">Kino-Modus</div>
+                <div class="scene-description">Lichter aus, Vorhänge zu</div>
+                <button class="btn-scene">Aktivieren</button>
+            </div>
+            <div class="scene-card" data-scene="goodnight">
+                <div class="scene-icon">🌙</div>
+                <div class="scene-name">Gute Nacht</div>
+                <div class="scene-description">Alles aus, Heizung auf 18°C</div>
+                <button class="btn-scene">Aktivieren</button>
+            </div>
+            <div class="scene-card" data-scene="away">
+                <div class="scene-icon">🏠</div>
+                <div class="scene-name">Ich bin weg</div>
+                <div class="scene-description">Lichter & Geräte aus</div>
+                <button class="btn-scene">Aktivieren</button>
+            </div>
+            <div class="scene-card" data-scene="party">
+                <div class="scene-icon">🎉</div>
+                <div class="scene-name">Party</div>
+                <div class="scene-description">Lichter bunt, Musik an</div>
+                <button class="btn-scene">Aktivieren</button>
+            </div>
+            <div class="scene-card" data-scene="morning">
+                <div class="scene-icon">☀️</div>
+                <div class="scene-name">Guten Morgen</div>
+                <div class="scene-description">Sanft aufwachen</div>
+                <button class="btn-scene">Aktivieren</button>
+            </div>
+            <div class="scene-card" data-scene="relax">
+                <div class="scene-icon">🛋️</div>
+                <div class="scene-name">Entspannung</div>
+                <div class="scene-description">Gedimmtes Licht, 22°C</div>
+                <button class="btn-scene">Aktivieren</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Live-Status Dashboard -->
+    <div class="card">
+        <h3>📊 Live-Status</h3>
+        <div class="status-dashboard">
+            <div class="status-item">
+                <div class="status-label">Aktive Regeln</div>
+                <div class="status-value" id="active-rules-count">0</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Heute ausgelöst</div>
+                <div class="status-value" id="today-triggers">0</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Präsenz</div>
+                <div class="status-value" id="presence-status">
+                    <span class="presence-dot"></span>
+                    <span id="presence-text">Anwesend</span>
+                </div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Aktueller Modus</div>
+                <div class="status-value" id="current-mode">Normal</div>
+            </div>
+        </div>
+
+        <!-- Letzte Auslösungen -->
+        <div class="recent-triggers" id="recent-triggers">
+            <h4 style="margin: 20px 0 10px 0; font-size: 14px; color: #6b7280;">Letzte Auslösungen</h4>
+            <div class="trigger-list" id="trigger-list">
+                <p class="empty-state">Noch keine Automatisierungen ausgeführt</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Automatisierungs-Regeln -->
+    <div class="card">
+        <h3>⚙️ Meine Regeln</h3>
+        <div id="rules-container" class="rules-container">
+            <!-- Wird dynamisch gefüllt -->
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Neue Regel erstellen -->
+<div id="modal-new-rule" class="modal">
+    <div class="modal-content" style="max-width: 700px;">
+        <div class="modal-header">
+            <h3>Neue Regel erstellen</h3>
+            <span class="modal-close">&times;</span>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>Regel-Name</label>
+                <input type="text" id="rule-name" class="form-input" placeholder="z.B. Licht bei Bewegung">
+            </div>
+
+            <div class="form-group">
+                <label>Emoji-Icon (optional)</label>
+                <input type="text" id="rule-icon" class="form-input" placeholder="💡" maxlength="2">
+            </div>
+
+            <hr style="margin: 20px 0; border: 0; border-top: 1px solid #e5e7eb;">
+
+            <!-- WENN (Bedingungen) -->
+            <h4 style="margin-bottom: 15px;">📍 WENN (Bedingungen)</h4>
+            <div id="conditions-container">
+                <!-- Wird dynamisch gefüllt -->
+            </div>
+            <button class="btn btn-secondary btn-sm" id="btn-add-condition">+ Bedingung hinzufügen</button>
+
+            <hr style="margin: 20px 0; border: 0; border-top: 1px solid #e5e7eb;">
+
+            <!-- DANN (Aktionen) -->
+            <h4 style="margin-bottom: 15px;">⚡ DANN (Aktionen)</h4>
+            <div id="actions-container">
+                <!-- Wird dynamisch gefüllt -->
+            </div>
+            <button class="btn btn-secondary btn-sm" id="btn-add-action">+ Aktion hinzufügen</button>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" id="btn-cancel-rule">Abbrechen</button>
+            <button class="btn btn-primary" id="btn-save-rule">Regel speichern</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Regel-Vorlagen -->
+<div id="modal-templates" class="modal">
+    <div class="modal-content" style="max-width: 800px;">
+        <div class="modal-header">
+            <h3>📋 Regel-Vorlagen</h3>
+            <span class="modal-close">&times;</span>
+        </div>
+        <div class="modal-body">
+            <div class="templates-grid" id="templates-grid">
+                <!-- Wird dynamisch gefüllt -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Schnellaktionen */
+.scenes-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 15px;
+    margin-top: 15px;
+}
+
+.scene-card {
+    background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+    border: 2px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.scene-card:hover {
+    border-color: #667eea;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+}
+
+.scene-icon {
+    font-size: 36px;
+    margin-bottom: 10px;
+}
+
+.scene-name {
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 5px;
+    color: #1f2937;
+}
+
+.scene-description {
+    font-size: 12px;
+    color: #6b7280;
+    margin-bottom: 12px;
+}
+
+.btn-scene {
+    background: #667eea;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-scene:hover {
+    background: #5568d3;
+}
+
+/* Live-Status Dashboard */
+.status-dashboard {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 20px;
+    margin-top: 15px;
+}
+
+.status-item {
+    text-align: center;
+    padding: 15px;
+    background: #f9fafb;
+    border-radius: 8px;
+}
+
+.status-label {
+    font-size: 12px;
+    color: #6b7280;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.status-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: #1f2937;
+}
+
+.presence-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #10b981;
+    margin-right: 5px;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* Regel-Cards */
+.rules-container {
+    margin-top: 15px;
+}
+
+.rule-card {
+    background: white;
+    border: 2px solid #e5e7eb;
+    border-radius: 10px;
+    margin-bottom: 15px;
+    overflow: hidden;
+    transition: all 0.3s;
+}
+
+.rule-card.active {
+    border-color: #10b981;
+}
+
+.rule-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    cursor: pointer;
+    background: #f9fafb;
+}
+
+.rule-card-header:hover {
+    background: #f3f4f6;
+}
+
+.rule-card-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+}
+
+.rule-icon {
+    font-size: 24px;
+}
+
+.rule-info h4 {
+    margin: 0;
+    font-size: 16px;
+    color: #1f2937;
+}
+
+.rule-info p {
+    margin: 4px 0 0 0;
+    font-size: 13px;
+    color: #6b7280;
+}
+
+.rule-controls {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.rule-toggle {
+    width: 50px;
+    height: 26px;
+    background: #d1d5db;
+    border-radius: 13px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.rule-toggle.active {
+    background: #10b981;
+}
+
+.rule-toggle::after {
+    content: '';
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: white;
+    top: 2px;
+    left: 2px;
+    transition: transform 0.3s;
+}
+
+.rule-toggle.active::after {
+    transform: translateX(24px);
+}
+
+.rule-card-body {
+    padding: 20px;
+    border-top: 1px solid #e5e7eb;
+    display: none;
+}
+
+.rule-card.expanded .rule-card-body {
+    display: block;
+}
+
+/* Modal Styles */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+}
+
+.modal.show {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 600px;
+    max-height: 90vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-header {
+    padding: 20px;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-header h3 {
+    margin: 0;
+}
+
+.modal-close {
+    font-size: 28px;
+    font-weight: 300;
+    color: #6b7280;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.modal-close:hover {
+    color: #1f2937;
+}
+
+.modal-body {
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.modal-footer {
+    padding: 15px 20px;
+    border-top: 1px solid #e5e7eb;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.condition-item,
+.action-item {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 10px;
+    display: flex;
+    gap: 10px;
+    align-items: start;
+}
+
+.condition-item select,
+.action-item select,
+.condition-item input,
+.action-item input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+.btn-remove {
+    background: #ef4444;
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.btn-remove:hover {
+    background: #dc2626;
+}
+
+.templates-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 15px;
+}
+
+.template-card {
+    background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+    border: 2px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.template-card:hover {
+    border-color: #667eea;
+    transform: translateY(-2px);
+}
+
+.template-icon {
+    font-size: 36px;
+    margin-bottom: 10px;
+}
+
+.template-name {
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.template-description {
+    font-size: 13px;
+    color: #6b7280;
+}
+
+.trigger-list {
+    margin-top: 10px;
+}
+
+.trigger-item {
+    padding: 10px 15px;
+    background: #f9fafb;
+    border-left: 3px solid #667eea;
+    margin-bottom: 8px;
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+.trigger-time {
+    color: #6b7280;
+    font-size: 12px;
+    margin-right: 10px;
+}
+
+.empty-state {
+    text-align: center;
+    color: #9ca3af;
+    padding: 20px;
+    font-style: italic;
+}
+
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 13px;
+}
+</style>
+
+<script src="{{ url_for('static', filename='js/automations_new.js') }}"></script>
+{% endblock %}

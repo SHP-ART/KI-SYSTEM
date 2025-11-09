@@ -2,6 +2,66 @@
 
 Alle wichtigen Änderungen am Projekt werden hier dokumentiert.
 
+## [0.9.0] - 2025-11-09
+
+### Hinzugefügt
+- **ML Auto-Trainer**: Automatisches Training der ML-Modelle täglich um 2:00 Uhr
+  - Prüft automatisch ob genug Daten vorhanden sind (100 Lighting Events, 200 Temperature Readings, min. 3 Tage)
+  - Trainiert Lighting Model und Temperature Model automatisch
+  - Speichert Trainingshistorie in Datenbank
+  - Verhindert doppeltes Training innerhalb 24 Stunden
+- **ML Training Status Dashboard** in Settings
+  - Live-Status für Lighting Model, Temperature Model und Auto-Trainer
+  - Farbliche Status-Indikatoren (Gelb/Blau/Grün/Rot)
+  - Daten-Fortschrittsanzeige (X / Required Events/Readings)
+  - Manueller Training-Trigger Button
+  - Training History Viewer mit Metriken
+  - Konfigurierbare Trainingszeit
+- **Kombinierte Automation-Seite** mit Tab-Navigation
+  - Tab 1: Regeln & Szenen (moderner Regel-Builder)
+  - Tab 2: Geräte & System (Geräte-Verwaltung, System-Automatisierungen)
+  - Beide Funktionen unter einer URL vereint
+- **Indoor-Sensor Konfiguration**
+  - Auswahl welche Temperatur-Sensoren für Indoor-Durchschnitt verwendet werden
+  - Auswahl welche Luftfeuchtigkeit-Sensoren verwendet werden
+  - "Alle auswählen/abwählen" Buttons
+  - Live-Anzeige der aktuellen Sensor-Werte
+- **Background Data Collection**
+  - Sammelt alle 5 Minuten Sensor-Daten
+  - Berechnet Indoor-Durchschnittswerte aus ausgewählten Sensoren
+  - Läuft automatisch im Hintergrund
+- **Analytics Dashboard**
+  - Zeitreihen-Visualisierung für Temperatur, Luftfeuchtigkeit, Energie
+  - Geräte-Aktivitäts-Historie
+  - Wetter-Daten Integration
+  - Interaktive Charts mit Zeit-Filter (24h, 7d, 30d)
+- **Bathroom Optimizer** (Background-Prozess)
+  - Analysiert Badezimmer-Nutzungsmuster
+  - Optimiert Heizung basierend auf Nutzungszeiten
+  - Läuft täglich um 3:00 Uhr
+- **Neue API Endpoints**
+  - `/api/ml/status` - ML Training Status
+  - `/api/ml/train` - Manuelles Training triggern
+  - `/api/ml/training-history` - Trainingshistorie abrufen
+  - `/api/sensors/config` - Sensor-Konfiguration
+  - `/api/sensors/available` - Verfügbare Sensoren
+  - `/api/analytics/timeseries` - Zeitreihen-Daten
+  - `/api/analytics/device-activity` - Geräte-Aktivität
+
+### Geändert
+- Web-Interface: Moderne UI mit besserer Navigation
+- Settings-Seite: Erweitert um ML-Training Sektion
+- Automations-Seite: Vereint alte und neue Funktionen in Tabs
+
+### Technisch
+- `MLAutoTrainer` Background-Prozess in `src/background/ml_auto_trainer.py`
+- `BackgroundDataCollector` in `src/background/data_collector.py`
+- `BathroomOptimizer` in `src/background/bathroom_optimizer.py`
+- JavaScript-Erweiterungen in `settings.js` für ML-Status
+- Kombinierte `automations.html` mit Tab-System
+
+---
+
 ## [1.1.0] - 2025-11-07
 
 ### Hinzugefügt
