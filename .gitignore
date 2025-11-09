@@ -44,6 +44,8 @@ ENV/
 data/*.db
 data/*.sqlite
 data/*.sqlite3
+data/*_config.json
+data/heating_*.json
 models/*.pkl
 models/*.h5
 models/*.joblib
@@ -65,3 +67,5 @@ htmlcov/
 *.tmp
 *.bak
 *.cache
+*_backup.*
+*_old.*
