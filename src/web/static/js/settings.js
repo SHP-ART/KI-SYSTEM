@@ -1,5 +1,47 @@
 // Settings Page JavaScript
 
+// === TAB SWITCHING ===
+
+function initTabs() {
+    const tabButtons = document.querySelectorAll('.tab-button');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    tabButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const targetTab = button.dataset.tab;
+
+            // Entferne active class von allen Buttons und Contents
+            tabButtons.forEach(btn => btn.classList.remove('active'));
+            tabContents.forEach(content => content.classList.remove('active'));
+
+            // Setze active class für aktuellen Tab
+            button.classList.add('active');
+            document.getElementById(`tab-${targetTab}`).classList.add('active');
+
+            // Speichere aktiven Tab in localStorage
+            localStorage.setItem('settings-active-tab', targetTab);
+
+            // Lade Daten für den Tab wenn nötig
+            if (targetTab === 'database') {
+                loadDatabaseStatus();
+            } else if (targetTab === 'ml') {
+                loadMLStatus();
+            } else if (targetTab === 'system') {
+                loadVersion();
+            }
+        });
+    });
+
+    // Stelle letzten aktiven Tab wieder her
+    const savedTab = localStorage.getItem('settings-active-tab');
+    if (savedTab) {
+        const tabButton = document.querySelector(`[data-tab="${savedTab}"]`);
+        if (tabButton) {
+            tabButton.click();
+        }
+    }
+}
+
 // Lade Konfiguration
 async function loadConfig() {
     try {
@@ -631,12 +673,339 @@ if (saveHeatingModeBtn) {
     });
 }
 
+// === DATENBANK-WARTUNG FUNKTIONEN ===
+
+// Lade Datenbank-Status
+async function loadDatabaseStatus() {
+    try {
+        const response = await fetch('/api/database/status');
+        const data = await response.json();
+
+        if (data.success) {
+            const db = data.database;
+            const settings = data.settings;
+
+            // Dateigröße
+            document.getElementById('db-size').textContent = db.file_size_mb + ' MB';
+            document.getElementById('db-size-bytes').textContent = formatBytes(db.file_size_bytes);
+
+            // Gesamt Zeilen
+            document.getElementById('db-total-rows').textContent = formatNumber(db.total_rows);
+
+            // Ältester Eintrag
+            if (db.oldest_data) {
+                const oldestDate = new Date(db.oldest_data);
+                document.getElementById('db-oldest-data').textContent = formatDate(oldestDate);
+
+                // Berechne Alter in Tagen
+                const ageInDays = Math.floor((new Date() - oldestDate) / (1000 * 60 * 60 * 24));
+                document.getElementById('db-data-age').textContent = ageInDays + ' Tage alt';
+            } else {
+                document.getElementById('db-oldest-data').textContent = 'Keine Daten';
+                document.getElementById('db-data-age').textContent = '';
+            }
+
+            // Retention Days in Input setzen
+            document.getElementById('retention-days').value = settings.retention_days || 90;
+
+            // Letzte Wartung
+            if (data.maintenance && data.maintenance.last_cleanup) {
+                const lastMaintenance = new Date(data.maintenance.last_cleanup);
+                const now = new Date();
+                const hoursAgo = Math.floor((now - lastMaintenance) / (1000 * 60 * 60));
+
+                if (hoursAgo < 24) {
+                    document.getElementById('db-last-maintenance').textContent =
+                        hoursAgo === 0 ? 'Gerade eben' : `Vor ${hoursAgo}h`;
+                } else {
+                    document.getElementById('db-last-maintenance').textContent = formatDate(lastMaintenance);
+                }
+            } else {
+                document.getElementById('db-last-maintenance').textContent = 'Nie';
+            }
+
+            // Tabellen-Details
+            renderTableDetails(db.table_counts);
+
+        }
+    } catch (error) {
+        console.error('Error loading database status:', error);
+    }
+}
+
+// Rendere Tabellen-Details
+function renderTableDetails(tableCounts) {
+    const container = document.getElementById('db-table-details');
+
+    // Sortiere nach Anzahl (absteigend)
+    const sorted = Object.entries(tableCounts)
+        .filter(([_, count]) => count > 0)
+        .sort((a, b) => b[1] - a[1]);
+
+    if (sorted.length === 0) {
+        container.innerHTML = '<div style="padding: 10px; color: #6b7280;">Keine Daten vorhanden</div>';
+        return;
+    }
+
+    let html = '<table style="width: 100%; border-collapse: collapse;">';
+    html += '<tr style="border-bottom: 1px solid #e5e7eb; font-weight: 600;"><th style="text-align: left; padding: 8px;">Tabelle</th><th style="text-align: right; padding: 8px;">Zeilen</th></tr>';
+
+    for (const [table, count] of sorted) {
+        html += `
+            <tr style="border-bottom: 1px solid #f3f4f6;">
+                <td style="padding: 8px;">${table}</td>
+                <td style="padding: 8px; text-align: right; font-weight: 600;">${formatNumber(count)}</td>
+            </tr>
+        `;
+    }
+
+    html += '</table>';
+    container.innerHTML = html;
+}
+
+// Cleanup durchführen
+async function runCleanup() {
+    const retentionDays = parseInt(document.getElementById('retention-days').value);
+    const resultEl = document.getElementById('db-maintenance-result');
+    const progressContainer = document.getElementById('db-progress-container');
+    const progressBar = document.getElementById('db-progress-bar');
+    const progressText = document.getElementById('db-progress-text');
+
+    // Deaktiviere Buttons
+    setButtonsDisabled(true);
+
+    // Zeige Progress
+    progressContainer.style.display = 'block';
+    progressBar.style.width = '30%';
+    progressText.textContent = 'Lösche alte Daten...';
+
+    resultEl.innerHTML = '<div class="loading">Cleanup läuft...</div>';
+    resultEl.style.display = 'block';
+
+    try {
+        const response = await fetch('/api/database/cleanup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ retention_days: retentionDays })
+        });
+
+        const data = await response.json();
+
+        progressBar.style.width = '100%';
+        progressText.textContent = 'Abgeschlossen!';
+
+        if (data.success) {
+            resultEl.innerHTML = `
+                <div class="success">
+                    ✓ ${data.message}
+                    <br><small>Gelöschte Zeilen: ${formatNumber(data.deleted_rows)}</small>
+                </div>
+            `;
+
+            // Aktualisiere Status
+            setTimeout(() => {
+                loadDatabaseStatus();
+            }, 1000);
+        } else {
+            throw new Error(data.error || 'Cleanup fehlgeschlagen');
+        }
+
+    } catch (error) {
+        console.error('Error during cleanup:', error);
+        resultEl.innerHTML = `<div class="error">✗ Fehler: ${error.message}</div>`;
+    } finally {
+        setButtonsDisabled(false);
+        setTimeout(() => {
+            progressContainer.style.display = 'none';
+            progressBar.style.width = '0%';
+            resultEl.style.display = 'none';
+        }, 5000);
+    }
+}
+
+// VACUUM durchführen
+async function runVacuum() {
+    const resultEl = document.getElementById('db-maintenance-result');
+    const progressContainer = document.getElementById('db-progress-container');
+    const progressBar = document.getElementById('db-progress-bar');
+    const progressText = document.getElementById('db-progress-text');
+
+    setButtonsDisabled(true);
+
+    progressContainer.style.display = 'block';
+    progressBar.style.width = '50%';
+    progressText.textContent = 'Optimiere Datenbank...';
+
+    resultEl.innerHTML = '<div class="loading">VACUUM läuft (kann einige Sekunden dauern)...</div>';
+    resultEl.style.display = 'block';
+
+    try {
+        const response = await fetch('/api/database/vacuum', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const data = await response.json();
+
+        progressBar.style.width = '100%';
+        progressText.textContent = 'Abgeschlossen!';
+
+        if (data.success) {
+            resultEl.innerHTML = `
+                <div class="success">
+                    ✓ ${data.message}
+                    <br><small>Größe vorher: ${data.before_size_mb} MB → nachher: ${data.after_size_mb} MB</small>
+                </div>
+            `;
+
+            // Aktualisiere Status
+            setTimeout(() => {
+                loadDatabaseStatus();
+            }, 1000);
+        } else {
+            throw new Error(data.error || 'VACUUM fehlgeschlagen');
+        }
+
+    } catch (error) {
+        console.error('Error during vacuum:', error);
+        resultEl.innerHTML = `<div class="error">✗ Fehler: ${error.message}</div>`;
+    } finally {
+        setButtonsDisabled(false);
+        setTimeout(() => {
+            progressContainer.style.display = 'none';
+            progressBar.style.width = '0%';
+            resultEl.style.display = 'none';
+        }, 5000);
+    }
+}
+
+// Vollständige Wartung (Cleanup + Vacuum)
+async function runFullMaintenance() {
+    const resultEl = document.getElementById('db-maintenance-result');
+    const progressContainer = document.getElementById('db-progress-container');
+    const progressBar = document.getElementById('db-progress-bar');
+    const progressText = document.getElementById('db-progress-text');
+
+    setButtonsDisabled(true);
+
+    progressContainer.style.display = 'block';
+    progressBar.style.width = '0%';
+    progressText.textContent = 'Starte Wartung...';
+
+    resultEl.innerHTML = '<div class="loading">Führe vollständige Wartung durch...</div>';
+    resultEl.style.display = 'block';
+
+    try {
+        // 1. Cleanup
+        progressBar.style.width = '25%';
+        progressText.textContent = '1/2: Lösche alte Daten...';
+
+        const retentionDays = parseInt(document.getElementById('retention-days').value);
+        const cleanupResponse = await fetch('/api/database/cleanup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ retention_days: retentionDays })
+        });
+
+        const cleanupData = await cleanupResponse.json();
+        if (!cleanupData.success) throw new Error(cleanupData.error);
+
+        // 2. VACUUM
+        progressBar.style.width = '60%';
+        progressText.textContent = '2/2: Optimiere Datenbank...';
+
+        const vacuumResponse = await fetch('/api/database/vacuum', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const vacuumData = await vacuumResponse.json();
+        if (!vacuumData.success) throw new Error(vacuumData.error);
+
+        // Fertig!
+        progressBar.style.width = '100%';
+        progressText.textContent = 'Abgeschlossen!';
+
+        resultEl.innerHTML = `
+            <div class="success">
+                ✓ Vollständige Wartung abgeschlossen!
+                <br><small>Gelöschte Zeilen: ${formatNumber(cleanupData.deleted_rows)} | Freigegeben: ${vacuumData.freed_mb} MB</small>
+            </div>
+        `;
+
+        // Aktualisiere Status
+        setTimeout(() => {
+            loadDatabaseStatus();
+        }, 1000);
+
+    } catch (error) {
+        console.error('Error during full maintenance:', error);
+        resultEl.innerHTML = `<div class="error">✗ Fehler: ${error.message}</div>`;
+    } finally {
+        setButtonsDisabled(false);
+        setTimeout(() => {
+            progressContainer.style.display = 'none';
+            progressBar.style.width = '0%';
+            resultEl.style.display = 'none';
+        }, 5000);
+    }
+}
+
+// Deaktiviere/Aktiviere Buttons während Wartung
+function setButtonsDisabled(disabled) {
+    document.getElementById('db-cleanup').disabled = disabled;
+    document.getElementById('db-vacuum').disabled = disabled;
+    document.getElementById('db-full-maintenance').disabled = disabled;
+    document.getElementById('db-refresh-status').disabled = disabled;
+}
+
+// Event Listeners für Datenbank-Wartung
+if (document.getElementById('db-cleanup')) {
+    document.getElementById('db-cleanup').addEventListener('click', runCleanup);
+    document.getElementById('db-vacuum').addEventListener('click', runVacuum);
+    document.getElementById('db-full-maintenance').addEventListener('click', runFullMaintenance);
+    document.getElementById('db-refresh-status').addEventListener('click', loadDatabaseStatus);
+}
+
+// Hilfsfunktionen
+function formatNumber(num) {
+    return num.toLocaleString('de-DE');
+}
+
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+}
+
+function formatDate(date) {
+    const options = { year: 'numeric', month: '2-digit', day: '2-digit' };
+    return date.toLocaleDateString('de-DE', options);
+}
+
 // Init
 document.addEventListener('DOMContentLoaded', () => {
+    // Initialisiere Tab-System
+    initTabs();
+
+    // Lade initiale Daten
     loadConfig();
     loadSensorConfig();
-    loadVersion();
-    checkForUpdates(); // Auto-check beim Laden
-    loadMLStatus(); // Lade ML Status
-    loadHeatingMode(); // Lade Heizungs-Modus
+    loadHeatingMode();
+
+    // Die anderen Daten werden nur geladen wenn der entsprechende Tab aktiv ist
+    // oder beim ersten Laden wenn kein Tab gespeichert ist
+    const savedTab = localStorage.getItem('settings-active-tab');
+    if (!savedTab || savedTab === 'general') {
+        // Allgemein-Tab ist aktiv - keine Extra-Daten nötig
+    } else if (savedTab === 'database') {
+        loadDatabaseStatus();
+    } else if (savedTab === 'ml') {
+        loadMLStatus();
+    } else if (savedTab === 'system') {
+        loadVersion();
+        checkForUpdates();
+    }
 });

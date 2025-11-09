@@ -6,7 +6,19 @@
 <div class="settings-page">
     <h2>Einstellungen</h2>
 
-    <div class="settings-sections">
+    <!-- Tab Navigation -->
+    <div class="settings-tabs">
+        <button class="tab-button active" data-tab="general">Allgemein</button>
+        <button class="tab-button" data-tab="sensors">Sensoren</button>
+        <button class="tab-button" data-tab="heating">Heizung</button>
+        <button class="tab-button" data-tab="database">Datenbank</button>
+        <button class="tab-button" data-tab="ml">ML Training</button>
+        <button class="tab-button" data-tab="system">System</button>
+    </div>
+
+    <!-- Tab: Allgemein -->
+    <div class="tab-content active" id="tab-general">
+        <div class="settings-sections">
         <!-- Platform Settings -->
         <div class="card settings-card">
             <h3>Smart Home Platform</h3>
@@ -20,60 +32,6 @@
                     <small>Platform-Typ kann nur in config.yaml geändert werden</small>
                 </div>
             </form>
-        </div>
-
-        <!-- Sensor Configuration -->
-        <div class="card settings-card">
-            <h3>🌡️ Indoor-Sensor Konfiguration</h3>
-            <p class="card-description">
-                Wähle welche Sensoren für die Indoor-Temperatur und Luftfeuchtigkeit verwendet werden sollen.
-                <strong>Standard:</strong> Alle Sensoren werden automatisch verwendet.
-            </p>
-
-            <div class="form-group">
-                <h4>Temperatur-Sensoren</h4>
-                <p class="small-text">Durchschnitt aller ausgewählten Sensoren wird als Indoor-Temperatur verwendet</p>
-                <div id="temp-sensors-list" class="sensors-list">
-                    <div class="loading">Lade Sensoren...</div>
-                </div>
-                <button class="btn btn-small btn-secondary" id="select-all-temp">Alle auswählen</button>
-                <button class="btn btn-small btn-secondary" id="deselect-all-temp">Alle abwählen</button>
-            </div>
-
-            <div class="form-group">
-                <h4>Luftfeuchtigkeit-Sensoren</h4>
-                <div id="humidity-sensors-list" class="sensors-list">
-                    <div class="loading">Lade Sensoren...</div>
-                </div>
-                <button class="btn btn-small btn-secondary" id="select-all-humidity">Alle auswählen</button>
-                <button class="btn btn-small btn-secondary" id="deselect-all-humidity">Alle abwählen</button>
-            </div>
-
-            <button class="btn btn-primary" id="save-sensor-config">Sensor-Konfiguration speichern</button>
-            <div id="sensor-save-result" class="action-result"></div>
-        </div>
-
-        <!-- Heating Mode Settings -->
-        <div class="card settings-card">
-            <h3>🔥 Heizungssteuerung</h3>
-            <p class="card-description">
-                Wähle wie das System die Heizung handhaben soll.
-            </p>
-
-            <div class="form-group">
-                <label for="heating-mode"><strong>Heizungs-Modus:</strong></label>
-                <select id="heating-mode" class="form-select" style="margin-bottom: 10px;">
-                    <option value="control">🎮 Steuerung - KI steuert Heizung direkt</option>
-                    <option value="optimization">📊 Optimierung - Nur Datensammlung & Vorschläge (für Tado X)</option>
-                </select>
-
-                <div id="heating-mode-description" class="info-box" style="margin-top: 10px;">
-                    <!-- Wird dynamisch gefüllt -->
-                </div>
-            </div>
-
-            <button class="btn btn-primary" id="save-heating-mode">Heizungs-Modus speichern</button>
-            <div id="heating-mode-result" class="action-result"></div>
         </div>
 
         <!-- Data Collection Settings -->
@@ -125,30 +83,173 @@
                 </div>
             </form>
         </div>
+        </div>
+    </div>
+    <!-- Ende Tab: Allgemein -->
 
-        <!-- System Info -->
+    <!-- Tab: Sensoren -->
+    <div class="tab-content" id="tab-sensors">
+        <div class="settings-sections">
+        <!-- Sensor Configuration -->
         <div class="card settings-card">
-            <h3>System-Information</h3>
-            <div class="system-info">
-                <div class="info-row">
-                    <span class="label">Datenbank:</span>
-                    <span id="db-path">data/ki_system.db</span>
+            <h3>🌡️ Indoor-Sensor Konfiguration</h3>
+            <p class="card-description">
+                Wähle welche Sensoren für die Indoor-Temperatur und Luftfeuchtigkeit verwendet werden sollen.
+                <strong>Standard:</strong> Alle Sensoren werden automatisch verwendet.
+            </p>
+
+            <div class="form-group">
+                <h4>Temperatur-Sensoren</h4>
+                <p class="small-text">Durchschnitt aller ausgewählten Sensoren wird als Indoor-Temperatur verwendet</p>
+                <div id="temp-sensors-list" class="sensors-list">
+                    <div class="loading">Lade Sensoren...</div>
                 </div>
-                <div class="info-row">
-                    <span class="label">Log-Level:</span>
-                    <span id="log-level">INFO</span>
+                <button class="btn btn-small btn-secondary" id="select-all-temp">Alle auswählen</button>
+                <button class="btn btn-small btn-secondary" id="deselect-all-temp">Alle abwählen</button>
+            </div>
+
+            <div class="form-group">
+                <h4>Luftfeuchtigkeit-Sensoren</h4>
+                <div id="humidity-sensors-list" class="sensors-list">
+                    <div class="loading">Lade Sensoren...</div>
                 </div>
-                <div class="info-row">
-                    <span class="label">Trainierte Modelle:</span>
-                    <span id="trained-models">0</span>
-                </div>
-                <div class="info-row">
-                    <span class="label">Gespeicherte Datenpunkte:</span>
-                    <span id="data-points">--</span>
+                <button class="btn btn-small btn-secondary" id="select-all-humidity">Alle auswählen</button>
+                <button class="btn btn-small btn-secondary" id="deselect-all-humidity">Alle abwählen</button>
+            </div>
+
+            <button class="btn btn-primary" id="save-sensor-config">Sensor-Konfiguration speichern</button>
+            <div id="sensor-save-result" class="action-result"></div>
+        </div>
+        </div>
+    </div>
+    <!-- Ende Tab: Sensoren -->
+
+    <!-- Tab: Heizung -->
+    <div class="tab-content" id="tab-heating">
+        <div class="settings-sections">
+        <!-- Heating Mode Settings -->
+        <div class="card settings-card">
+            <h3>🔥 Heizungssteuerung</h3>
+            <p class="card-description">
+                Wähle wie das System die Heizung handhaben soll.
+            </p>
+
+            <div class="form-group">
+                <label for="heating-mode"><strong>Heizungs-Modus:</strong></label>
+                <select id="heating-mode" class="form-select" style="margin-bottom: 10px;">
+                    <option value="control">🎮 Steuerung - KI steuert Heizung direkt</option>
+                    <option value="optimization">📊 Optimierung - Nur Datensammlung & Vorschläge (für Tado X)</option>
+                </select>
+
+                <div id="heating-mode-description" class="info-box" style="margin-top: 10px;">
+                    <!-- Wird dynamisch gefüllt -->
                 </div>
             </div>
-        </div>
 
+            <button class="btn btn-primary" id="save-heating-mode">Heizungs-Modus speichern</button>
+            <div id="heating-mode-result" class="action-result"></div>
+        </div>
+        </div>
+    </div>
+    <!-- Ende Tab: Heizung -->
+
+    <!-- Tab: Datenbank -->
+    <div class="tab-content" id="tab-database">
+        <div class="settings-sections">
+        <!-- Database Maintenance -->
+        <div class="card settings-card">
+            <h3>💾 Datenbank-Wartung</h3>
+            <p class="card-description">
+                Verwalte den Speicherverbrauch deiner Datenbank. Alte Daten werden automatisch täglich um 5:00 Uhr gelöscht.
+            </p>
+
+            <!-- Database Stats Grid -->
+            <div class="db-stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin: 20px 0;">
+                <!-- File Size -->
+                <div class="db-stat-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 12px; color: white;">
+                    <div style="font-size: 12px; opacity: 0.9; margin-bottom: 5px;">DATEIGRÖSSE</div>
+                    <div id="db-size" style="font-size: 28px; font-weight: 700;">--</div>
+                    <div style="font-size: 11px; opacity: 0.8; margin-top: 5px;" id="db-size-bytes">-- Bytes</div>
+                </div>
+
+                <!-- Total Rows -->
+                <div class="db-stat-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); padding: 20px; border-radius: 12px; color: white;">
+                    <div style="font-size: 12px; opacity: 0.9; margin-bottom: 5px;">GESAMT ZEILEN</div>
+                    <div id="db-total-rows" style="font-size: 28px; font-weight: 700;">--</div>
+                    <div style="font-size: 11px; opacity: 0.8; margin-top: 5px;">in allen Tabellen</div>
+                </div>
+
+                <!-- Data Age -->
+                <div class="db-stat-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); padding: 20px; border-radius: 12px; color: white;">
+                    <div style="font-size: 12px; opacity: 0.9; margin-bottom: 5px;">ÄLTESTER EINTRAG</div>
+                    <div id="db-oldest-data" style="font-size: 18px; font-weight: 700;">--</div>
+                    <div style="font-size: 11px; opacity: 0.8; margin-top: 5px;" id="db-data-age">-- Tage alt</div>
+                </div>
+
+                <!-- Last Cleanup -->
+                <div class="db-stat-card" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); padding: 20px; border-radius: 12px; color: white;">
+                    <div style="font-size: 12px; opacity: 0.9; margin-bottom: 5px;">LETZTE WARTUNG</div>
+                    <div id="db-last-maintenance" style="font-size: 18px; font-weight: 700;">Nie</div>
+                    <div style="font-size: 11px; opacity: 0.8; margin-top: 5px;">Automatisch um 5:00 Uhr</div>
+                </div>
+            </div>
+
+            <!-- Table Details -->
+            <details style="margin-top: 20px;">
+                <summary style="cursor: pointer; font-weight: 600; padding: 10px; background: #f9fafb; border-radius: 6px;">
+                    📊 Zeilen pro Tabelle anzeigen
+                </summary>
+                <div id="db-table-details" style="margin-top: 15px; font-size: 13px;">
+                    <div class="loading">Lade...</div>
+                </div>
+            </details>
+
+            <!-- Retention Settings -->
+            <div class="form-group" style="margin-top: 20px;">
+                <h4 style="font-size: 14px; margin-bottom: 10px;">⚙️ Aufbewahrungs-Einstellungen</h4>
+                <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                    <label for="retention-days" style="font-weight: 600;">Daten behalten für:</label>
+                    <input type="number" id="retention-days" min="7" max="365" value="90" style="width: 80px; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px;">
+                    <span>Tage</span>
+                    <span style="font-size: 12px; color: #6b7280;">(Standard: 90 Tage)</span>
+                </div>
+                <div style="margin-top: 10px; font-size: 13px; color: #6b7280;">
+                    ℹ️ Badezimmer-Events werden mindestens 180 Tage aufbewahrt (für Muster-Erkennung)
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="action-buttons" style="margin-top: 20px;">
+                <button class="btn btn-primary" id="db-cleanup">
+                    <span style="margin-right: 5px;">🧹</span> Alte Daten jetzt löschen
+                </button>
+                <button class="btn btn-secondary" id="db-vacuum">
+                    <span style="margin-right: 5px;">🔧</span> Datenbank optimieren (VACUUM)
+                </button>
+                <button class="btn btn-success" id="db-full-maintenance">
+                    <span style="margin-right: 5px;">⚡</span> Vollständige Wartung (Cleanup + Vacuum)
+                </button>
+                <button class="btn btn-secondary" id="db-refresh-status">
+                    <span style="margin-right: 5px;">🔄</span> Status aktualisieren
+                </button>
+            </div>
+            <div id="db-maintenance-result" class="action-result"></div>
+
+            <!-- Progress Bar -->
+            <div id="db-progress-container" style="display: none; margin-top: 15px;">
+                <div style="background: #e5e7eb; border-radius: 8px; height: 8px; overflow: hidden;">
+                    <div id="db-progress-bar" style="background: linear-gradient(90deg, #667eea, #764ba2); height: 100%; width: 0%; transition: width 0.3s;"></div>
+                </div>
+                <div id="db-progress-text" style="margin-top: 8px; font-size: 13px; color: #6b7280; text-align: center;"></div>
+            </div>
+        </div>
+        </div>
+    </div>
+    <!-- Ende Tab: Datenbank -->
+
+    <!-- Tab: ML Training -->
+    <div class="tab-content" id="tab-ml">
+        <div class="settings-sections">
         <!-- ML Training & KI-Status -->
         <div class="card settings-card">
             <h3>🤖 ML Training & KI-Status</h3>
@@ -231,6 +332,35 @@
                 </div>
             </details>
         </div>
+        </div>
+    </div>
+    <!-- Ende Tab: ML Training -->
+
+    <!-- Tab: System -->
+    <div class="tab-content" id="tab-system">
+        <div class="settings-sections">
+        <!-- System Info -->
+        <div class="card settings-card">
+            <h3>System-Information</h3>
+            <div class="system-info">
+                <div class="info-row">
+                    <span class="label">Datenbank:</span>
+                    <span id="db-path">data/ki_system.db</span>
+                </div>
+                <div class="info-row">
+                    <span class="label">Log-Level:</span>
+                    <span id="log-level">INFO</span>
+                </div>
+                <div class="info-row">
+                    <span class="label">Trainierte Modelle:</span>
+                    <span id="trained-models">0</span>
+                </div>
+                <div class="info-row">
+                    <span class="label">Gespeicherte Datenpunkte:</span>
+                    <span id="data-points">--</span>
+                </div>
+            </div>
+        </div>
 
         <!-- System Updates -->
         <div class="card settings-card">
@@ -270,8 +400,68 @@
             </div>
             <div id="action-result" class="action-result"></div>
         </div>
+        </div>
     </div>
+    <!-- Ende Tab: System -->
+
 </div>
+
+<style>
+/* Tab Styling */
+.settings-tabs {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #e5e7eb;
+    flex-wrap: wrap;
+}
+
+.tab-button {
+    padding: 12px 24px;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    color: #6b7280;
+    transition: all 0.2s;
+    margin-bottom: -2px;
+}
+
+.tab-button:hover {
+    color: #374151;
+    background: #f9fafb;
+}
+
+.tab-button.active {
+    color: #667eea;
+    border-bottom-color: #667eea;
+    background: transparent;
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .settings-tabs {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .tab-button {
+        white-space: nowrap;
+        padding: 10px 16px;
+        font-size: 13px;
+    }
+}
+</style>
 
 <script src="{{ url_for('static', filename='js/settings.js') }}"></script>
 {% endblock %}
