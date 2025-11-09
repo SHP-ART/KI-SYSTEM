@@ -996,4 +996,135 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Auto-refresh Live-Sensoren alle 5 Sekunden
     liveSensorInterval = setInterval(loadLiveSensorStatus, 5000);
+
+    // === MANUELLES EVENT-FORMULAR ===
+
+    // Submit Manual Event
+    const submitManualEventBtn = document.getElementById('submit-manual-event');
+    if (submitManualEventBtn) {
+        submitManualEventBtn.addEventListener('click', submitManualEvent);
+    }
+
+    // Clear Manual Form
+    const clearManualFormBtn = document.getElementById('clear-manual-form');
+    if (clearManualFormBtn) {
+        clearManualFormBtn.addEventListener('click', () => {
+            document.getElementById('manual-start-time').value = '';
+            document.getElementById('manual-end-time').value = '';
+            document.getElementById('manual-peak-humidity').value = '75';
+            document.getElementById('manual-notes').value = '';
+
+            const resultEl = document.getElementById('manual-event-result');
+            resultEl.style.display = 'none';
+        });
+    }
+
+    // Set default times (jetzt - 30 Minuten bis jetzt)
+    setDefaultManualEventTimes();
 });
+
+// === MANUELLE EVENT FUNKTIONEN ===
+
+function setDefaultManualEventTimes() {
+    const now = new Date();
+    const thirtyMinutesAgo = new Date(now.getTime() - 30 * 60 * 1000);
+
+    const startInput = document.getElementById('manual-start-time');
+    const endInput = document.getElementById('manual-end-time');
+
+    if (startInput && endInput) {
+        // Format: YYYY-MM-DDTHH:MM
+        startInput.value = formatDateTimeLocal(thirtyMinutesAgo);
+        endInput.value = formatDateTimeLocal(now);
+    }
+}
+
+function formatDateTimeLocal(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+async function submitManualEvent() {
+    const resultEl = document.getElementById('manual-event-result');
+    const submitBtn = document.getElementById('submit-manual-event');
+
+    // Validierung
+    const startTime = document.getElementById('manual-start-time').value;
+    const endTime = document.getElementById('manual-end-time').value;
+    const peakHumidity = document.getElementById('manual-peak-humidity').value;
+    const notes = document.getElementById('manual-notes').value;
+
+    if (!startTime || !endTime) {
+        resultEl.innerHTML = '<div class="error">❌ Bitte Start- und Endzeit angeben!</div>';
+        resultEl.style.display = 'block';
+        return;
+    }
+
+    // Parse Zeiten
+    const start = new Date(startTime);
+    const end = new Date(endTime);
+
+    // Validiere Zeitspanne
+    if (end <= start) {
+        resultEl.innerHTML = '<div class="error">❌ Endzeit muss nach Startzeit liegen!</div>';
+        resultEl.style.display = 'block';
+        return;
+    }
+
+    const durationMinutes = (end - start) / 1000 / 60;
+    if (durationMinutes > 120) {
+        resultEl.innerHTML = '<div class="error">❌ Dauer zu lang! Maximal 2 Stunden erlaubt.</div>';
+        resultEl.style.display = 'block';
+        return;
+    }
+
+    try {
+        submitBtn.disabled = true;
+        resultEl.innerHTML = '<div class="loading">📤 Trage Event ein...</div>';
+        resultEl.style.display = 'block';
+
+        const response = await fetch('/api/luftentfeuchten/manual-event', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                start_time: start.toISOString(),
+                end_time: end.toISOString(),
+                peak_humidity: parseFloat(peakHumidity),
+                notes: notes || null
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            resultEl.innerHTML = `
+                <div class="success">
+                    ✅ ${data.message}
+                    <br><small>Event ID: ${data.event_id} | Dauer: ${Math.round(durationMinutes)} Minuten</small>
+                </div>
+            `;
+
+            // Clear form nach Erfolg
+            setTimeout(() => {
+                document.getElementById('clear-manual-form').click();
+                // Reload Status und Energie-Stats
+                loadStatus();
+                loadEnergyStats();
+            }, 2000);
+
+        } else {
+            throw new Error(data.error || 'Unbekannter Fehler');
+        }
+
+    } catch (error) {
+        console.error('Error submitting manual event:', error);
+        resultEl.innerHTML = `<div class="error">❌ Fehler: ${error.message}</div>`;
+    } finally {
+        submitBtn.disabled = false;
+    }
+}
