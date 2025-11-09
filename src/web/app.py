@@ -213,14 +213,47 @@ class WebInterface:
                         states = platform.get_states(entity_ids)
 
                         for entity_id, state_data in states.items():
-                            devices.append({
+                            device_data = {
                                 'id': entity_id,
+                                'entity_id': entity_id,
                                 'name': state_data.get('attributes', {}).get('friendly_name', entity_id),
                                 'domain': domain,
                                 'state': state_data.get('state'),
                                 'attributes': state_data.get('attributes', {}),
                                 'last_updated': state_data.get('last_updated')
-                            })
+                            }
+
+                            # Für Climate/Heizgeräte: Extrahiere Temperaturen
+                            if domain == 'climate':
+                                capabilities = state_data.get('attributes', {}).get('capabilities', {})
+
+                                # Aktuelle Temperatur
+                                if 'measure_temperature' in capabilities:
+                                    current_temp = capabilities['measure_temperature'].get('value')
+                                    if current_temp is not None:
+                                        device_data['current_temperature'] = current_temp
+                                        if 'attributes' not in device_data:
+                                            device_data['attributes'] = {}
+                                        device_data['attributes']['current_temperature'] = current_temp
+
+                                # Zieltemperatur
+                                if 'target_temperature' in capabilities:
+                                    target_temp = capabilities['target_temperature'].get('value')
+                                    if target_temp is not None:
+                                        device_data['target_temperature'] = target_temp
+                                        if 'attributes' not in device_data:
+                                            device_data['attributes'] = {}
+                                        device_data['attributes']['temperature'] = target_temp
+
+                                # Zone/Raum
+                                zone = state_data.get('attributes', {}).get('zone')
+                                if zone:
+                                    device_data['zone'] = zone
+
+                                # Capabilities Object für erweiterte Infos
+                                device_data['capabilitiesObj'] = capabilities
+
+                            devices.append(device_data)
                     except Exception as e:
                         logger.warning(f"Error getting {domain} devices: {e}")
 

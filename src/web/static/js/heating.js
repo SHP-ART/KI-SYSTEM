@@ -100,13 +100,30 @@ async function loadHeaters() {
         const allDevices = devicesData.devices || [];
         allRooms = roomsData.rooms || [];
 
+        console.log('Loaded devices:', allDevices.length);
+        console.log('Climate devices:', allDevices.filter(d => d.domain === 'climate'));
+
         // Filtere nur Heizgeräte (climate domain)
-        allHeaters = allDevices.filter(d =>
-            d.domain === 'climate' ||
-            d.type === 'thermostat' ||
-            d.class === 'thermostat' ||
-            (d.capabilities && d.capabilities.includes('target_temperature'))
-        );
+        allHeaters = allDevices.filter(d => {
+            // Climate domain ist der Hauptindikator
+            if (d.domain === 'climate') return true;
+
+            // Thermostat class
+            if (d.attributes?.device_class === 'thermostat') return true;
+            if (d.class === 'thermostat') return true;
+
+            // Hat target_temperature capability
+            if (d.capabilitiesObj?.target_temperature) return true;
+            if (d.capabilities?.target_temperature) return true;
+            if (d.attributes?.capabilities?.target_temperature) return true;
+
+            return false;
+        });
+
+        console.log('Filtered heaters:', allHeaters.length);
+        if (allHeaters.length > 0) {
+            console.log('First heater example:', allHeaters[0]);
+        }
 
         // Erstelle Zone-ID zu Name Mapping
         zoneNameMap = {};
@@ -294,25 +311,44 @@ function getHeaterId(heater) {
 }
 
 function getCurrentTemp(heater) {
+    // Direkt auf oberster Ebene (von verbesserter API)
+    if (heater.current_temperature !== undefined && heater.current_temperature !== null) {
+        return heater.current_temperature;
+    }
+    // In attributes (Home Assistant Format)
     if (heater.attributes?.current_temperature !== undefined) {
         return heater.attributes.current_temperature;
     }
+    // In state Objekt
     if (heater.state?.current_temperature !== undefined) {
         return heater.state.current_temperature;
     }
+    // Direkt in capabilitiesObj (Homey Format)
     if (heater.capabilitiesObj?.measure_temperature?.value !== undefined) {
         return heater.capabilitiesObj.measure_temperature.value;
+    }
+    // Als Fallback: state Wert wenn es eine Zahl ist
+    const stateValue = parseFloat(heater.state);
+    if (!isNaN(stateValue)) {
+        return stateValue;
     }
     return null;
 }
 
 function getTargetTemp(heater) {
+    // Direkt auf oberster Ebene (von verbesserter API)
+    if (heater.target_temperature !== undefined && heater.target_temperature !== null) {
+        return heater.target_temperature;
+    }
+    // In attributes.temperature (Home Assistant Format)
     if (heater.attributes?.temperature !== undefined) {
         return heater.attributes.temperature;
     }
+    // In state.target_temperature
     if (heater.state?.target_temperature !== undefined) {
         return heater.state.target_temperature;
     }
+    // Direkt in capabilitiesObj (Homey Format)
     if (heater.capabilitiesObj?.target_temperature?.value !== undefined) {
         return heater.capabilitiesObj.target_temperature.value;
     }
