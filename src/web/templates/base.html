@@ -11,7 +11,7 @@
         <div class="nav-brand">
             <h1>🤖 KI Smart Home</h1>
         </div>
-        <div class="version-badge">v0.8</div>
+        <div class="version-badge">v{{ app_version }}</div>
         <ul class="nav-menu">
             <li><a href="/" class="{% if request.path == '/' %}active{% endif %}">Dashboard</a></li>
             <li><a href="/analytics" class="{% if request.path == '/analytics' %}active{% endif %}">Analytics</a></li>

@@ -15,6 +15,7 @@ import os
 # Füge src zum Python-Path hinzu
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+import src  # Für Zugriff auf __version__
 from src.decision_engine.engine import DecisionEngine
 from src.data_collector.background_collector import BackgroundDataCollector
 from src.background.bathroom_optimizer import BathroomOptimizer
@@ -81,6 +82,14 @@ class WebInterface:
 
         # Registriere Routen
         self._register_routes()
+
+        # Registriere Context Processor für globale Template-Variablen
+        @self.app.context_processor
+        def inject_globals():
+            """Stelle Version in allen Templates zur Verfügung"""
+            return {
+                'app_version': src.__version__
+            }
 
     def _register_routes(self):
         """Registriere alle Flask-Routen"""
