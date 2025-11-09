@@ -899,6 +899,43 @@ function setupTabs() {
     });
 }
 
+// Lade Datenstatistiken
+async function loadDataStats() {
+    try {
+        const data = await fetchJSON('/api/luftentfeuchten/data-stats');
+
+        if (data.success) {
+            // Events Count
+            document.getElementById('data-events-count').textContent =
+                data.events_count.toLocaleString('de-DE');
+
+            // Measurements Count
+            document.getElementById('data-measurements-count').textContent =
+                data.measurements_count.toLocaleString('de-DE');
+
+            // Actions Count
+            document.getElementById('data-actions-count').textContent =
+                data.actions_count.toLocaleString('de-DE');
+
+            // Data Age
+            if (data.data_age) {
+                document.getElementById('data-age').textContent = data.data_age;
+                document.getElementById('data-date-range').textContent = data.date_range;
+            } else {
+                document.getElementById('data-age').textContent = '0 Tage';
+                document.getElementById('data-date-range').textContent = 'Keine Daten';
+            }
+        }
+    } catch (error) {
+        console.error('Error loading data stats:', error);
+        // Zeige Fehler an
+        document.getElementById('data-events-count').textContent = 'Fehler';
+        document.getElementById('data-measurements-count').textContent = 'Fehler';
+        document.getElementById('data-actions-count').textContent = 'Fehler';
+        document.getElementById('data-age').textContent = 'Fehler';
+    }
+}
+
 // Init
 document.addEventListener('DOMContentLoaded', async () => {
     setupSliders();
@@ -917,7 +954,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         loadConfig(),
         loadLearnedParams(),
         loadEnergyStats(),
-        loadAlerts()
+        loadAlerts(),
+        loadDataStats()
     ]);
 
     // Lade Status nach Config (braucht Config-Daten)

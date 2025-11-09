@@ -2484,6 +2484,63 @@ class WebInterface:
                 logger.error(f"Error creating manual bathroom event: {e}")
                 return jsonify({'error': str(e)}), 500
 
+        @self.app.route('/api/luftentfeuchten/data-stats')
+        def api_bathroom_data_stats():
+            """API: Statistiken über gespeicherte Badezimmer-Daten"""
+            try:
+                conn = self.db._get_connection()
+                cursor = conn.cursor()
+
+                # Zähle Events
+                cursor.execute("SELECT COUNT(*) FROM bathroom_events")
+                events_count = cursor.fetchone()[0]
+
+                # Zähle Messungen
+                cursor.execute("SELECT COUNT(*) FROM bathroom_measurements")
+                measurements_count = cursor.fetchone()[0]
+
+                # Zähle Geräteaktionen
+                cursor.execute("SELECT COUNT(*) FROM bathroom_device_actions")
+                actions_count = cursor.fetchone()[0]
+
+                # Ältestes und neuestes Event
+                cursor.execute("""
+                    SELECT MIN(start_time), MAX(start_time)
+                    FROM bathroom_events
+                    WHERE start_time IS NOT NULL
+                """)
+                oldest, newest = cursor.fetchone()
+
+                # Berechne Zeitspanne
+                data_age = None
+                date_range = "Keine Daten"
+                if oldest and newest:
+                    from datetime import datetime
+                    oldest_dt = datetime.fromisoformat(oldest) if isinstance(oldest, str) else oldest
+                    newest_dt = datetime.fromisoformat(newest) if isinstance(newest, str) else newest
+                    days = (datetime.now() - oldest_dt).days
+                    data_age = f"{days} Tage"
+
+                    # Format: "DD.MM.YYYY - DD.MM.YYYY"
+                    oldest_str = oldest_dt.strftime("%d.%m.%Y")
+                    newest_str = newest_dt.strftime("%d.%m.%Y")
+                    date_range = f"{oldest_str} - {newest_str}"
+
+                return jsonify({
+                    'success': True,
+                    'events_count': events_count,
+                    'measurements_count': measurements_count,
+                    'actions_count': actions_count,
+                    'data_age': data_age,
+                    'date_range': date_range,
+                    'oldest_date': oldest,
+                    'newest_date': newest
+                })
+
+            except Exception as e:
+                logger.error(f"Error fetching bathroom data stats: {e}")
+                return jsonify({'error': str(e)}), 500
+
         # ===== Heizungs-Optimierungs-Endpoints =====
 
         @self.app.route('/api/heating/mode', methods=['GET', 'POST'])

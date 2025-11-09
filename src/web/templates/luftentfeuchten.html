@@ -114,6 +114,47 @@
         </div>
     </div>
 
+    <!-- Datenstatistik Card -->
+    <div class="card data-stats-card">
+        <h3>📊 Datenstatistik</h3>
+        <p class="subtitle" style="margin-bottom: 20px;">Übersicht gespeicherter Daten für das Badezimmer-System</p>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px;">
+            <div class="stat-box" style="background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);">
+                <div class="stat-label">Events</div>
+                <div class="stat-value" id="data-events-count">--</div>
+                <div style="font-size: 11px; color: #1e40af; margin-top: 5px;">Dusch-/Bade-Vorgänge</div>
+            </div>
+            <div class="stat-box" style="background: linear-gradient(135deg, #fce7f3 0%, #fbcfe8 100%);">
+                <div class="stat-label">Messungen</div>
+                <div class="stat-value" id="data-measurements-count">--</div>
+                <div style="font-size: 11px; color: #9f1239; margin-top: 5px;">Sensor-Datenpunkte</div>
+            </div>
+            <div class="stat-box" style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);">
+                <div class="stat-label">Geräteaktionen</div>
+                <div class="stat-value" id="data-actions-count">--</div>
+                <div style="font-size: 11px; color: #92400e; margin-top: 5px;">Ein-/Ausschalt-Vorgänge</div>
+            </div>
+            <div class="stat-box" style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);">
+                <div class="stat-label">Datenalter</div>
+                <div class="stat-value" id="data-age" style="font-size: 16px;">--</div>
+                <div style="font-size: 11px; color: #065f46; margin-top: 5px;" id="data-date-range">--</div>
+            </div>
+        </div>
+
+        <div style="margin-top: 15px; padding: 12px; background: #f9fafb; border-radius: 6px; font-size: 0.9em; color: #6b7280;">
+            <strong>ℹ️ Datenerfassung:</strong>
+            <ul style="margin: 8px 0 0 20px; padding: 0;">
+                <li><strong>Events:</strong> Werden automatisch erkannt wenn Luftfeuchtigkeit stark ansteigt</li>
+                <li><strong>Messungen:</strong> Während eines Events alle 5 Minuten (Daemon-Modus) oder bei manuellen Aufrufen</li>
+                <li><strong>Geräteaktionen:</strong> Bei jedem Ein-/Ausschalten von Luftentfeuchter oder Heizung</li>
+            </ul>
+            <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #e5e7eb;">
+                <strong>💾 Automatische Bereinigung:</strong> Alte Daten werden nach <strong>180 Tagen</strong> automatisch gelöscht (für Muster-Erkennung optimiert).
+            </div>
+        </div>
+    </div>
+
     <!-- Live Sensor Values & Actuator Testing -->
     <div class="card" id="live-sensors-card" style="display: none;">
         <h3>📡 Live-Sensor-Werte & Aktoren-Test</h3>
