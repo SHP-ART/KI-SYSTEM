@@ -1289,6 +1289,139 @@ class Database:
             }
         }
 
+    # ===== Heizungs-Monitoring Methoden =====
+
+    def add_heating_observation(self, device_id: str, room_name: str = None,
+                                current_temp: float = None, target_temp: float = None,
+                                is_heating: bool = False, outdoor_temp: float = None,
+                                humidity: float = None, power_percentage: float = None):
+        """Fügt eine Heizungsbeobachtung hinzu (für Analytics)"""
+        from datetime import datetime
+
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        now = datetime.now()
+
+        cursor.execute("""
+            INSERT INTO heating_observations
+            (timestamp, device_id, room_name, current_temp, target_temp,
+             is_heating, outdoor_temp, humidity, hour_of_day, day_of_week, power_percentage)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            now,
+            device_id,
+            room_name,
+            current_temp,
+            target_temp,
+            1 if is_heating else 0,
+            outdoor_temp,
+            humidity,
+            now.hour,
+            now.weekday(),
+            power_percentage
+        ))
+
+        conn.commit()
+        return cursor.lastrowid
+
+    def get_heating_observations(self, days_back: int = 7, device_id: str = None,
+                                 room_name: str = None) -> List[Dict]:
+        """Holt Heizungsbeobachtungen für Analytics"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        start_time = datetime.now() - timedelta(days=days_back)
+
+        query = """
+            SELECT
+                timestamp,
+                device_id,
+                room_name,
+                current_temp,
+                target_temp,
+                is_heating,
+                outdoor_temp,
+                humidity,
+                hour_of_day,
+                day_of_week,
+                power_percentage
+            FROM heating_observations
+            WHERE timestamp >= ?
+        """
+
+        params = [start_time]
+
+        if device_id:
+            query += " AND device_id = ?"
+            params.append(device_id)
+
+        if room_name:
+            query += " AND room_name = ?"
+            params.append(room_name)
+
+        query += " ORDER BY timestamp ASC"
+
+        cursor.execute(query, params)
+
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_heating_statistics(self, days_back: int = 30) -> Dict:
+        """Berechnet Heizungs-Statistiken"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        start_time = datetime.now() - timedelta(days=days_back)
+
+        # Gesamt-Statistiken
+        cursor.execute("""
+            SELECT
+                COUNT(*) as total_observations,
+                SUM(CASE WHEN is_heating = 1 THEN 1 ELSE 0 END) as heating_count,
+                AVG(current_temp) as avg_temp,
+                AVG(target_temp) as avg_target,
+                AVG(outdoor_temp) as avg_outdoor
+            FROM heating_observations
+            WHERE timestamp >= ?
+        """, (start_time,))
+
+        stats = dict(cursor.fetchone())
+
+        # Raum-Statistiken
+        cursor.execute("""
+            SELECT
+                room_name,
+                COUNT(*) as observations,
+                AVG(current_temp) as avg_temp,
+                AVG(target_temp) as avg_target,
+                SUM(CASE WHEN is_heating = 1 THEN 1 ELSE 0 END) as heating_count
+            FROM heating_observations
+            WHERE timestamp >= ? AND room_name IS NOT NULL
+            GROUP BY room_name
+        """, (start_time,))
+
+        stats['room_stats'] = [dict(row) for row in cursor.fetchall()]
+
+        return stats
+
+    def cleanup_heating_observations(self, retention_days: int = 90) -> int:
+        """Löscht alte Heizungsbeobachtungen"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        cutoff_date = datetime.now() - timedelta(days=retention_days)
+
+        cursor.execute("""
+            DELETE FROM heating_observations
+            WHERE timestamp < ?
+        """, (cutoff_date,))
+
+        deleted_count = cursor.rowcount
+        conn.commit()
+
+        logger.info(f"Deleted {deleted_count} old heating observations (older than {retention_days} days)")
+        return deleted_count
+
     def close(self):
         """Schließt die Datenbankverbindung"""
         if self.connection:

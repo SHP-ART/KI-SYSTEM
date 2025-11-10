@@ -1,184 +1,213 @@
 """
-Background Task: Automatische Heizungsdaten-Sammlung und Optimierung
-- Sammelt regelmäßig Heizungsdaten
-- Generiert täglich Optimierungsvorschläge
+Heating Data Collector - Kontinuierliche Heizungsdaten-Sammlung
+
+Sammelt alle 15 Minuten Daten von allen Heizgeräten für Analytics:
+- Aktuelle/Zieltemperatur
+- Heizstatus
+- Außentemperatur
+- Luftfeuchtigkeit
 """
 
 import threading
 import time
-import json
-from pathlib import Path
 from datetime import datetime
+from typing import Optional
 from loguru import logger
 from src.utils.database import Database
 
 
 class HeatingDataCollector:
-    """
-    Background-Prozess für Heizungsdaten-Sammlung und Optimierung
+    """Sammelt kontinuierlich Heizungsdaten für Analytics"""
 
-    - Sammelt alle 15 Minuten Heizungsdaten
-    - Generiert täglich um 4:00 Uhr Optimierungsvorschläge
-    """
-
-    def __init__(self, engine=None, interval_minutes: int = 15, optimize_at_hour: int = 4):
+    def __init__(self, engine=None, interval_seconds: int = 900):  # 15 Minuten = 900 Sekunden
         """
         Args:
-            engine: DecisionEngine Instanz (optional)
-            interval_minutes: Intervall für Datensammlung in Minuten (default: 15)
-            optimize_at_hour: Uhrzeit für tägliche Optimierung (default: 4 = 4:00 Uhr)
+            engine: DecisionEngine Instanz für Zugriff auf Platform
+            interval_seconds: Sammel-Intervall in Sekunden (default: 900 = 15 Min)
         """
         self.engine = engine
-        self.interval_minutes = interval_minutes
-        self.optimize_at_hour = optimize_at_hour
+        self.interval_seconds = interval_seconds
         self.running = False
         self.thread = None
         self.last_collection = None
-        self.last_optimization = None
         self.db = Database()
 
+        logger.info(f"Heating Data Collector initialized ({interval_seconds}s interval)")
+
     def start(self):
-        """Startet den Background-Prozess"""
+        """Startet die kontinuierliche Datensammlung"""
         if self.running:
-            logger.warning("HeatingDataCollector is already running")
+            logger.warning("Heating Data Collector is already running")
             return
 
         self.running = True
-        self.thread = threading.Thread(target=self._run_loop, daemon=True)
+        self.thread = threading.Thread(target=self._run, daemon=True)
         self.thread.start()
-        logger.info(f"HeatingDataCollector started (collects every {self.interval_minutes}min, optimizes daily at {self.optimize_at_hour}:00)")
+        logger.info(f"Heating Data Collector started (collects every {self.interval_seconds}s)")
 
     def stop(self):
-        """Stoppt den Background-Prozess"""
+        """Stoppt die kontinuierliche Datensammlung"""
+        if not self.running:
+            return
+
         self.running = False
         if self.thread:
             self.thread.join(timeout=5)
-        logger.info("HeatingDataCollector stopped")
+        logger.info("Heating Data Collector stopped")
 
-    def _run_loop(self):
-        """Haupt-Loop des Background-Prozesses"""
+    def _run(self):
+        """Haupt-Loop für kontinuierliche Datensammlung"""
         while self.running:
             try:
-                # Datensammlung
-                if self._should_collect_now():
-                    self._collect_data()
-                    self.last_collection = datetime.now()
-
-                # Optimierung (täglich)
-                if self._should_optimize_now():
-                    self._run_optimization()
-                    self.last_optimization = datetime.now()
-
-                # Warte 1 Minute bevor nächster Check
-                time.sleep(60)
-
+                self._collect_data()
+                self.last_collection = datetime.now()
             except Exception as e:
-                logger.error(f"Error in HeatingDataCollector loop: {e}")
-                time.sleep(60)
+                logger.error(f"Error in heating data collection: {e}")
 
-    def _should_collect_now(self) -> bool:
-        """Prüft ob jetzt Daten gesammelt werden sollen"""
-        if not self.last_collection:
-            return True
-
-        minutes_since_last = (datetime.now() - self.last_collection).seconds / 60
-        return minutes_since_last >= self.interval_minutes
-
-    def _should_optimize_now(self) -> bool:
-        """Prüft ob jetzt optimiert werden soll"""
-        now = datetime.now()
-
-        # Prüfe ob bereits heute gelaufen
-        if self.last_optimization:
-            if self.last_optimization.date() == now.date():
-                return False
-
-        # Prüfe ob es die richtige Stunde ist
-        if now.hour == self.optimize_at_hour:
-            return True
-
-        return False
+            # Warte bis zum nächsten Intervall
+            time.sleep(self.interval_seconds)
 
     def _collect_data(self):
-        """Sammelt aktuelle Heizungsdaten"""
+        """Sammelt aktuelle Heizungsdaten von allen Geräten"""
+        if not self.engine or not self.engine.platform:
+            logger.debug("No engine/platform available for heating data collection")
+            return
+
         try:
-            if not self.engine or not self.engine.platform:
-                logger.debug("No engine/platform available for data collection")
+            # Hole alle Heizgeräte
+            all_states = self.engine.platform.get_states()
+            heating_devices = []
+
+            # Filtere nach Thermostaten und Heizgeräten
+            for device in all_states:
+                device_type = device.get('class', '').lower()
+                capabilities = device.get('capabilitiesObj', {})
+
+                # Prüfe ob es ein Thermostat oder Heizgerät ist
+                if ('thermostat' in device_type or
+                    'heater' in device_type or
+                    'target_temperature' in capabilities or
+                    'measure_temperature' in capabilities):
+                    heating_devices.append(device)
+
+            if not heating_devices:
+                logger.debug("No heating devices found for data collection")
                 return
 
-            from src.decision_engine.heating_optimizer import HeatingOptimizer
+            # Hole Außentemperatur einmal für alle Geräte
+            outdoor_temp = self._get_outdoor_temperature()
 
-            optimizer = HeatingOptimizer(db=self.db)
+            # Sammle Daten von jedem Heizgerät
+            collected_count = 0
+            for device in heating_devices:
+                try:
+                    observation_id = self._collect_device_data(device, outdoor_temp)
+                    if observation_id:
+                        collected_count += 1
+                except Exception as e:
+                    logger.error(f"Error collecting data from device {device.get('id')}: {e}")
 
-            # Hole Außentemperatur
-            outdoor_temp = None
-            if self.engine.weather:
-                weather_data = self.engine.weather.get_weather_data(self.engine.platform)
-                if weather_data:
-                    outdoor_temp = weather_data.get('temperature')
-
-            # Sammle Daten
-            result = optimizer.collect_current_state(
-                platform=self.engine.platform,
-                outdoor_temp=outdoor_temp
-            )
-
-            logger.debug(f"Collected {result.get('observations_count', 0)} heating observations")
+            logger.debug(f"Collected heating data from {collected_count}/{len(heating_devices)} devices")
 
         except Exception as e:
-            logger.error(f"Error collecting heating data: {e}")
+            logger.error(f"Error in heating data collection: {e}")
 
-    def _run_optimization(self):
-        """Führt die Optimierung durch"""
+    def _collect_device_data(self, device: dict, outdoor_temp: Optional[float]) -> Optional[int]:
+        """Sammelt Daten von einem einzelnen Heizgerät"""
+        device_id = device.get('id')
+        if not device_id:
+            return None
+
+        # Extrahiere Daten
+        capabilities = device.get('capabilitiesObj', {})
+
+        # Aktuelle Temperatur
+        current_temp = None
+        if 'measure_temperature' in capabilities:
+            temp_cap = capabilities['measure_temperature']
+            current_temp = temp_cap.get('value')
+
+        # Zieltemperatur
+        target_temp = None
+        if 'target_temperature' in capabilities:
+            target_cap = capabilities['target_temperature']
+            target_temp = target_cap.get('value')
+
+        # Heizstatus (ist das Gerät gerade am Heizen?)
+        is_heating = False
+        if 'onoff' in capabilities:
+            is_heating = capabilities['onoff'].get('value', False)
+
+        # Alternativ: prüfe ob target > current (typisch für Thermostate)
+        if not is_heating and current_temp and target_temp:
+            # Wenn Zieltemp > aktuelle Temp + 0.5°C => vermutlich am Heizen
+            is_heating = target_temp > (current_temp + 0.5)
+
+        # Luftfeuchtigkeit (optional)
+        humidity = None
+        if 'measure_humidity' in capabilities:
+            humidity = capabilities['measure_humidity'].get('value')
+
+        # Raum-Name aus Zone
+        room_name = None
+        zone_id = device.get('zone')
+        if zone_id and hasattr(self.engine, 'platform'):
+            # Versuche Raum-Name zu holen
+            try:
+                zones = self.engine.platform.get_zones()
+                for zone in zones:
+                    if zone.get('id') == zone_id:
+                        room_name = zone.get('name')
+                        break
+            except:
+                pass
+
+        # Speichere in Datenbank
+        observation_id = self.db.add_heating_observation(
+            device_id=device_id,
+            room_name=room_name,
+            current_temp=current_temp,
+            target_temp=target_temp,
+            is_heating=is_heating,
+            outdoor_temp=outdoor_temp,
+            humidity=humidity,
+            power_percentage=None  # Könnte später von capable_dim oder measure_power kommen
+        )
+
+        return observation_id
+
+    def _get_outdoor_temperature(self) -> Optional[float]:
+        """Holt die aktuelle Außentemperatur"""
         try:
-            from src.decision_engine.heating_optimizer import HeatingOptimizer
+            # Versuche aus external_data (Weather-Collector)
+            weather_data = self.db.get_latest_external_data('weather')
+            if weather_data:
+                data = weather_data.get('data', {})
+                outdoor_temp = data.get('temperature') or data.get('temp')
+                if outdoor_temp is not None:
+                    return float(outdoor_temp)
 
-            optimizer = HeatingOptimizer(db=self.db)
-
-            # Analysiere Muster
-            logger.info("🤖 Analyzing heating patterns...")
-            patterns = optimizer.analyze_patterns(days_back=14)
-
-            if not patterns.get('sufficient_data'):
-                logger.info(f"Not enough data for optimization: {patterns.get('message')}")
-                return
-
-            # Generiere Insights
-            logger.info("💡 Generating optimization insights...")
-            insights = optimizer.generate_insights(days_back=14)
-
-            logger.info(f"✅ Generated {len(insights)} heating insights:")
-            for insight in insights:
-                logger.info(f"  - {insight.get('title')}: {insight.get('recommendation')}")
-                if insight.get('saving_eur'):
-                    logger.info(f"    Sparpotenzial: {insight.get('saving_eur')}€/Monat")
-
-            # Speichere Optimierungs-Status
-            status_file = Path('data/heating_optimization_status.json')
-            status_file.parent.mkdir(parents=True, exist_ok=True)
-
-            status = {
-                'last_optimization': datetime.now().isoformat(),
-                'insights_count': len(insights),
-                'observations_count': patterns.get('observations_count', 0),
-                'period_days': patterns.get('period_days', 14),
-                'insights': insights
-            }
-
-            with open(status_file, 'w') as f:
-                json.dump(status, f, indent=2)
-
-            logger.info("✅ Heating optimization completed")
+            # Fallback: Suche nach Outdoor-Sensor in Geräten
+            if self.engine and self.engine.platform:
+                all_states = self.engine.platform.get_states()
+                for device in all_states:
+                    device_name = device.get('name', '').lower()
+                    if 'outdoor' in device_name or 'außen' in device_name or 'outside' in device_name:
+                        caps = device.get('capabilitiesObj', {})
+                        if 'measure_temperature' in caps:
+                            temp = caps['measure_temperature'].get('value')
+                            if temp is not None:
+                                return float(temp)
 
         except Exception as e:
-            logger.error(f"Error in heating optimization: {e}")
+            logger.debug(f"Could not get outdoor temperature: {e}")
+
+        return None
 
     def get_status(self) -> dict:
-        """Gibt den aktuellen Status zurück"""
+        """Gibt den aktuellen Status des Collectors zurück"""
         return {
             'running': self.running,
-            'last_collection': self.last_collection.isoformat() if self.last_collection else None,
-            'last_optimization': self.last_optimization.isoformat() if self.last_optimization else None,
-            'interval_minutes': self.interval_minutes,
-            'optimize_at_hour': self.optimize_at_hour
+            'interval_seconds': self.interval_seconds,
+            'last_collection': self.last_collection.isoformat() if self.last_collection else None
         }

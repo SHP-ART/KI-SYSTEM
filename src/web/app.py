@@ -107,6 +107,17 @@ class WebInterface:
         except Exception as e:
             logger.error(f"Failed to initialize Bathroom Data Collector: {e}")
 
+        # Initialisiere Heating Data Collector (sammelt alle 15 Minuten)
+        self.heating_collector = None
+        try:
+            self.heating_collector = HeatingDataCollector(
+                engine=self.engine,
+                interval_seconds=900  # Alle 15 Minuten
+            )
+            logger.info("Heating Data Collector initialized (15min interval)")
+        except Exception as e:
+            logger.error(f"Failed to initialize Heating Data Collector: {e}")
+
         # Initialisiere Database Maintenance Job (läuft täglich um 5:00 Uhr)
         self.db_maintenance = None
         try:
@@ -3537,15 +3548,15 @@ class WebInterface:
             self.bathroom_optimizer.start()
             logger.info("Bathroom Optimizer started (runs daily at 3:00)")
 
-        # Starte Heating Data Collector
-        if self.heating_collector:
-            self.heating_collector.start()
-            logger.info("Heating Data Collector started (collects every 15min, optimizes daily at 4:00)")
-
         # Starte Bathroom Data Collector
         if self.bathroom_collector:
             self.bathroom_collector.start()
             logger.info("Bathroom Data Collector started (collects every 60s)")
+
+        # Starte Heating Data Collector
+        if self.heating_collector:
+            self.heating_collector.start()
+            logger.info("Heating Data Collector started (collects every 15min)")
 
         # Starte Database Maintenance Job
         if self.db_maintenance:
@@ -3568,13 +3579,13 @@ class WebInterface:
                 self.bathroom_optimizer.stop()
                 logger.info("Bathroom Optimizer stopped")
 
-            if self.heating_collector:
-                self.heating_collector.stop()
-                logger.info("Heating Data Collector stopped")
-
             if self.bathroom_collector:
                 self.bathroom_collector.stop()
                 logger.info("Bathroom Data Collector stopped")
+
+            if self.heating_collector:
+                self.heating_collector.stop()
+                logger.info("Heating Data Collector stopped")
 
             if self.db_maintenance:
                 self.db_maintenance.stop()
