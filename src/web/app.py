@@ -2744,6 +2744,9 @@ class WebInterface:
                 now = datetime.now()
                 start_time = now - timedelta(hours=hours_back)
 
+                # Hole Datenbankverbindung
+                conn = self.db._get_connection()
+
                 # Hole Temperaturdaten aus sensor_data
                 query = """
                     SELECT timestamp, value, metadata
@@ -2752,7 +2755,7 @@ class WebInterface:
                     AND timestamp >= ?
                     ORDER BY timestamp ASC
                 """
-                cursor = self.db.conn.execute(query, (start_time.isoformat(),))
+                cursor = conn.execute(query, (start_time.isoformat(),))
                 temp_data = cursor.fetchall()
 
                 # Hole Zieltemperaturen
@@ -2763,7 +2766,7 @@ class WebInterface:
                     AND timestamp >= ?
                     ORDER BY timestamp ASC
                 """
-                cursor = self.db.conn.execute(query, (start_time.isoformat(),))
+                cursor = conn.execute(query, (start_time.isoformat(),))
                 target_data = cursor.fetchall()
 
                 # Hole Außentemperaturen aus external_data
@@ -2774,7 +2777,7 @@ class WebInterface:
                     AND timestamp >= ?
                     ORDER BY timestamp ASC
                 """
-                cursor = self.db.conn.execute(query, (start_time.isoformat(),))
+                cursor = conn.execute(query, (start_time.isoformat(),))
                 weather_data = cursor.fetchall()
 
                 if not temp_data and not weather_data:
