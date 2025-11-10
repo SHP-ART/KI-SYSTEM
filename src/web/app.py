@@ -85,18 +85,6 @@ class WebInterface:
         except Exception as e:
             logger.error(f"Failed to initialize ML Auto-Trainer: {e}")
 
-        # Initialisiere Heating Data Collector (sammelt alle 15 Min, optimiert täglich um 4:00 Uhr)
-        self.heating_collector = None
-        try:
-            self.heating_collector = HeatingDataCollector(
-                engine=self.engine,
-                interval_minutes=15,
-                optimize_at_hour=4  # 4:00 Uhr morgens
-            )
-            logger.info("Heating Data Collector initialized")
-        except Exception as e:
-            logger.error(f"Failed to initialize Heating Data Collector: {e}")
-
         # Initialisiere Bathroom Data Collector (sammelt alle 60 Sekunden)
         self.bathroom_collector = None
         try:
