@@ -287,6 +287,11 @@ class WebInterface:
                                 'last_updated': state_data.get('last_updated')
                             }
 
+                            # Zone/Raum für ALLE Gerätetypen
+                            zone = state_data.get('attributes', {}).get('zone')
+                            if zone:
+                                device_data['zone'] = zone
+
                             # Für Climate/Heizgeräte: Extrahiere Temperaturen
                             if domain == 'climate':
                                 capabilities = state_data.get('attributes', {}).get('capabilities', {})
@@ -308,11 +313,6 @@ class WebInterface:
                                         if 'attributes' not in device_data:
                                             device_data['attributes'] = {}
                                         device_data['attributes']['temperature'] = target_temp
-
-                                # Zone/Raum
-                                zone = state_data.get('attributes', {}).get('zone')
-                                if zone:
-                                    device_data['zone'] = zone
 
                                 # Capabilities Object für erweiterte Infos
                                 device_data['capabilitiesObj'] = capabilities
