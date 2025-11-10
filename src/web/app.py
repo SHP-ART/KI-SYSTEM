@@ -22,6 +22,7 @@ from src.data_collector.background_collector import BackgroundDataCollector
 from src.background.bathroom_optimizer import BathroomOptimizer
 from src.background.ml_auto_trainer import MLAutoTrainer
 from src.background.heating_data_collector import HeatingDataCollector
+from src.background.window_data_collector import WindowDataCollector
 from src.background.bathroom_data_collector import BathroomDataCollector
 from src.background.database_maintenance import DatabaseMaintenanceJob
 from src.utils.database import Database
@@ -117,6 +118,17 @@ class WebInterface:
             logger.info("Heating Data Collector initialized (15min interval)")
         except Exception as e:
             logger.error(f"Failed to initialize Heating Data Collector: {e}")
+
+        # Window Data Collector (60s interval)
+        self.window_collector = None
+        try:
+            self.window_collector = WindowDataCollector(
+                engine=self.engine,
+                interval_seconds=60  # Alle 60 Sekunden
+            )
+            logger.info("Window Data Collector initialized (60s interval)")
+        except Exception as e:
+            logger.error(f"Failed to initialize Window Data Collector: {e}")
 
         # Initialisiere Database Maintenance Job (läuft täglich um 5:00 Uhr)
         self.db_maintenance = None
@@ -2823,6 +2835,83 @@ class WebInterface:
                 logger.error(f"Error getting temperature history: {e}")
                 return jsonify({'error': str(e)}), 500
 
+        # ===== Window Status Endpoints =====
+
+        @self.app.route('/api/heating/windows/current')
+        def api_heating_windows_current():
+            """Hole alle aktuell geöffneten Fenster mit Dauer"""
+            try:
+                open_windows = self.db.get_current_open_windows()
+
+                return jsonify({
+                    'success': True,
+                    'data': open_windows,
+                    'count': len(open_windows)
+                })
+
+            except Exception as e:
+                logger.error(f"Error getting current open windows: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @self.app.route('/api/heating/windows/history')
+        def api_heating_windows_history():
+            """Hole Fenster-Status-Historie (für Chart)"""
+            try:
+                hours = int(request.args.get('hours', 24))
+                room_name = request.args.get('room', None)
+
+                observations = self.db.get_window_observations(
+                    hours_back=hours,
+                    room_name=room_name
+                )
+
+                if not observations:
+                    return jsonify({
+                        'success': True,
+                        'data': [],
+                        'message': 'Noch keine Fensterdaten gesammelt.'
+                    })
+
+                # Gruppiere nach Gerät für Timeline-Darstellung
+                from collections import defaultdict
+                by_device = defaultdict(list)
+
+                for obs in observations:
+                    device_key = f"{obs['device_name']} ({obs['room_name'] or 'Unbekannt'})"
+                    by_device[device_key].append({
+                        'timestamp': obs['timestamp'],
+                        'is_open': obs['is_open']
+                    })
+
+                return jsonify({
+                    'success': True,
+                    'hours': hours,
+                    'data': dict(by_device),
+                    'count': len(observations)
+                })
+
+            except Exception as e:
+                logger.error(f"Error getting window history: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @self.app.route('/api/heating/windows/statistics')
+        def api_heating_windows_statistics():
+            """Hole Fenster-Öffnungs-Statistiken"""
+            try:
+                days = int(request.args.get('days', 7))
+
+                stats = self.db.get_window_open_statistics(days_back=days)
+
+                return jsonify({
+                    'success': True,
+                    'data': stats,
+                    'period_days': days
+                })
+
+            except Exception as e:
+                logger.error(f"Error getting window statistics: {e}")
+                return jsonify({'error': str(e)}), 500
+
         # ===== Analytics Endpoints =====
 
         @self.app.route('/api/analytics/comfort')
@@ -3651,6 +3740,11 @@ class WebInterface:
             self.heating_collector.start()
             logger.info("Heating Data Collector started (collects every 15min)")
 
+        # Starte Window Data Collector
+        if self.window_collector:
+            self.window_collector.start()
+            logger.info("Window Data Collector started (collects every 60s)")
+
         # Starte Database Maintenance Job
         if self.db_maintenance:
             self.db_maintenance.start()
@@ -3679,6 +3773,10 @@ class WebInterface:
             if self.heating_collector:
                 self.heating_collector.stop()
                 logger.info("Heating Data Collector stopped")
+
+            if self.window_collector:
+                self.window_collector.stop()
+                logger.info("Window Data Collector stopped")
 
             if self.db_maintenance:
                 self.db_maintenance.stop()

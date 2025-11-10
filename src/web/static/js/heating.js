@@ -18,6 +18,9 @@ document.addEventListener('DOMContentLoaded', () => {
     setupSliders();
     loadOutdoorTemp();
 
+    // Lade Fenster-Daten
+    loadWindowData();
+
     // Lade Optimierungsdaten wenn im Monitoring-Modus
     if (currentMode === 'optimization') {
         loadOptimizationData();
@@ -34,6 +37,7 @@ function setupEventListeners() {
     document.getElementById('refresh-heating')?.addEventListener('click', () => {
         loadHeaters();
         loadWindows();
+        loadWindowData();
         if (currentMode === 'optimization') {
             loadOptimizationData();
         }
@@ -1228,4 +1232,160 @@ async function fetchJSON(url) {
     const response = await fetch(url);
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     return await response.json();
+}
+
+// ===== FENSTER-STATUS FUNKTIONEN =====
+
+/**
+ * Lädt und zeigt aktuell geöffnete Fenster
+ */
+async function loadCurrentOpenWindows() {
+    try {
+        const response = await fetchJSON('/api/heating/windows/current');
+
+        const container = document.getElementById('open-windows-container');
+
+        if (!response.data || response.data.length === 0) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 20px; background: #f0fdf4; border-radius: 8px; border: 1px solid #d1fae5;">
+                    <div style="font-size: 2em; margin-bottom: 10px;">✅</div>
+                    <p style="margin: 0; color: #065f46; font-weight: 600;">Alle Fenster geschlossen</p>
+                    <p style="margin: 5px 0 0 0; color: #6b7280; font-size: 0.9em;">Optimale Bedingungen für Heizung</p>
+                </div>
+            `;
+            return;
+        }
+
+        // Zeige geöffnete Fenster
+        const openWindowsHTML = response.data.map(window => {
+            const minutesOpen = window.minutes_open;
+            const hoursOpen = Math.floor(minutesOpen / 60);
+            const remainingMinutes = minutesOpen % 60;
+
+            let durationText = '';
+            if (hoursOpen > 0) {
+                durationText = `${hoursOpen}h ${remainingMinutes}min`;
+            } else {
+                durationText = `${remainingMinutes} min`;
+            }
+
+            // Warnung bei langer Öffnung
+            const isLongOpen = minutesOpen > 15;
+            const bgColor = isLongOpen ? '#fef3c7' : '#fef9c3';
+            const borderColor = isLongOpen ? '#f59e0b' : '#eab308';
+            const iconColor = isLongOpen ? '#92400e' : '#854d0e';
+
+            return `
+                <div style="display: flex; align-items: center; gap: 15px; padding: 15px; background: ${bgColor}; border-radius: 8px; border: 1px solid ${borderColor}; margin-bottom: 10px;">
+                    <div style="font-size: 2em;">🪟</div>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 700; color: ${iconColor};">${window.device_name}</div>
+                        <div style="font-size: 0.85em; color: #6b7280;">${window.room_name || 'Unbekannter Raum'}</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="font-size: 1.5em; font-weight: 700; color: ${iconColor};">${durationText}</div>
+                        <div style="font-size: 0.75em; color: #6b7280;">offen seit</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        container.innerHTML = `
+            <div style="margin-bottom: 10px; padding: 12px; background: #fef3c7; border-radius: 8px; border-left: 4px solid #f59e0b;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 1.5em;">⚠️</span>
+                    <div>
+                        <strong style="color: #92400e;">${response.data.length} Fenster offen</strong>
+                        <div style="font-size: 0.85em; color: #6b7280; margin-top: 3px;">
+                            Heizleistung kann beeinträchtigt sein
+                        </div>
+                    </div>
+                </div>
+            </div>
+            ${openWindowsHTML}
+        `;
+
+    } catch (error) {
+        console.error('Error loading open windows:', error);
+        document.getElementById('open-windows-container').innerHTML = `
+            <div class="error" style="padding: 15px; background: #fee2e2; border-radius: 8px; color: #991b1b;">
+                ❌ Fehler beim Laden der Fensterdaten: ${error.message}
+            </div>
+        `;
+    }
+}
+
+/**
+ * Lädt und zeigt Fenster-Öffnungsstatistik
+ */
+async function loadWindowStatistics() {
+    try {
+        const response = await fetchJSON('/api/heating/windows/statistics?days=7');
+
+        const container = document.getElementById('window-stats-content');
+
+        if (!response.data || !response.data.by_room || response.data.by_room.length === 0) {
+            container.innerHTML = `
+                <div class="info" style="text-align: center; padding: 15px; color: #6b7280;">
+                    Noch keine Statistiken verfügbar. Daten werden gesammelt...
+                </div>
+            `;
+            return;
+        }
+
+        const statsHTML = response.data.by_room.map(stat => {
+            const avgDurationHours = Math.floor(stat.avg_duration_minutes / 60);
+            const avgDurationMinutes = Math.round(stat.avg_duration_minutes % 60);
+            const maxDurationHours = Math.floor(stat.max_duration_minutes / 60);
+            const maxDurationMinutes = Math.round(stat.max_duration_minutes % 60);
+            const totalHours = Math.floor(stat.total_minutes_open / 60);
+
+            return `
+                <div style="padding: 15px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb; margin-bottom: 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <div>
+                            <div style="font-weight: 700; color: #1f2937;">${stat.device_name}</div>
+                            <div style="font-size: 0.85em; color: #6b7280;">${stat.room_name || 'Unbekannter Raum'}</div>
+                        </div>
+                        <div style="background: #dbeafe; padding: 5px 12px; border-radius: 6px;">
+                            <strong style="color: #1e40af;">${stat.open_count}x</strong>
+                            <span style="font-size: 0.85em; color: #6b7280;"> geöffnet</span>
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; font-size: 0.85em;">
+                        <div>
+                            <div style="color: #6b7280;">Ø Dauer</div>
+                            <div style="font-weight: 600; color: #1f2937;">${avgDurationHours}h ${avgDurationMinutes}min</div>
+                        </div>
+                        <div>
+                            <div style="color: #6b7280;">Max. Dauer</div>
+                            <div style="font-weight: 600; color: #1f2937;">${maxDurationHours}h ${maxDurationMinutes}min</div>
+                        </div>
+                        <div>
+                            <div style="color: #6b7280;">Gesamt</div>
+                            <div style="font-weight: 600; color: #1f2937;">${totalHours}h offen</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        container.innerHTML = statsHTML;
+
+    } catch (error) {
+        console.error('Error loading window statistics:', error);
+        document.getElementById('window-stats-content').innerHTML = `
+            <div class="error" style="padding: 15px; background: #fee2e2; border-radius: 8px; color: #991b1b;">
+                ❌ Fehler beim Laden der Statistiken: ${error.message}
+            </div>
+        `;
+    }
+}
+
+/**
+ * Lädt alle Fenster-Daten
+ */
+function loadWindowData() {
+    loadCurrentOpenWindows();
+    loadWindowStatistics();
 }

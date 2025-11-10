@@ -1422,6 +1422,157 @@ class Database:
         logger.info(f"Deleted {deleted_count} old heating observations (older than {retention_days} days)")
         return deleted_count
 
+    # ===== Window Observations Methods =====
+
+    def add_window_observation(self, device_id: str, device_name: str = None,
+                                room_name: str = None, is_open: bool = False,
+                                contact_alarm: bool = False):
+        """Fügt eine Fenster-Beobachtung hinzu (alle 60s für Heizungsoptimierung)"""
+        from datetime import datetime
+
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            INSERT INTO window_observations
+            (timestamp, device_id, device_name, room_name, is_open, contact_alarm)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (
+            datetime.now(),
+            device_id,
+            device_name,
+            room_name,
+            1 if is_open else 0,
+            1 if contact_alarm else 0
+        ))
+
+        conn.commit()
+        return cursor.lastrowid
+
+    def get_current_open_windows(self) -> List[Dict]:
+        """Holt alle aktuell geöffneten Fenster mit Dauer"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        # Nutze die View für effiziente Abfrage
+        cursor.execute("""
+            SELECT
+                device_id,
+                device_name,
+                room_name,
+                opened_at,
+                last_seen,
+                minutes_open
+            FROM v_current_open_windows
+            ORDER BY minutes_open DESC
+        """)
+
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_window_observations(self, hours_back: int = 24, device_id: str = None,
+                                room_name: str = None) -> List[Dict]:
+        """Holt Fenster-Beobachtungen für Analytics"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        start_time = datetime.now() - timedelta(hours=hours_back)
+
+        query = """
+            SELECT
+                timestamp,
+                device_id,
+                device_name,
+                room_name,
+                is_open,
+                contact_alarm
+            FROM window_observations
+            WHERE timestamp >= ?
+        """
+
+        params = [start_time]
+
+        if device_id:
+            query += " AND device_id = ?"
+            params.append(device_id)
+
+        if room_name:
+            query += " AND room_name = ?"
+            params.append(room_name)
+
+        query += " ORDER BY timestamp ASC"
+
+        cursor.execute(query, params)
+
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_window_open_statistics(self, days_back: int = 7) -> Dict:
+        """Berechnet Statistiken über offene Fenster (für Heizungsoptimierung)"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        start_time = datetime.now() - timedelta(days=days_back)
+
+        # Pro Raum: wie oft und wie lange waren Fenster offen
+        cursor.execute("""
+            WITH window_sessions AS (
+                SELECT
+                    device_id,
+                    device_name,
+                    room_name,
+                    timestamp,
+                    is_open,
+                    LAG(is_open, 1, 0) OVER (PARTITION BY device_id ORDER BY timestamp) as prev_open
+                FROM window_observations
+                WHERE timestamp >= ?
+            ),
+            open_events AS (
+                SELECT
+                    device_id,
+                    device_name,
+                    room_name,
+                    timestamp as opened_at,
+                    LEAD(timestamp) OVER (PARTITION BY device_id ORDER BY timestamp) as closed_at
+                FROM window_sessions
+                WHERE is_open = 1 AND prev_open = 0
+            )
+            SELECT
+                room_name,
+                device_name,
+                COUNT(*) as open_count,
+                AVG(CAST((julianday(closed_at) - julianday(opened_at)) * 24 * 60 AS INTEGER)) as avg_duration_minutes,
+                MAX(CAST((julianday(closed_at) - julianday(opened_at)) * 24 * 60 AS INTEGER)) as max_duration_minutes,
+                SUM(CAST((julianday(closed_at) - julianday(opened_at)) * 24 * 60 AS INTEGER)) as total_minutes_open
+            FROM open_events
+            WHERE closed_at IS NOT NULL
+            GROUP BY room_name, device_name
+            ORDER BY total_minutes_open DESC
+        """, (start_time,))
+
+        stats = {
+            'by_room': [dict(row) for row in cursor.fetchall()],
+            'period_days': days_back
+        }
+
+        return stats
+
+    def cleanup_window_observations(self, retention_days: int = 90) -> int:
+        """Löscht alte Fenster-Beobachtungen"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        cutoff_date = datetime.now() - timedelta(days=retention_days)
+
+        cursor.execute("""
+            DELETE FROM window_observations
+            WHERE timestamp < ?
+        """, (cutoff_date,))
+
+        deleted_count = cursor.rowcount
+        conn.commit()
+
+        logger.info(f"Deleted {deleted_count} old window observations (older than {retention_days} days)")
+        return deleted_count
+
     def close(self):
         """Schließt die Datenbankverbindung"""
         if self.connection:

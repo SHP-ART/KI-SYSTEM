@@ -399,6 +399,9 @@ async function updateMLPerformance() {
         const daysBack = 30; // Fester Zeitraum für ML-Performance
         const data = await fetchJSON(`/api/analytics/ml-performance?days=${daysBack}`);
 
+        // Prüfe ob überhaupt ML-Daten vorhanden sind
+        const hasMLData = (data.decision_stats.total_decisions > 0) || (data.training_history.length > 0);
+
         // Statistiken
         document.getElementById('ml-total-decisions').textContent =
             (data.decision_stats.total_decisions || 0).toLocaleString('de-DE');
@@ -420,6 +423,13 @@ async function updateMLPerformance() {
             document.getElementById('ml-last-training').textContent = 'Letztes: Noch keins';
         }
 
+        // Zeige Info-Nachricht wenn keine ML-Daten vorhanden
+        if (!hasMLData) {
+            showMLNoDataInfo();
+        } else {
+            hideMLNoDataInfo();
+        }
+
         // Confidence Trend Chart
         if (data.confidence_trends && data.confidence_trends.length > 0) {
             renderConfidenceChart(data.confidence_trends);
@@ -432,6 +442,51 @@ async function updateMLPerformance() {
 
     } catch (error) {
         console.error('Error updating ML performance:', error);
+    }
+}
+
+function showMLNoDataInfo() {
+    // Finde oder erstelle Info-Box
+    let infoBox = document.getElementById('ml-no-data-info');
+
+    if (!infoBox) {
+        infoBox = document.createElement('div');
+        infoBox.id = 'ml-no-data-info';
+        infoBox.className = 'ml-no-data-info';
+        infoBox.innerHTML = `
+            <div class="info-box" style="background: linear-gradient(135deg, #fef3c7 0%, #ffffff 100%); border-left: 4px solid #f59e0b; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h4 style="margin-top: 0; color: #92400e;">⏳ ML-Modelle noch nicht trainiert</h4>
+                <p style="margin-bottom: 10px;">Das System befindet sich im <strong>Optimierungs-Modus</strong> und sammelt Daten.</p>
+                <p style="margin-bottom: 10px;">ML-Modelle werden automatisch trainiert wenn:</p>
+                <ul style="margin-left: 20px; margin-bottom: 10px;">
+                    <li>Genügend Sensordaten gesammelt wurden (min. 100-200 Datenpunkte)</li>
+                    <li>Der automatische Trainer läuft (täglich um 02:00 Uhr)</li>
+                    <li>Oder manuell mit <code>python3 main.py train</code> gestartet</li>
+                </ul>
+                <p style="margin-bottom: 0; font-size: 0.9em; color: #78716c;">
+                    💡 <strong>Tipp:</strong> Im Optimierungs-Modus werden keine automatischen Aktionen ausgeführt.
+                    Das System analysiert nur und gibt Empfehlungen.
+                </p>
+            </div>
+        `;
+
+        // Füge nach den ml-stats-grid ein
+        const mlCard = document.querySelector('.ml-performance-card');
+        const statsGrid = mlCard.querySelector('.ml-stats-grid');
+        if (statsGrid && statsGrid.nextSibling) {
+            mlCard.insertBefore(infoBox, statsGrid.nextSibling);
+        } else {
+            mlCard.appendChild(infoBox);
+        }
+    }
+
+    infoBox.style.display = 'block';
+}
+
+function hideMLNoDataInfo() {
+    const infoBox = document.getElementById('ml-no-data-info');
+    if (infoBox) {
+        infoBox.style.display = 'none';
     }
 }
 
