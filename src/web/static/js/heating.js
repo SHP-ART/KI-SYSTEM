@@ -21,10 +21,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Lade Fenster-Daten
     loadWindowData();
 
+    // Lade Temperaturverlauf (immer)
+    loadTemperatureHistory();
+
     // Lade Optimierungsdaten wenn im Monitoring-Modus
     if (currentMode === 'optimization') {
         loadOptimizationData();
-        loadTemperatureHistory();
     }
 
     // Lade Heizungs-Analytics
@@ -38,6 +40,7 @@ function setupEventListeners() {
         loadHeaters();
         loadWindows();
         loadWindowData();
+        loadTemperatureHistory();
         if (currentMode === 'optimization') {
             loadOptimizationData();
         }
@@ -301,10 +304,14 @@ async function loadTemperatureHistory() {
         if (!response.data || response.data.timestamps.length === 0) {
             const chartContainer = document.getElementById('temperature-chart').parentElement;
             chartContainer.innerHTML = `
-                <div style="text-align: center; padding: 40px; color: #6b7280;">
-                    <p>${response.message || 'Noch keine Daten verfügbar'}</p>
-                    <p style="font-size: 0.9em; margin-top: 10px;">
-                        Das System sammelt alle 15 Minuten Heizungsdaten.
+                <div style="text-align: center; padding: 40px; background: linear-gradient(135deg, #eff6ff 0%, #ffffff 100%); border-radius: 8px; border: 1px solid #dbeafe;">
+                    <div style="font-size: 2.5em; margin-bottom: 15px;">⏳</div>
+                    <h4 style="margin: 0 0 10px 0; color: #1e40af;">Daten werden gesammelt</h4>
+                    <p style="margin: 0 0 10px 0; color: #6b7280;">
+                        ${response.message || 'Der HeatingDataCollector sammelt alle 15 Minuten Heizungsdaten.'}
+                    </p>
+                    <p style="margin: 0; font-size: 0.85em; color: #9ca3af;">
+                        Nach 15-30 Minuten werden hier die ersten Temperaturverläufe angezeigt.
                     </p>
                 </div>
             `;
