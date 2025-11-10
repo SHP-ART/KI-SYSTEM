@@ -7,6 +7,7 @@ let zoneNameMap = {};
 let currentFilter = 'all';
 let currentRoomFilter = 'all';
 let currentMode = 'control'; // control oder optimization
+let temperatureChart = null; // Chart.js Instanz für Temperaturverlauf
 
 // Lade alle Heizgeräte beim Seitenaufruf
 document.addEventListener('DOMContentLoaded', () => {
@@ -20,6 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Lade Optimierungsdaten wenn im Monitoring-Modus
     if (currentMode === 'optimization') {
         loadOptimizationData();
+        loadTemperatureHistory();
     }
 
     // Lade Heizungs-Analytics
@@ -279,6 +281,148 @@ async function loadOutdoorTemp() {
     } catch (error) {
         console.error('Error loading outdoor temp:', error);
     }
+}
+
+// Lade Temperaturverlauf für Chart (24 Stunden)
+async function loadTemperatureHistory() {
+    try {
+        const response = await fetchJSON('/api/heating/temperature-history?hours=24');
+
+        if (!response.success) {
+            console.error('Error loading temperature history:', response.error);
+            return;
+        }
+
+        // Wenn keine Daten vorhanden
+        if (!response.data || response.data.timestamps.length === 0) {
+            const chartContainer = document.getElementById('temperature-chart').parentElement;
+            chartContainer.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: #6b7280;">
+                    <p>${response.message || 'Noch keine Daten verfügbar'}</p>
+                    <p style="font-size: 0.9em; margin-top: 10px;">
+                        Das System sammelt alle 15 Minuten Heizungsdaten.
+                    </p>
+                </div>
+            `;
+            return;
+        }
+
+        renderTemperatureChart(response.data);
+
+    } catch (error) {
+        console.error('Error loading temperature history:', error);
+    }
+}
+
+// Rendere Temperaturverlauf Chart
+function renderTemperatureChart(data) {
+    const ctx = document.getElementById('temperature-chart');
+    if (!ctx) return;
+
+    // Zerstöre existierenden Chart
+    if (temperatureChart) {
+        temperatureChart.destroy();
+    }
+
+    // Formatiere Timestamps für X-Achse
+    const labels = data.timestamps.map(ts => {
+        const date = new Date(ts);
+        return date.toLocaleTimeString('de-DE', {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    });
+
+    // Erstelle Chart
+    temperatureChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Außentemperatur',
+                    data: data.outdoor_temp,
+                    borderColor: '#ef4444',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: false,
+                    spanGaps: true
+                },
+                {
+                    label: 'Durchschnitt Innen',
+                    data: data.indoor_temp,
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: true,
+                    spanGaps: true
+                },
+                {
+                    label: 'Zieltemperatur',
+                    data: data.target_temp,
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    borderWidth: 2,
+                    borderDash: [5, 5],
+                    tension: 0.4,
+                    fill: false,
+                    spanGaps: true
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            if (context.parsed.y !== null) {
+                                label += context.parsed.y.toFixed(1) + '°C';
+                            }
+                            return label;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    ticks: {
+                        callback: function(value) {
+                            return value + '°C';
+                        }
+                    },
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.05)'
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    },
+                    ticks: {
+                        maxRotation: 45,
+                        minRotation: 45
+                    }
+                }
+            }
+        }
+    });
 }
 
 // Fülle Raum-Filter aus

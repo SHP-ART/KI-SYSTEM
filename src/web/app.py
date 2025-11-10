@@ -2730,6 +2730,99 @@ class WebInterface:
                 logger.error(f"Error getting heating analytics: {e}")
                 return jsonify({'error': str(e)}), 500
 
+        @self.app.route('/api/heating/temperature-history')
+        def api_heating_temperature_history():
+            """Hole Temperaturverlauf für Chart (letzte 24h)"""
+            try:
+                hours_back = int(request.args.get('hours', 24))
+
+                # Hole Heizungsbeobachtungen
+                observations = self.db.get_heating_observations(days_back=hours_back/24)
+
+                if not observations:
+                    return jsonify({
+                        'success': True,
+                        'data': [],
+                        'message': 'Noch keine Daten gesammelt. Bitte warten Sie 15-30 Minuten.'
+                    })
+
+                # Gruppiere Daten nach Stunde für bessere Übersicht
+                from collections import defaultdict
+                import statistics
+
+                hourly_data = defaultdict(lambda: {
+                    'indoor_temps': [],
+                    'outdoor_temps': [],
+                    'target_temps': [],
+                    'heating_count': 0,
+                    'total_count': 0
+                })
+
+                for obs in observations:
+                    timestamp = obs['timestamp']
+                    if isinstance(timestamp, str):
+                        from datetime import datetime
+                        timestamp = datetime.fromisoformat(timestamp)
+
+                    # Runde auf Stunde
+                    hour_key = timestamp.replace(minute=0, second=0, microsecond=0)
+
+                    if obs['current_temp'] is not None:
+                        hourly_data[hour_key]['indoor_temps'].append(obs['current_temp'])
+                    if obs['outdoor_temp'] is not None:
+                        hourly_data[hour_key]['outdoor_temps'].append(obs['outdoor_temp'])
+                    if obs['target_temp'] is not None:
+                        hourly_data[hour_key]['target_temps'].append(obs['target_temp'])
+                    if obs['is_heating']:
+                        hourly_data[hour_key]['heating_count'] += 1
+                    hourly_data[hour_key]['total_count'] += 1
+
+                # Erstelle Zeitreihen-Arrays
+                timestamps = []
+                indoor_temps = []
+                outdoor_temps = []
+                target_temps = []
+                heating_percentages = []
+
+                for hour in sorted(hourly_data.keys()):
+                    data = hourly_data[hour]
+                    timestamps.append(hour.isoformat())
+
+                    # Durchschnitte berechnen
+                    indoor_temps.append(
+                        round(statistics.mean(data['indoor_temps']), 1)
+                        if data['indoor_temps'] else None
+                    )
+                    outdoor_temps.append(
+                        round(statistics.mean(data['outdoor_temps']), 1)
+                        if data['outdoor_temps'] else None
+                    )
+                    target_temps.append(
+                        round(statistics.mean(data['target_temps']), 1)
+                        if data['target_temps'] else None
+                    )
+                    heating_percentages.append(
+                        round((data['heating_count'] / data['total_count']) * 100, 1)
+                        if data['total_count'] > 0 else 0
+                    )
+
+                return jsonify({
+                    'success': True,
+                    'hours': hours_back,
+                    'data': {
+                        'timestamps': timestamps,
+                        'indoor_temp': indoor_temps,
+                        'outdoor_temp': outdoor_temps,
+                        'target_temp': target_temps,
+                        'heating_percentage': heating_percentages
+                    },
+                    'count': len(timestamps)
+                })
+
+            except Exception as e:
+                logger.error(f"Error getting temperature history: {e}")
+                return jsonify({'error': str(e)}), 500
+
         # ===== Analytics Endpoints =====
 
         @self.app.route('/api/analytics/comfort')
