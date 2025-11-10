@@ -1112,30 +1112,6 @@ class Database:
 
         conn.commit()
 
-    def get_heating_observations(self, device_id: str = None,
-                                days_back: int = 7,
-                                limit: int = None) -> List[Dict]:
-        """Holt Heizungs-Beobachtungen"""
-        conn = self._get_connection()
-        cursor = conn.cursor()
-
-        start_time = datetime.now() - timedelta(days=days_back)
-
-        query = "SELECT * FROM heating_observations WHERE timestamp >= ?"
-        params = [start_time]
-
-        if device_id:
-            query += " AND device_id = ?"
-            params.append(device_id)
-
-        query += " ORDER BY timestamp DESC"
-
-        if limit:
-            query += f" LIMIT {limit}"
-
-        cursor.execute(query, params)
-        return [dict(row) for row in cursor.fetchall()]
-
     def add_heating_insight(self, insight_type: str, recommendation: str,
                            device_id: str = None, room_name: str = None,
                            saving_percent: float = None, saving_eur: float = None,
