@@ -2732,57 +2732,101 @@ class WebInterface:
 
         @self.app.route('/api/heating/temperature-history')
         def api_heating_temperature_history():
-            """Hole Temperaturverlauf für Chart (letzte 24h)"""
+            """Hole Temperaturverlauf für Chart (letzte 24h) aus sensor_data"""
             try:
+                from collections import defaultdict
+                import statistics
+                from datetime import datetime, timedelta
+
                 hours_back = int(request.args.get('hours', 24))
 
-                # Hole Heizungsbeobachtungen
-                observations = self.db.get_heating_observations(days_back=hours_back/24)
+                # Zeitfenster berechnen
+                now = datetime.now()
+                start_time = now - timedelta(hours=hours_back)
 
-                if not observations:
+                # Hole Temperaturdaten aus sensor_data
+                query = """
+                    SELECT timestamp, value, metadata
+                    FROM sensor_data
+                    WHERE sensor_type = 'temperature'
+                    AND timestamp >= ?
+                    ORDER BY timestamp ASC
+                """
+                cursor = self.db.conn.execute(query, (start_time.isoformat(),))
+                temp_data = cursor.fetchall()
+
+                # Hole Zieltemperaturen
+                query = """
+                    SELECT timestamp, value
+                    FROM sensor_data
+                    WHERE sensor_type = 'target_temperature'
+                    AND timestamp >= ?
+                    ORDER BY timestamp ASC
+                """
+                cursor = self.db.conn.execute(query, (start_time.isoformat(),))
+                target_data = cursor.fetchall()
+
+                # Hole Außentemperaturen aus external_data
+                query = """
+                    SELECT timestamp, data
+                    FROM external_data
+                    WHERE data_type = 'weather'
+                    AND timestamp >= ?
+                    ORDER BY timestamp ASC
+                """
+                cursor = self.db.conn.execute(query, (start_time.isoformat(),))
+                weather_data = cursor.fetchall()
+
+                if not temp_data and not weather_data:
                     return jsonify({
                         'success': True,
                         'data': [],
-                        'message': 'Noch keine Daten gesammelt. Bitte warten Sie 15-30 Minuten.'
+                        'message': 'Keine Temperaturdaten vorhanden.'
                     })
 
-                # Gruppiere Daten nach Stunde für bessere Übersicht
-                from collections import defaultdict
-                import statistics
-
+                # Gruppiere Daten nach Stunde
                 hourly_data = defaultdict(lambda: {
                     'indoor_temps': [],
                     'outdoor_temps': [],
-                    'target_temps': [],
-                    'heating_count': 0,
-                    'total_count': 0
+                    'target_temps': []
                 })
 
-                for obs in observations:
-                    timestamp = obs['timestamp']
-                    if isinstance(timestamp, str):
-                        from datetime import datetime
-                        timestamp = datetime.fromisoformat(timestamp)
-
-                    # Runde auf Stunde
+                # Verarbeite Innentemperaturen
+                for row in temp_data:
+                    timestamp = datetime.fromisoformat(row[0]) if isinstance(row[0], str) else row[0]
                     hour_key = timestamp.replace(minute=0, second=0, microsecond=0)
 
-                    if obs['current_temp'] is not None:
-                        hourly_data[hour_key]['indoor_temps'].append(obs['current_temp'])
-                    if obs['outdoor_temp'] is not None:
-                        hourly_data[hour_key]['outdoor_temps'].append(obs['outdoor_temp'])
-                    if obs['target_temp'] is not None:
-                        hourly_data[hour_key]['target_temps'].append(obs['target_temp'])
-                    if obs['is_heating']:
-                        hourly_data[hour_key]['heating_count'] += 1
-                    hourly_data[hour_key]['total_count'] += 1
+                    value = float(row[1])
+                    # Filtere unrealistische Werte (z.B. Fahrrad-Akku mit 33°C)
+                    if 5 < value < 30:  # Nur realistische Raumtemperaturen
+                        hourly_data[hour_key]['indoor_temps'].append(value)
+
+                # Verarbeite Zieltemperaturen
+                for row in target_data:
+                    timestamp = datetime.fromisoformat(row[0]) if isinstance(row[0], str) else row[0]
+                    hour_key = timestamp.replace(minute=0, second=0, microsecond=0)
+
+                    value = float(row[1])
+                    if 5 < value < 30:
+                        hourly_data[hour_key]['target_temps'].append(value)
+
+                # Verarbeite Außentemperaturen
+                import json
+                for row in weather_data:
+                    timestamp = datetime.fromisoformat(row[0]) if isinstance(row[0], str) else row[0]
+                    hour_key = timestamp.replace(minute=0, second=0, microsecond=0)
+
+                    data_json = json.loads(row[1]) if isinstance(row[1], str) else row[1]
+                    outdoor_temp = data_json.get('temperature')
+
+                    if outdoor_temp is not None:
+                        hourly_data[hour_key]['outdoor_temps'].append(float(outdoor_temp))
 
                 # Erstelle Zeitreihen-Arrays
                 timestamps = []
                 indoor_temps = []
                 outdoor_temps = []
                 target_temps = []
-                heating_percentages = []
 
                 for hour in sorted(hourly_data.keys()):
                     data = hourly_data[hour]
@@ -2801,10 +2845,6 @@ class WebInterface:
                         round(statistics.mean(data['target_temps']), 1)
                         if data['target_temps'] else None
                     )
-                    heating_percentages.append(
-                        round((data['heating_count'] / data['total_count']) * 100, 1)
-                        if data['total_count'] > 0 else 0
-                    )
 
                 return jsonify({
                     'success': True,
@@ -2813,8 +2853,7 @@ class WebInterface:
                         'timestamps': timestamps,
                         'indoor_temp': indoor_temps,
                         'outdoor_temp': outdoor_temps,
-                        'target_temp': target_temps,
-                        'heating_percentage': heating_percentages
+                        'target_temp': target_temps
                     },
                     'count': len(timestamps)
                 })
