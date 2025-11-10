@@ -79,6 +79,10 @@ class WindowDataCollector:
 
             # Filtere nach Fenster-Kontakten und Türen
             for device in all_states:
+                # Skip wenn device kein Dictionary ist
+                if not isinstance(device, dict):
+                    continue
+
                 device_class = device.get('class', '').lower()
                 device_name = device.get('name', '').lower()
                 capabilities = device.get('capabilitiesObj', {})
