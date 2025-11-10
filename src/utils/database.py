@@ -1210,61 +1210,6 @@ class Database:
 
         return [dict(row) for row in cursor.fetchall()]
 
-    def get_heating_statistics(self, days_back: int = 30) -> Dict:
-        """Berechnet Statistiken für Heizungsoptimierung"""
-        conn = self._get_connection()
-        cursor = conn.cursor()
-
-        start_time = datetime.now() - timedelta(days=days_back)
-
-        # Durchschnittstemperaturen
-        cursor.execute("""
-            SELECT
-                AVG(current_temperature) as avg_indoor,
-                AVG(target_temperature) as avg_target,
-                AVG(outdoor_temperature) as avg_outdoor
-            FROM heating_observations
-            WHERE timestamp >= ?
-        """, (start_time,))
-
-        temps = dict(cursor.fetchone())
-
-        # Heizstunden
-        cursor.execute("""
-            SELECT
-                COUNT(*) as total_observations,
-                SUM(CASE WHEN is_heating THEN 1 ELSE 0 END) as heating_count
-            FROM heating_observations
-            WHERE timestamp >= ?
-        """, (start_time,))
-
-        heating = dict(cursor.fetchone())
-        heating_percent = (heating['heating_count'] / heating['total_observations'] * 100) if heating['total_observations'] > 0 else 0
-
-        # Fenster-offen Statistik
-        cursor.execute("""
-            SELECT
-                SUM(CASE WHEN window_open AND is_heating THEN 1 ELSE 0 END) as heating_with_window_open
-            FROM heating_observations
-            WHERE timestamp >= ?
-        """, (start_time,))
-
-        window_stats = dict(cursor.fetchone())
-
-        return {
-            'period_days': days_back,
-            'temperatures': {
-                'avg_indoor': round(temps['avg_indoor'], 1) if temps['avg_indoor'] else None,
-                'avg_target': round(temps['avg_target'], 1) if temps['avg_target'] else None,
-                'avg_outdoor': round(temps['avg_outdoor'], 1) if temps['avg_outdoor'] else None
-            },
-            'heating': {
-                'total_observations': heating['total_observations'],
-                'heating_percent': round(heating_percent, 1),
-                'heating_with_window_open': window_stats['heating_with_window_open'] or 0
-            }
-        }
-
     # ===== Heizungs-Monitoring Methoden =====
 
     def add_heating_observation(self, device_id: str, room_name: str = None,

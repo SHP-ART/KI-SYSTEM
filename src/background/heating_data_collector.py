@@ -78,18 +78,26 @@ class HeatingDataCollector:
             all_states = self.engine.platform.get_states()
             heating_devices = []
 
+            # Konvertiere Dictionary zu Liste (falls nötig)
+            devices_list = list(all_states.values()) if isinstance(all_states, dict) else all_states
+
             # Filtere nach Thermostaten und Heizgeräten
-            for device in all_states:
+            for device in devices_list:
                 # Skip wenn device kein Dictionary ist
                 if not isinstance(device, dict):
                     continue
 
                 device_type = device.get('class', '').lower()
+                domain = device.get('domain', '').lower()
                 capabilities = device.get('capabilitiesObj', {})
+                # Fallback: prüfe auch attributes.capabilities
+                if not capabilities:
+                    capabilities = device.get('attributes', {}).get('capabilities', {})
 
                 # Prüfe ob es ein Thermostat oder Heizgerät ist
                 if ('thermostat' in device_type or
                     'heater' in device_type or
+                    domain == 'climate' or  # Homey climate devices
                     'target_temperature' in capabilities or
                     'measure_temperature' in capabilities):
                     heating_devices.append(device)
@@ -118,12 +126,14 @@ class HeatingDataCollector:
 
     def _collect_device_data(self, device: dict, outdoor_temp: Optional[float]) -> Optional[int]:
         """Sammelt Daten von einem einzelnen Heizgerät"""
-        device_id = device.get('id')
+        device_id = device.get('id') or device.get('entity_id')
         if not device_id:
             return None
 
-        # Extrahiere Daten
+        # Extrahiere Daten (unterstützt beide Formate)
         capabilities = device.get('capabilitiesObj', {})
+        if not capabilities:
+            capabilities = device.get('attributes', {}).get('capabilities', {})
 
         # Aktuelle Temperatur
         current_temp = None
@@ -154,7 +164,7 @@ class HeatingDataCollector:
 
         # Raum-Name aus Zone
         room_name = None
-        zone_id = device.get('zone')
+        zone_id = device.get('zone') or device.get('attributes', {}).get('zone')
         if zone_id and hasattr(self.engine, 'platform'):
             # Versuche Raum-Name zu holen
             try:
