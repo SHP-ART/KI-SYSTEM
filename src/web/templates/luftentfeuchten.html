@@ -14,6 +14,22 @@
         </a>
     </div>
 
+    <!-- Main Tab Navigation -->
+    <div class="main-tabs" style="margin-bottom: 20px;">
+        <button class="main-tab-btn active" data-main-tab="overview">
+            📊 Übersicht
+        </button>
+        <button class="main-tab-btn" data-main-tab="config">
+            ⚙️ Konfiguration
+        </button>
+        <button class="main-tab-btn" data-main-tab="info">
+            ℹ️ Info
+        </button>
+    </div>
+
+    <!-- Tab Content: Übersicht -->
+    <div class="main-tab-content active" id="main-tab-overview">
+
     <!-- Anomalie-Alerts (falls vorhanden) -->
     <div class="card alert-card" id="alerts-card" style="display: none; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-left: 4px solid #f59e0b;">
         <div style="display: flex; justify-content: space-between; align-items: start;">
@@ -252,6 +268,11 @@
             </small>
         </div>
     </div>
+
+    </div> <!-- End main-tab-overview -->
+
+    <!-- Tab Content: Konfiguration -->
+    <div class="main-tab-content" id="main-tab-config">
 
     <!-- Konfiguration -->
     <div class="card config-card">
@@ -548,6 +569,11 @@
         </div>
     </div>
 
+    </div> <!-- End main-tab-config -->
+
+    <!-- Tab Content: Info -->
+    <div class="main-tab-content" id="main-tab-info">
+
     <!-- Erklärung -->
     <div class="card info-card">
         <h3>ℹ️ Wie funktioniert's?</h3>
@@ -570,9 +596,65 @@
             </div>
         </div>
     </div>
+
+    </div> <!-- End main-tab-info -->
+
 </div>
 
 <style>
+/* Main Tab Navigation */
+.main-tabs {
+    display: flex;
+    gap: 10px;
+    border-bottom: 2px solid #e5e7eb;
+    padding-bottom: 0;
+}
+
+.main-tab-btn {
+    padding: 12px 24px;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    font-size: 1em;
+    font-weight: 500;
+    color: #6b7280;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    bottom: -2px;
+}
+
+.main-tab-btn:hover {
+    color: #3b82f6;
+    background: #eff6ff;
+}
+
+.main-tab-btn.active {
+    color: #3b82f6;
+    border-bottom-color: #3b82f6;
+    font-weight: 600;
+}
+
+.main-tab-content {
+    display: none;
+    animation: fadeIn 0.3s ease;
+}
+
+.main-tab-content.active {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 .sensor-live-card {
     background: white;
     border-radius: 8px;

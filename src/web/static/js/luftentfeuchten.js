@@ -8,6 +8,57 @@ let devicesCache = null;
 let devicesCacheTime = 0;
 const CACHE_DURATION = 60000; // 60 Sekunden Cache
 
+// ===== MAIN TAB NAVIGATION =====
+
+/**
+ * Initialisiere Tab-Navigation
+ */
+function initMainTabs() {
+    const tabButtons = document.querySelectorAll('.main-tab-btn');
+
+    tabButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const targetTab = button.dataset.mainTab;
+            switchMainTab(targetTab);
+        });
+    });
+}
+
+/**
+ * Wechsle zu einem bestimmten Tab
+ */
+function switchMainTab(tabName) {
+    // Entferne active Klasse von allen Buttons und Contents
+    document.querySelectorAll('.main-tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    document.querySelectorAll('.main-tab-content').forEach(content => {
+        content.classList.remove('active');
+    });
+
+    // Aktiviere den ausgewählten Tab
+    const activeButton = document.querySelector(`.main-tab-btn[data-main-tab="${tabName}"]`);
+    const activeContent = document.getElementById(`main-tab-${tabName}`);
+
+    if (activeButton) activeButton.classList.add('active');
+    if (activeContent) activeContent.classList.add('active');
+
+    // Speichere aktiven Tab in localStorage
+    localStorage.setItem('bathroom_active_main_tab', tabName);
+}
+
+/**
+ * Stelle letzten aktiven Tab wieder her
+ */
+function restoreLastMainTab() {
+    const lastTab = localStorage.getItem('bathroom_active_main_tab');
+    if (lastTab) {
+        switchMainTab(lastTab);
+    }
+}
+
+// ===== END MAIN TAB NAVIGATION =====
+
 // Lade alle Geräte und Räume (mit Caching)
 async function loadDevices() {
     try {
@@ -943,6 +994,10 @@ async function loadDataStats() {
 
 // Init
 document.addEventListener('DOMContentLoaded', async () => {
+    // Initialisiere Main Tabs
+    initMainTabs();
+    restoreLastMainTab();
+
     setupSliders();
     setupTabs();
     setupHeatingBoostToggle();
