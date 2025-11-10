@@ -271,7 +271,8 @@ function isWindowOpen(window) {
 async function loadOutdoorTemp() {
     try {
         const status = await fetchJSON('/api/status');
-        const outdoorTemp = status.outdoor_temperature;
+        // API gibt Temperatur unter temperature.outdoor zurück
+        const outdoorTemp = status.temperature?.outdoor;
         if (outdoorTemp !== undefined && outdoorTemp !== null) {
             document.getElementById('outdoor-temp').textContent = outdoorTemp.toFixed(1) + '°C';
         }
