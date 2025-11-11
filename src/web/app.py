@@ -2118,10 +2118,13 @@ class WebInterface:
                     if state:
                         caps = state.get('capabilitiesObj', {})
                         target_temp = caps.get('target_temperature', {}).get('value', None)
+                        current_temp = caps.get('measure_temperature', {}).get('value', None)
                         devices_status['heater'] = {
                             'id': device_id,
                             'name': state.get('name', device_id),
-                            'value': target_temp,
+                            'value': target_temp,  # SOLL-Temperatur
+                            'current_temp': current_temp,  # IST-Temperatur
+                            'target_temp': target_temp,  # SOLL-Temperatur (explizit)
                             'unit': '°C',
                             'available': state.get('available', True)
                         }

@@ -575,12 +575,25 @@ async function loadLiveSensorStatus() {
             const card = document.getElementById('live-heater-card');
             card.style.display = 'block';
             document.getElementById('live-heater-name').textContent = devices.heater.name;
-            const value = devices.heater.value;
-            if (value !== null && value !== undefined) {
-                document.getElementById('live-heater-value').textContent = `${value.toFixed(1)}°C`;
+
+            // IST und SOLL Temperatur anzeigen
+            const currentTemp = devices.heater.current_temp;
+            const targetTemp = devices.heater.target_temp;
+
+            let displayText = '';
+            if (currentTemp !== null && currentTemp !== undefined) {
+                displayText = `IST: ${currentTemp.toFixed(1)}°C`;
             } else {
-                document.getElementById('live-heater-value').textContent = '--';
+                displayText = 'IST: --°C';
             }
+
+            if (targetTemp !== null && targetTemp !== undefined) {
+                displayText += ` | SOLL: ${targetTemp.toFixed(1)}°C`;
+            } else {
+                displayText += ' | SOLL: --°C';
+            }
+
+            document.getElementById('live-heater-value').textContent = displayText;
             document.getElementById('live-heater-meta').textContent = devices.heater.available ? 'Online' : 'Offline';
         } else {
             document.getElementById('live-heater-card').style.display = 'none';
