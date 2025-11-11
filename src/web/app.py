@@ -2116,17 +2116,32 @@ class WebInterface:
                     device_id = config['heater_id']
                     state = self.engine.platform.get_state(device_id)
                     if state:
+                        # Capabilities können in verschiedenen Strukturen sein
                         caps = state.get('capabilitiesObj', {})
-                        target_temp = caps.get('target_temperature', {}).get('value', None)
-                        current_temp = caps.get('measure_temperature', {}).get('value', None)
+                        if not caps:
+                            # Alternative: attributes.capabilities (Homey)
+                            caps = state.get('attributes', {}).get('capabilities', {})
+
+                        target_temp = None
+                        current_temp = None
+
+                        if caps:
+                            target_temp_cap = caps.get('target_temperature', {})
+                            current_temp_cap = caps.get('measure_temperature', {})
+
+                            if isinstance(target_temp_cap, dict):
+                                target_temp = target_temp_cap.get('value')
+                            if isinstance(current_temp_cap, dict):
+                                current_temp = current_temp_cap.get('value')
+
                         devices_status['heater'] = {
                             'id': device_id,
-                            'name': state.get('name', device_id),
+                            'name': state.get('attributes', {}).get('friendly_name', state.get('name', device_id)),
                             'value': target_temp,  # SOLL-Temperatur
                             'current_temp': current_temp,  # IST-Temperatur
                             'target_temp': target_temp,  # SOLL-Temperatur (explizit)
                             'unit': '°C',
-                            'available': state.get('available', True)
+                            'available': state.get('attributes', {}).get('available', state.get('available', True))
                         }
 
                 return jsonify({'devices': devices_status})
