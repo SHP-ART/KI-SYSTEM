@@ -32,7 +32,7 @@ class BathroomOptimizer:
         self.running = False
         self.thread = None
         self.last_run = None
-        self.config_file = Path('data/bathroom_config.json')
+        self.config_file = Path('data/luftentfeuchten_config.json')
 
     def start(self):
         """Startet den Background-Prozess"""
