@@ -510,10 +510,21 @@
                     </small>
                 </div>
 
+                <div class="form-group">
+                    <label>Frostschutz-Temperatur (bei offenem Fenster)</label>
+                    <div class="slider-group">
+                        <input type="range" id="frost-protection-temp" min="5" max="15" value="12" step="0.5" class="slider">
+                        <span class="slider-value" id="frost-protection-temp-value">12°C</span>
+                    </div>
+                    <small style="color: #6b7280; margin-top: 4px; display: block;">
+                        Minimale Heiztemperatur bei offenem Fenster zum Schutz vor Frost
+                    </small>
+                </div>
+
                 <div style="background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 6px; padding: 12px; margin-top: 15px;">
                     <small style="color: #92400e;">
-                        <strong>⚠️ Sicherheit:</strong> Bei offenem Fenster wird die Heizung automatisch deaktiviert,
-                        unabhängig von diesen Einstellungen.
+                        <strong>⚠️ Sicherheit:</strong> Bei offenem Fenster wird die Heizung auf Frostschutz-Temperatur gestellt
+                        und der Luftentfeuchter deaktiviert (Energiesparen).
                     </small>
                 </div>
             </div>

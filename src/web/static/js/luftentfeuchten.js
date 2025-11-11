@@ -233,6 +233,7 @@ async function loadConfig() {
             // Heizung
             setSlider('target-temperature', config.target_temperature || 22);
             setSlider('heating-boost-delta', config.heating_boost_delta || 1);
+            setSlider('frost-protection-temp', config.frost_protection_temperature || 12);
             const heatingBoostEnabled = document.getElementById('heating-boost-enabled');
             if (heatingBoostEnabled) {
                 heatingBoostEnabled.checked = config.heating_boost_enabled !== false; // Default: true
@@ -288,6 +289,7 @@ async function saveConfig() {
             target_temperature: parseFloat(document.getElementById('target-temperature').value),
             heating_boost_enabled: document.getElementById('heating-boost-enabled').checked,
             heating_boost_delta: parseFloat(document.getElementById('heating-boost-delta').value),
+            frost_protection_temperature: parseFloat(document.getElementById('frost-protection-temp').value),
             // Energie-Werte (nur Luftentfeuchter, keine Heizung bei Zentralheizung)
             dehumidifier_wattage: parseFloat(document.getElementById('dehumidifier-wattage').value),
             energy_price_per_kwh: parseFloat(document.getElementById('energy-price').value)
