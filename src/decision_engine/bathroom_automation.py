@@ -51,6 +51,9 @@ class BathroomAutomation:
         self.heating_boost_enabled = config.get('heating_boost_enabled', True)
         self.heating_boost_delta = config.get('heating_boost_delta', 1.0)
 
+        # Frostschutztemperatur bei offenem Fenster
+        self.frost_protection_temp = config.get('frost_protection_temperature', 12.0)
+
         # Verzögerung bevor Luftentfeuchter ausschaltet
         self.dehumidifier_delay_minutes = config.get('dehumidifier_delay', 5)
 
@@ -66,7 +69,7 @@ class BathroomAutomation:
         if self.db and enable_learning:
             self._load_learned_parameters()
 
-        logger.info(f"Bathroom automation initialized: High={self.humidity_high}%, Low={self.humidity_low}%, Learning={enable_learning}")
+        logger.info(f"Bathroom automation initialized: High={self.humidity_high}%, Low={self.humidity_low}%, Target={self.target_temp}°C, Frost={self.frost_protection_temp}°C, Learning={enable_learning}")
 
     def process(self, platform, current_state: Dict) -> List[Dict]:
         """
@@ -88,9 +91,10 @@ class BathroomAutomation:
             logger.warning("No humidity sensor data available")
             return actions
 
-        # Sicherheitscheck: Bei offenem Fenster keine Automation
+        # Sicherheitscheck: Bei offenem Fenster Energiesparmodus
         if window_open:
-            logger.info("⚠️ Window is open - skipping heating and dehumidifier control")
+            logger.info("⚠️ Window is open - energy saving mode activated")
+
             # Schalte Luftentfeuchter aus wenn er läuft
             if self.dehumidifier_running:
                 dehumidifier_id = self.config.get('dehumidifier_id')
@@ -103,6 +107,21 @@ class BathroomAutomation:
                         'action': 'turn_off',
                         'reason': 'Window open - energy saving'
                     })
+
+            # Setze Heizung auf Frostschutztemperatur
+            heater_id = self.config.get('heater_id')
+            if heater_id and temperature is not None:
+                # Nur anpassen wenn Temperatur über Frostschutz + 0.5°C liegt
+                if temperature > self.frost_protection_temp + 0.5:
+                    logger.info(f"🌡️ Setting heating to frost protection ({self.frost_protection_temp}°C, window open)")
+                    self._log_device_action('heater', heater_id, 'set_temperature', 'Window open - frost protection', platform)
+                    actions.append({
+                        'device_id': heater_id,
+                        'action': 'set_temperature',
+                        'temperature': self.frost_protection_temp,
+                        'reason': 'Window open - frost protection'
+                    })
+
             return actions
 
         # Update Motion-Tracking

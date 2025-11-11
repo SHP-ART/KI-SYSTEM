@@ -1,5 +1,5 @@
 {
-  "enabled": false,
+  "enabled": true,
   "humidity_sensor_id": "40cf21f8-e419-410d-ac7b-28f11de88ba8",
   "temperature_sensor_id": "40cf21f8-e419-410d-ac7b-28f11de88ba8",
   "dehumidifier_id": "fc3d7dcc-bbc9-45b3-bcf8-2e9fd39d7470",
@@ -9,5 +9,6 @@
   "humidity_threshold_high": 70,
   "humidity_threshold_low": 60,
   "target_temperature": 22,
-  "dehumidifier_delay": 5
+  "dehumidifier_delay": 5,
+  "frost_protection_temperature": 12
 }
