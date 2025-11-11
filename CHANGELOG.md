@@ -2,6 +2,38 @@
 
 Alle wichtigen Änderungen am Projekt werden hier dokumentiert.
 
+## [0.9.5] - 2025-11-11
+
+### Hinzugefügt
+- **Frostschutz-Funktion für Badezimmer-Automation**
+  - Bei offenem Fenster: Heizung wird auf 12°C Frostschutztemperatur gestellt (statt komplett deaktiviert)
+  - Luftentfeuchter wird weiterhin deaktiviert für Energieeinsparung
+  - Konfigurierbare Frostschutztemperatur (`frost_protection_temperature` in Config)
+  - Verhindert Frostschäden an Rohren und Leitungen
+  - Automatische Aktivierung basierend auf Fenstersensor-Status
+- **Server Update Script** (`update_server.sh`)
+  - Automatisiertes Deployment-Script für Produktions-Server
+  - Führt `git pull`, stoppt/startet Web-App, testet APIs
+  - Validiert Konfiguration und neue Version
+  - Verbesserte Wartbarkeit und schnellere Updates
+
+### Geändert
+- **Badezimmer-Automation aktiviert** (enabled: true in Config)
+- Verbesserte Energie-Effizienz: Intelligente Heizungssteuerung bei offenem Fenster
+- Erweiterte Log-Ausgaben zeigen jetzt Target- und Frostschutztemperatur
+
+### Behoben
+- Badezimmer-Automation Sensor-Daten werden korrekt angezeigt
+- Web-Interface zeigt Live-Status für Luftfeuchtigkeit und Temperatur
+- Konfigurationsdateien werden bei Server-Updates korrekt aktualisiert
+
+### Technisch
+- `BathroomAutomation.__init__()`: Neuer Parameter `frost_protection_temp`
+- `BathroomAutomation.process()`: Verbesserte Fenster-Logik in Zeilen 94-125
+- `update_server.sh`: Production-ready Deployment-Script
+
+---
+
 ## [0.9.0] - 2025-11-09
 
 ### Hinzugefügt
