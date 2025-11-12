@@ -10,8 +10,10 @@ import time
 import json
 from pathlib import Path
 from datetime import datetime
+from typing import Dict, Optional
 from loguru import logger
 from src.utils.database import Database
+from src.decision_engine.bathroom_automation import BathroomAutomation
 
 
 class BathroomDataCollector:
@@ -34,8 +36,11 @@ class BathroomDataCollector:
         self.running = False
         self.thread = None
         self.last_collection = None
+        self._last_config_load = None
         self.db = Database()
         self.config = None
+        self.automation: Optional[BathroomAutomation] = None
+        self._config_hash = None
 
         # Lade Badezimmer-Konfiguration
         self._load_config()
@@ -47,11 +52,34 @@ class BathroomDataCollector:
             if config_file.exists():
                 with open(config_file, 'r') as f:
                     self.config = json.load(f)
+
+                config_hash = hash(json.dumps(self.config, sort_keys=True))
+                if config_hash != self._config_hash:
+                    self._config_hash = config_hash
+                    self._initialize_automation()
+
                 logger.debug("Bathroom config loaded for data collector")
             else:
                 logger.warning("No bathroom config found - data collector will wait for configuration")
+
+            self._last_config_load = datetime.now()
         except Exception as e:
             logger.error(f"Error loading bathroom config: {e}")
+
+    def _initialize_automation(self):
+        """Erstellt oder deaktiviert die Badezimmer-Automationsinstanz basierend auf der Config"""
+        if not self.config or not self.config.get('enabled', False):
+            if self.automation:
+                logger.info("Bathroom automation disabled via config - stopping automation controller")
+            self.automation = None
+            return
+
+        try:
+            self.automation = BathroomAutomation(self.config, enable_learning=True)
+            logger.info("Bathroom automation instance initialized for data collector")
+        except Exception as e:
+            logger.error(f"Failed to initialize bathroom automation: {e}")
+            self.automation = None
 
     def start(self):
         """Startet den Background-Prozess"""
@@ -101,10 +129,10 @@ class BathroomDataCollector:
 
     def _should_reload_config(self) -> bool:
         """Prüft ob Config neu geladen werden soll (alle 5 Minuten)"""
-        if not self.last_collection:
+        if not self._last_config_load:
             return False
 
-        minutes_since_last = (datetime.now() - self.last_collection).seconds / 60
+        minutes_since_last = (datetime.now() - self._last_config_load).seconds / 60
         return minutes_since_last >= 5
 
     def _collect_data(self):
@@ -149,11 +177,88 @@ class BathroomDataCollector:
                     temperature=temperature
                 )
                 logger.debug(f"Collected bathroom data: Humidity={humidity}%, Temp={temperature}°C")
+
+                # Führe direkt die Badezimmer-Automation aus, sobald valide Daten vorliegen
+                if self.config.get('enabled', False):
+                    self._run_automation(
+                        humidity=humidity,
+                        temperature=temperature
+                    )
             else:
                 logger.debug("No sensor values available")
 
         except Exception as e:
             logger.error(f"Error collecting bathroom data: {e}")
+
+    def _run_automation(self, humidity: Optional[float], temperature: Optional[float]):
+        """Startet die Badezimmer-Automationslogik und führt resultierende Aktionen aus"""
+        if not self.automation:
+            logger.trace("Bathroom automation not initialized - skipping automation run")
+            return
+
+        if not self.engine or not self.engine.platform:
+            logger.trace("No platform available for bathroom automation")
+            return
+
+        try:
+            current_state: Dict = {
+                'timestamp': datetime.now().isoformat(),
+                'humidity': humidity,
+                'temperature': temperature
+            }
+
+            actions = self.automation.process(self.engine.platform, current_state)
+
+            if not actions:
+                return
+
+            executed = 0
+            for action in actions:
+                if self._execute_action(action):
+                    executed += 1
+
+            logger.info(f"Bathroom automation executed {executed}/{len(actions)} action(s)")
+
+        except Exception as e:
+            logger.error(f"Error running bathroom automation: {e}")
+
+    def _execute_action(self, action: Dict) -> bool:
+        """Führt eine einzelne Automation-Aktion physisch aus"""
+        if not self.engine or not self.engine.platform:
+            return False
+
+        platform = self.engine.platform
+        device_id = action.get('device_id')
+        action_type = action.get('action')
+
+        if not device_id or not action_type:
+            logger.warning(f"Invalid bathroom action payload: {action}")
+            return False
+
+        try:
+            if action_type == 'turn_on':
+                success = platform.turn_on(device_id)
+            elif action_type == 'turn_off':
+                success = platform.turn_off(device_id)
+            elif action_type == 'set_temperature':
+                temperature = action.get('temperature')
+                if temperature is None:
+                    logger.warning(f"Missing temperature for set_temperature action on {device_id}")
+                    return False
+                success = platform.set_temperature(device_id, temperature)
+            else:
+                logger.warning(f"Unsupported bathroom action type: {action_type}")
+                return False
+
+            if success:
+                logger.info(f"Bathroom automation: {action_type} executed on {device_id}")
+            else:
+                logger.error(f"Bathroom automation failed: {action_type} on {device_id}")
+
+            return success
+        except Exception as e:
+            logger.error(f"Error executing bathroom action {action_type} on {device_id}: {e}")
+            return False
 
     def get_status(self) -> dict:
         """Gibt den aktuellen Status zurück"""
@@ -163,5 +268,6 @@ class BathroomDataCollector:
             'interval_seconds': self.interval_seconds,
             'config_loaded': self.config is not None,
             'humidity_sensor': self.config.get('humidity_sensor_id') if self.config else None,
-            'temperature_sensor': self.config.get('temperature_sensor_id') if self.config else None
+            'temperature_sensor': self.config.get('temperature_sensor_id') if self.config else None,
+            'automation_active': bool(self.automation) if self.config else False
         }

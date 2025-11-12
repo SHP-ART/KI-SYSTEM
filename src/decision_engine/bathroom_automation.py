@@ -80,12 +80,25 @@ class BathroomAutomation:
         """
         actions = []
 
-        # Hole Sensor-Werte
-        humidity = self._get_humidity(platform)
-        temperature = self._get_temperature(platform)
-        motion_detected = self._check_motion(platform)
-        door_closed = self._check_door(platform)
-        window_open = self._check_window(platform)
+        # Nutze übergebene Messwerte falls vorhanden (vermeidet doppelte API-Calls)
+        humidity = (current_state or {}).get('humidity')
+        if humidity is None:
+            humidity = self._get_humidity(platform)
+
+        temperature = (current_state or {}).get('temperature')
+        if temperature is None:
+            temperature = self._get_temperature(platform)
+        motion_detected = (current_state or {}).get('motion_detected')
+        if motion_detected is None:
+            motion_detected = self._check_motion(platform)
+
+        door_closed = (current_state or {}).get('door_closed')
+        if door_closed is None:
+            door_closed = self._check_door(platform)
+
+        window_open = (current_state or {}).get('window_open')
+        if window_open is None:
+            window_open = self._check_window(platform)
 
         if humidity is None:
             logger.warning("No humidity sensor data available")
