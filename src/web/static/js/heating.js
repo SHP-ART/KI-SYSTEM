@@ -12,7 +12,6 @@ let temperatureChart = null; // Chart.js Instanz für Temperaturverlauf
 // Lade alle Heizgeräte beim Seitenaufruf
 document.addEventListener('DOMContentLoaded', () => {
     loadHeaters();
-    loadWindows();
     loadHeatingMode();
     setupEventListeners();
     setupSliders();
@@ -36,7 +35,6 @@ function setupEventListeners() {
     // Refresh Button
     document.getElementById('refresh-heating')?.addEventListener('click', () => {
         loadHeaters();
-        loadWindows();
         loadWindowData();
         loadTemperatureHistory();
         loadOptimizationData(); // Immer laden
@@ -181,95 +179,6 @@ function updateStatistics() {
     document.getElementById('total-heaters').textContent = allHeaters.length;
     document.getElementById('active-heaters').textContent = activeHeaters;
     document.getElementById('avg-temp').textContent = avgTemp + (avgTemp !== '--' ? '°C' : '');
-}
-
-// Lade Fenster-Sensoren
-async function loadWindows() {
-    try {
-        const devicesData = await fetchJSON('/api/devices');
-        const allDevices = devicesData.devices || [];
-
-        // Filtere Fenster-Sensoren (contact sensors für Fenster/Türen)
-        allWindows = allDevices.filter(d => {
-            // Sensor domain mit contact class
-            if (d.domain === 'sensor' && d.attributes?.device_class === 'window') return true;
-            if (d.domain === 'binary_sensor' && d.attributes?.device_class === 'window') return true;
-            if (d.domain === 'binary_sensor' && d.attributes?.device_class === 'door') return true;
-
-            // Homey: contact alarm capability
-            if (d.capabilitiesObj?.alarm_contact !== undefined) return true;
-
-            // Name enthält "Fenster" oder "Window"
-            const name = (d.name || '').toLowerCase();
-            if (name.includes('fenster') || name.includes('window')) return true;
-
-            return false;
-        });
-
-        // Füge Raumnamen hinzu
-        allWindows.forEach(window => {
-            const zoneId = window.attributes?.zone || window.zone;
-            window.zoneName = zoneId ? zoneNameMap[zoneId] : 'Ohne Raum';
-        });
-
-        console.log('Filtered windows:', allWindows.length);
-        if (allWindows.length > 0) {
-            console.log('First window example:', allWindows[0]);
-        }
-
-        renderWindows();
-    } catch (error) {
-        console.error('Error loading windows:', error);
-        document.getElementById('windows-container').innerHTML =
-            '<div class="error">Fehler beim Laden der Fenster-Sensoren</div>';
-    }
-}
-
-// Rendere Fenster-Sensoren
-function renderWindows() {
-    const container = document.getElementById('windows-container');
-
-    if (allWindows.length === 0) {
-        container.innerHTML = '<div class="info-box">Keine Fenster-Sensoren gefunden.</div>';
-        return;
-    }
-
-    container.innerHTML = allWindows.map(window => createWindowCard(window)).join('');
-}
-
-// Erstelle Fenster-Karte
-function createWindowCard(window) {
-    const isOpen = isWindowOpen(window);
-    const windowName = window.name || window.id;
-    const zoneName = window.zoneName || 'Ohne Raum';
-
-    return `
-        <div class="window-card ${isOpen ? 'open' : 'closed'}">
-            <div class="window-icon">
-                ${isOpen ? '🪟' : '🟢'}
-            </div>
-            <div class="window-name">${windowName}</div>
-            <div class="window-status ${isOpen ? 'open' : 'closed'}">
-                ${isOpen ? '⚠️ Offen' : '✓ Geschlossen'}
-            </div>
-            <div class="window-room">🏠 ${zoneName}</div>
-        </div>
-    `;
-}
-
-// Prüfe ob Fenster offen ist
-function isWindowOpen(window) {
-    // State "on" bedeutet offen bei binary sensors
-    if (window.state === 'on' || window.state === 'open') return true;
-
-    // Homey: alarm_contact capability (true = offen)
-    if (window.capabilitiesObj?.alarm_contact?.value === true) return true;
-
-    // Home Assistant: state "on" oder "open"
-    const state = window.state?.state || window.state;
-    if (state === 'on' || state === 'open') return true;
-
-    return false;
 }
 
 // Lade Außentemperatur
