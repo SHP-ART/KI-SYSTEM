@@ -63,6 +63,7 @@ class BathroomAutomation:
         self.event_start_time = None
         self.dehumidifier_start_time = None
         self.humidity_below_threshold_since = None  # Zeitpunkt, wann Luftfeuchtigkeit unter Schwellwert gefallen ist
+        self._state_synced = False  # Flag ob States schon synchronisiert wurden
 
         # Datenbank für Lernsystem
         self.db = Database() if enable_learning else None
@@ -81,6 +82,11 @@ class BathroomAutomation:
             Liste von Aktionen die ausgeführt werden sollen
         """
         actions = []
+        
+        # Synchronisiere internen State mit tatsächlichem Geräte-Status (nur einmal beim ersten Aufruf)
+        if not self._state_synced:
+            self._sync_device_states(platform)
+            self._state_synced = True
 
         # Nutze übergebene Messwerte falls vorhanden (vermeidet doppelte API-Calls)
         humidity = (current_state or {}).get('humidity')
@@ -186,6 +192,33 @@ class BathroomAutomation:
             self._end_event(platform)
 
         return actions
+
+    def _sync_device_states(self, platform):
+        """
+        Synchronisiert internen State mit tatsächlichem Geräte-Status
+        Wird beim ersten process() Aufruf ausgeführt
+        """
+        # Prüfe Luftentfeuchter-Status
+        dehumidifier_id = self.config.get('dehumidifier_id')
+        if dehumidifier_id:
+            try:
+                device_state = platform.get_state(dehumidifier_id)
+                if device_state:
+                    caps = device_state.get('attributes', {}).get('capabilities', {})
+                    if 'onoff' in caps:
+                        actual_running = caps['onoff'].get('value', False)
+                        if actual_running != self.dehumidifier_running:
+                            logger.info(f"Syncing dehumidifier state: internal={self.dehumidifier_running}, actual={actual_running}")
+                            self.dehumidifier_running = actual_running
+                            # Wenn Gerät läuft und Luftfeuchtigkeit niedrig ist, starte den Countdown
+                            if actual_running:
+                                humidity = self._get_humidity(platform)
+                                if humidity and humidity < self.humidity_low:
+                                    if self.humidity_below_threshold_since is None:
+                                        self.humidity_below_threshold_since = datetime.now()
+                                        logger.info(f"Dehumidifier already running with low humidity - starting countdown")
+            except Exception as e:
+                logger.debug(f"Could not sync dehumidifier state: {e}")
 
     def _get_humidity(self, platform) -> Optional[float]:
         """Liest Luftfeuchtigkeit-Sensor"""
@@ -339,12 +372,13 @@ class BathroomAutomation:
             # Merke dir, wann Luftfeuchtigkeit unter Schwellwert gefallen ist
             if self.humidity_below_threshold_since is None:
                 self.humidity_below_threshold_since = datetime.now()
-                logger.debug(f"Humidity dropped below threshold, starting shutdown countdown")
+                logger.info(f"Humidity dropped below threshold ({humidity}%), starting {self.dehumidifier_delay_minutes} min shutdown countdown")
             
             # Prüfe ob Verzögerung abgelaufen ist
             minutes_since_below = (datetime.now() - self.humidity_below_threshold_since).seconds / 60
             if minutes_since_below < self.dehumidifier_delay_minutes:
-                logger.debug(f"Delaying dehumidifier shutdown ({minutes_since_below:.1f}/{self.dehumidifier_delay_minutes} min)")
+                remaining = self.dehumidifier_delay_minutes - minutes_since_below
+                logger.info(f"Delaying dehumidifier shutdown: {remaining:.1f} min remaining (humidity: {humidity}%)")
                 return None
 
             reason = f'Humidity normalized ({humidity}%)'
