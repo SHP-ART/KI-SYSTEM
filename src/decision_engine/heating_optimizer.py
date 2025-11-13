@@ -239,9 +239,13 @@ class HeatingOptimizer:
 
     def _analyze_temperature_patterns(self, observations: List[Dict]) -> Dict:
         """Analysiert Temperatur-Muster"""
-        target_temps = [obs['target_temperature'] for obs in observations if obs.get('target_temperature')]
-        current_temps = [obs['current_temperature'] for obs in observations if obs.get('current_temperature')]
-        outdoor_temps = [obs['outdoor_temperature'] for obs in observations if obs.get('outdoor_temperature')]
+        # Unterstütze beide Feldnamen (target_temp und target_temperature)
+        target_temps = [obs.get('target_temp') or obs.get('target_temperature') for obs in observations 
+                       if obs.get('target_temp') or obs.get('target_temperature')]
+        current_temps = [obs.get('current_temp') or obs.get('current_temperature') for obs in observations 
+                        if obs.get('current_temp') or obs.get('current_temperature')]
+        outdoor_temps = [obs.get('outdoor_temp') or obs.get('outdoor_temperature') for obs in observations 
+                        if obs.get('outdoor_temp') or obs.get('outdoor_temperature')]
 
         if not target_temps or not current_temps:
             return {'available': False}
@@ -275,12 +279,12 @@ class HeatingOptimizer:
         # Hohe Temperaturen ohne Anwesenheit
         high_temp_no_presence = sum(1 for obs in observations
                                    if not obs.get('presence_detected')
-                                   and obs.get('target_temperature', 0) > 20.0)
+                                   and (obs.get('target_temp', 0) or obs.get('target_temperature', 0)) > 20.0)
 
         # Nächtliche Überheizung (22-06 Uhr, über 19°C)
         night_overheating = sum(1 for obs in observations
                                if 22 <= obs.get('hour_of_day', 12) or obs.get('hour_of_day', 12) < 6
-                               and obs.get('target_temperature', 0) > 19.0)
+                               and (obs.get('target_temp', 0) or obs.get('target_temperature', 0)) > 19.0)
 
         total_obs = len(observations)
 
@@ -379,7 +383,7 @@ class HeatingOptimizer:
         inefficiencies = patterns.get('inefficiencies', {})
         night_overheating = inefficiencies.get('night_overheating', {})
 
-        if night_overheating.get('percentage', 0) > 20:  # Mehr als 20% der Nacht-Beobachtungen über 19°C
+        if night_overheating.get('percentage', 0) > 5:  # Mehr als 5% der Nacht-Beobachtungen über 19°C
             # Berechne Einsparpotenzial (grobe Schätzung)
             # 2°C Reduktion nachts (8h) = ca. 10-15% Ersparnis
             saving_percent = 12.0
@@ -404,7 +408,7 @@ class HeatingOptimizer:
         inefficiencies = patterns.get('inefficiencies', {})
         window_heating = inefficiencies.get('window_open_heating', {})
 
-        if window_heating.get('count', 0) > 10:
+        if window_heating.get('count', 0) > 3:  # Mehr als 3 Ereignisse
             # Heizen bei offenem Fenster ist sehr ineffizient (30-50% Verlust)
             saving_percent = 30.0
             # Annahme: 5% der Zeit wird mit offenem Fenster geheizt
@@ -556,3 +560,141 @@ class HeatingOptimizer:
                 )
 
         return schedule
+
+    def generate_insights_per_room(self, days_back: int = 14) -> Dict[str, List[Dict]]:
+        """
+        Generiert Optimierungsvorschläge für jeden Raum einzeln
+        
+        Returns:
+            Dictionary mit room_name als Key und Liste von Insights als Value
+            {
+                'Wohnzimmer': [insight1, insight2, ...],
+                'Schlafzimmer': [insight1, ...],
+                ...
+            }
+        """
+        conn = self.db._get_connection()
+        cursor = conn.cursor()
+        
+        # Hole alle Räume mit Daten
+        cursor.execute("""
+            SELECT DISTINCT room_name
+            FROM heating_observations
+            WHERE room_name IS NOT NULL
+            AND timestamp >= ?
+        """, (datetime.now() - timedelta(days=days_back),))
+        
+        rooms = [row[0] for row in cursor.fetchall()]
+        
+        if not rooms:
+            logger.warning("Keine Räume mit Heizungsdaten gefunden")
+            return {}
+        
+        logger.info(f"Analysiere {len(rooms)} Räume für Insights")
+        
+        room_insights = {}
+        
+        for room_name in rooms:
+            insights = self._generate_room_insights(room_name, days_back)
+            if insights:
+                room_insights[room_name] = insights
+        
+        return room_insights
+    
+    def _generate_room_insights(self, room_name: str, days_back: int = 14) -> List[Dict]:
+        """Generiert Insights für einen spezifischen Raum"""
+        conn = self.db._get_connection()
+        cursor = conn.cursor()
+        
+        # Hole Daten für diesen Raum
+        cursor.execute("""
+            SELECT 
+                current_temp, target_temp, is_heating, 
+                hour_of_day, day_of_week, humidity
+            FROM heating_observations
+            WHERE room_name = ?
+            AND timestamp >= ?
+            ORDER BY timestamp DESC
+        """, (room_name, datetime.now() - timedelta(days=days_back)))
+        
+        observations = [dict(row) for row in cursor.fetchall()]
+        
+        if len(observations) < 50:  # Mindestens 50 Messungen
+            return []
+        
+        insights = []
+        
+        # Analyse 1: Durchschnittstemperatur
+        avg_target = statistics.mean([o.get('target_temp', 0) or 0 for o in observations if o.get('target_temp')])
+        
+        if avg_target > 21.0:
+            temp_reduction = round(avg_target - 21.0, 1)
+            saving_percent = temp_reduction * 6  # 6% pro Grad
+            saving_eur = self.heating_cost_per_degree_per_day * temp_reduction * 30
+            
+            insights.append({
+                'type': 'room_temperature_optimization',
+                'icon': '🌡️',
+                'title': f'{room_name}: Temperatur senken',
+                'recommendation': f'Reduziere Durchschnittstemperatur um {temp_reduction}°C auf 21°C',
+                'saving_percent': round(saving_percent, 1),
+                'saving_eur': round(saving_eur, 2),
+                'confidence': 0.70,
+                'priority': 'medium',
+                'room_name': room_name,
+                'details': f'Aktuelle Ø Temperatur: {avg_target:.1f}°C'
+            })
+        
+        # Analyse 2: Nächtliche Überheizung (22-06 Uhr)
+        night_obs = [o for o in observations 
+                     if o.get('hour_of_day', 12) >= 22 or o.get('hour_of_day', 12) < 6]
+        
+        if night_obs:
+            night_overheating = sum(1 for o in night_obs if (o.get('target_temp') or 0) > 19.0)
+            night_percentage = (night_overheating / len(night_obs) * 100) if night_obs else 0
+            
+            if night_percentage > 5:
+                insights.append({
+                    'type': 'room_night_reduction',
+                    'icon': '🌙',
+                    'title': f'{room_name}: Nachtabsenkung',
+                    'recommendation': f'Reduziere Nachttemperatur um 2°C auf 17-18°C',
+                    'saving_percent': 8.0,
+                    'saving_eur': round(self.heating_cost_per_degree_per_day * 2 * 8, 2),  # Pro Monat, nur dieser Raum
+                    'confidence': 0.75,
+                    'priority': 'high',
+                    'room_name': room_name,
+                    'details': f'In {night_percentage:.1f}% der Nächte wird über 19°C geheizt'
+                })
+        
+        # Analyse 3: Heizaktivität
+        heating_percent = (sum(1 for o in observations if o.get('is_heating')) / len(observations) * 100)
+        
+        if heating_percent > 80:
+            insights.append({
+                'type': 'room_high_activity',
+                'icon': '🔥',
+                'title': f'{room_name}: Hohe Heizaktivität',
+                'recommendation': f'Raum heizt sehr häufig ({heating_percent:.1f}%). Prüfe Isolierung oder Thermostat-Position.',
+                'saving_percent': 10.0,
+                'saving_eur': round(self.heating_cost_per_degree_per_day * 30 * 0.1, 2),
+                'confidence': 0.60,
+                'priority': 'low',
+                'room_name': room_name,
+                'details': f'Heizung aktiv in {heating_percent:.1f}% der Messungen'
+            })
+        
+        # Speichere Insights in DB
+        for insight in insights:
+            self.db.add_heating_insight(
+                insight_type=insight['type'],
+                recommendation=insight['recommendation'],
+                saving_percent=insight.get('saving_percent'),
+                saving_eur=insight.get('saving_eur'),
+                confidence=insight.get('confidence', 0.7),
+                samples=len(observations),
+                priority=insight.get('priority', 'medium'),
+                room_name=room_name
+            )
+        
+        return insights

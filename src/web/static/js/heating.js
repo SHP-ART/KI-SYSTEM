@@ -24,10 +24,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Lade Temperaturverlauf (immer)
     loadTemperatureHistory();
 
-    // Lade Optimierungsdaten wenn im Monitoring-Modus
-    if (currentMode === 'optimization') {
-        loadOptimizationData();
-    }
+    // Lade Optimierungsdaten (immer, unabhängig vom Modus)
+    loadOptimizationData();
 
     // Lade Heizungs-Analytics
     loadHeatingAnalytics();
@@ -41,9 +39,7 @@ function setupEventListeners() {
         loadWindows();
         loadWindowData();
         loadTemperatureHistory();
-        if (currentMode === 'optimization') {
-            loadOptimizationData();
-        }
+        loadOptimizationData(); // Immer laden
     });
 
     // Filter
@@ -933,15 +929,20 @@ function renderStatistics(stats) {
         console.log('Heating active:', heatingPercent + '%');
     }
 
-    // Update Monitoring-Status (nur im Monitoring-Modus sichtbar)
-    if (currentMode === 'optimization') {
-        // Beobachtungen
-        const observationsCount = stats.heating?.total_observations || 0;
-        document.getElementById('monitoring-observations-count').textContent = observationsCount;
+    // Update Monitoring-Status (immer anzeigen, Daten direkt aus stats)
+    // Beobachtungen
+    const observationsCount = stats.total_observations || 0;
+    const observationsEl = document.getElementById('monitoring-observations-count');
+    if (observationsEl) {
+        observationsEl.textContent = observationsCount;
+    }
 
-        // Daten-Zeitraum
-        const dataDays = stats.period_days || 0;
-        document.getElementById('monitoring-data-days').textContent = dataDays > 0 ? dataDays + ' Tage' : 'Keine Daten';
+    // Daten-Zeitraum (berechne aus Datenbank)
+    // Wenn wir Beobachtungen haben, zeige mindestens den letzten Tag
+    const dataDays = stats.period_days || (observationsCount > 0 ? Math.ceil(observationsCount / 96) : 0);
+    const dataDaysEl = document.getElementById('monitoring-data-days');
+    if (dataDaysEl) {
+        dataDaysEl.textContent = dataDays > 0 ? dataDays + ' Tage' : 'Keine Daten';
     }
 }
 

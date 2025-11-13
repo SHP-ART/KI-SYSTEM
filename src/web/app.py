@@ -2641,6 +2641,20 @@ class WebInterface:
                     logger.info("No insights found in DB, generating new ones")
                     insights = optimizer.generate_insights(days_back=days_back)
 
+                # Füge Icon und Title basierend auf insight_type hinzu
+                type_info = {
+                    'night_reduction': {'icon': '🌙', 'title': 'Nachtabsenkung'},
+                    'window_warning': {'icon': '⚠️', 'title': 'Fenster-Heizung'},
+                    'temperature_optimization': {'icon': '🌡️', 'title': 'Temperatur-Optimierung'},
+                    'weekend_optimization': {'icon': '📅', 'title': 'Wochenend-Heizplan'}
+                }
+                
+                for insight in insights:
+                    insight_type = insight.get('insight_type')
+                    if insight_type in type_info:
+                        insight['icon'] = type_info[insight_type]['icon']
+                        insight['title'] = type_info[insight_type]['title']
+
                 return jsonify({
                     'success': True,
                     'insights': insights,
@@ -2649,6 +2663,46 @@ class WebInterface:
 
             except Exception as e:
                 logger.error(f"Error getting heating insights: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @self.app.route('/api/heating/insights/rooms')
+        def api_heating_insights_per_room():
+            """Hole raumbasierte KI-Insights"""
+            try:
+                from src.decision_engine.heating_optimizer import HeatingOptimizer
+
+                optimizer = HeatingOptimizer(db=self.db)
+                days_back = int(request.args.get('days', 14))
+
+                # Generiere raumbasierte Insights
+                room_insights = optimizer.generate_insights_per_room(days_back=days_back)
+                
+                # Füge Icon und Title hinzu
+                type_info = {
+                    'room_temperature_optimization': {'icon': '🌡️', 'title': 'Temperatur-Optimierung'},
+                    'room_night_reduction': {'icon': '🌙', 'title': 'Nachtabsenkung'},
+                    'room_high_activity': {'icon': '🔥', 'title': 'Hohe Heizaktivität'}
+                }
+                
+                # Formatiere für Frontend
+                formatted_insights = []
+                for room_name, insights in room_insights.items():
+                    for insight in insights:
+                        insight_type = insight.get('type')
+                        if insight_type in type_info and 'icon' not in insight:
+                            insight['icon'] = type_info[insight_type]['icon']
+                        formatted_insights.append(insight)
+
+                return jsonify({
+                    'success': True,
+                    'insights_by_room': room_insights,
+                    'insights_flat': formatted_insights,
+                    'room_count': len(room_insights),
+                    'total_insights': len(formatted_insights)
+                })
+
+            except Exception as e:
+                logger.error(f"Error getting room insights: {e}")
                 return jsonify({'error': str(e)}), 500
 
         @self.app.route('/api/heating/patterns')

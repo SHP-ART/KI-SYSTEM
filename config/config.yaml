@@ -3,7 +3,7 @@
 # Smart Home Platform Auswahl
 # Unterstützt: "homeassistant" oder "homey"
 platform:
-  type: "homeassistant"  # oder "homey" für Homey Pro
+  type: "homey"  # oder "homeassistant" für Home Assistant
 
 # Home Assistant Verbindung
 # Nur relevant wenn platform.type = "homeassistant"
