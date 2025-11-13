@@ -73,12 +73,31 @@ class WindowDataCollector:
             return
 
         try:
-            # Hole alle Geräte
-            all_states = self.engine.platform.get_states()
+            # Hole alle Geräte direkt aus dem Cache
+            all_devices = []
+            
+            if hasattr(self.engine.platform, '_device_cache'):
+                # Homey verwendet _device_cache
+                self.engine.platform._refresh_device_cache()
+                cache = self.engine.platform._device_cache
+                if isinstance(cache, dict):
+                    all_devices = list(cache.values())
+                elif isinstance(cache, list):
+                    all_devices = cache
+            else:
+                # Fallback: Versuche get_states()
+                states = self.engine.platform.get_states()
+                if isinstance(states, list):
+                    all_devices = states
+            
+            if not all_devices:
+                logger.debug("No devices found for window data collection")
+                return
+                
             window_devices = []
 
             # Filtere nach Fenster-Kontakten und Türen
-            for device in all_states:
+            for device in all_devices:
                 # Skip wenn device kein Dictionary ist
                 if not isinstance(device, dict):
                     continue
@@ -108,7 +127,7 @@ class WindowDataCollector:
                 except Exception as e:
                     logger.error(f"Error collecting data from device {device.get('id')}: {e}")
 
-            logger.debug(f"Collected window data from {collected_count}/{len(window_devices)} devices")
+            logger.info(f"Collected window data from {collected_count}/{len(window_devices)} devices")
 
         except Exception as e:
             logger.error(f"Error in window data collection: {e}")
