@@ -1,10 +1,12 @@
 """
 Window Data Collector - Kontinuierliche Fenster-Status-Sammlung
 
-Sammelt alle 60 Sekunden Daten von allen Fenstern/Türen für Heizungsoptimierung:
+Sammelt alle 60 Sekunden Daten von allen Fenstern für Heizungsoptimierung und Lüftungsstatistik:
 - Fenster offen/geschlossen
 - Raum-Zuordnung
 - Alarme
+
+Hinweis: Türen werden explizit NICHT erfasst, nur Fenster!
 """
 
 import threading
@@ -16,7 +18,7 @@ from src.utils.database import Database
 
 
 class WindowDataCollector:
-    """Sammelt kontinuierlich Fenster-Status für Heizungsoptimierung"""
+    """Sammelt kontinuierlich Fenster-Status für Heizungsoptimierung und Lüftungsstatistik (nur Fenster, keine Türen)"""
 
     def __init__(self, engine=None, interval_seconds: int = 60):  # 60 Sekunden = 1 Minute
         """
@@ -96,7 +98,7 @@ class WindowDataCollector:
                 
             window_devices = []
 
-            # Filtere nach Fenster-Kontakten und Türen
+            # Filtere nur nach Fenstern (KEINE Türen)
             for device in all_devices:
                 # Skip wenn device kein Dictionary ist
                 if not isinstance(device, dict):
@@ -106,18 +108,22 @@ class WindowDataCollector:
                 device_name = device.get('name', '').lower()
                 capabilities = device.get('capabilitiesObj', {})
 
-                # Prüfe ob es ein Fenster/Tür-Sensor ist
-                if ('sensor' in device_class and
-                    ('alarm_contact' in capabilities or 'windowcoverings_state' in capabilities)) or \
-                   ('window' in device_name or 'fenster' in device_name or
-                    'door' in device_name or 'tür' in device_name or 'tur' in device_name):
+                # Prüfe ob es ein Fenster-Sensor ist (aber KEINE Tür)
+                # Explizit Türen ausschließen
+                is_door = ('door' in device_name or 'tür' in device_name or 
+                          'tur' in device_name or 'türe' in device_name)
+                
+                is_window = ('window' in device_name or 'fenster' in device_name)
+                
+                # Nur Fenster, keine Türen
+                if not is_door and is_window and 'alarm_contact' in capabilities:
                     window_devices.append(device)
 
             if not window_devices:
                 logger.debug("No window devices found for data collection")
                 return
 
-            # Sammle Daten von jedem Fenster/Tür
+            # Sammle Daten von jedem Fenster (keine Türen)
             collected_count = 0
             for device in window_devices:
                 try:
@@ -127,13 +133,13 @@ class WindowDataCollector:
                 except Exception as e:
                     logger.error(f"Error collecting data from device {device.get('id')}: {e}")
 
-            logger.info(f"Collected window data from {collected_count}/{len(window_devices)} devices")
+            logger.info(f"Collected window data from {collected_count}/{len(window_devices)} window devices")
 
         except Exception as e:
             logger.error(f"Error in window data collection: {e}")
 
     def _collect_device_data(self, device: dict) -> Optional[int]:
-        """Sammelt Daten von einem einzelnen Fenster/Tür"""
+        """Sammelt Daten von einem einzelnen Fenster"""
         device_id = device.get('id')
         if not device_id:
             return None
