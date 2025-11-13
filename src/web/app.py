@@ -1855,16 +1855,23 @@ class WebInterface:
                     bathroom_status_cache['timestamp'] = now
                     return jsonify(result)
 
-                # Prüfe ob Config geändert wurde (Hash vergleichen)
-                config_hash = hash(json.dumps(config, sort_keys=True))
+                # Verwende die Automation-Instanz vom BathroomDataCollector wenn verfügbar
+                # (diese hat den korrekten State inkl. humidity_below_threshold_since)
+                bathroom = None
+                if self.bathroom_collector and self.bathroom_collector.automation:
+                    bathroom = self.bathroom_collector.automation
+                else:
+                    # Fallback: Prüfe ob Config geändert wurde (Hash vergleichen)
+                    config_hash = hash(json.dumps(config, sort_keys=True))
 
-                if bathroom_instance_cache['config_hash'] != config_hash:
-                    # Config hat sich geändert, neue Instanz erstellen
-                    bathroom_instance_cache['instance'] = BathroomAutomation(config)
-                    bathroom_instance_cache['config_hash'] = config_hash
+                    if bathroom_instance_cache['config_hash'] != config_hash:
+                        # Config hat sich geändert, neue Instanz erstellen
+                        bathroom_instance_cache['instance'] = BathroomAutomation(config)
+                        bathroom_instance_cache['config_hash'] = config_hash
 
-                # Verwende gecachte Instanz
-                bathroom = bathroom_instance_cache['instance']
+                    # Verwende gecachte Instanz
+                    bathroom = bathroom_instance_cache['instance']
+                
                 status = bathroom.get_status(self.engine.platform)
 
                 result = {'status': status}
