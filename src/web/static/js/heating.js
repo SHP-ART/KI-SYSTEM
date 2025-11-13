@@ -1245,7 +1245,105 @@ async function fetchJSON(url) {
 // ===== FENSTER-STATUS FUNKTIONEN =====
 
 /**
- * Lädt und zeigt aktuell geöffnete Fenster
+ * Lädt und zeigt ALLE Fenster mit ihrem aktuellen Status
+ */
+async function loadAllWindowStatuses() {
+    try {
+        const response = await fetchJSON('/api/heating/windows/all');
+
+        const container = document.getElementById('all-windows-container');
+
+        if (!response.data || response.data.length === 0) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 20px; background: #f3f4f6; border-radius: 8px;">
+                    <div style="font-size: 2em; margin-bottom: 10px;">🪟</div>
+                    <p style="margin: 0; color: #6b7280;">Keine Fenster-Sensoren gefunden</p>
+                </div>
+            `;
+            return;
+        }
+
+        // Zähle offene Fenster
+        const openWindows = response.data.filter(w => w.is_open);
+        const closedWindows = response.data.filter(w => !w.is_open);
+
+        // Header mit Zusammenfassung
+        let headerHTML = '';
+        if (openWindows.length > 0) {
+            headerHTML = `
+                <div style="margin-bottom: 15px; padding: 12px; background: #fef3c7; border-radius: 8px; border-left: 4px solid #f59e0b;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 1.5em;">⚠️</span>
+                        <div>
+                            <strong style="color: #92400e;">${openWindows.length} Fenster offen</strong>
+                            <div style="font-size: 0.85em; color: #6b7280; margin-top: 3px;">
+                                Heizleistung kann beeinträchtigt sein
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else {
+            headerHTML = `
+                <div style="margin-bottom: 15px; padding: 12px; background: #f0fdf4; border-radius: 8px; border-left: 4px solid #10b981;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 1.5em;">✅</span>
+                        <div>
+                            <strong style="color: #065f46;">Alle Fenster geschlossen</strong>
+                            <div style="font-size: 0.85em; color: #6b7280; margin-top: 3px;">
+                                Optimale Bedingungen für Heizung
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Zeige alle Fenster in einem Grid
+        const windowsHTML = response.data.map(window => {
+            const isOpen = window.is_open;
+            const icon = isOpen ? '🔴' : '🟢';
+            const statusText = isOpen ? '⚠️ Geöffnet' : '✓ Geschlossen';
+            const bgColor = isOpen ? '#fef3c7' : '#f0fdf4';
+            const borderColor = isOpen ? '#f59e0b' : '#10b981';
+            const textColor = isOpen ? '#92400e' : '#065f46';
+
+            return `
+                <div style="padding: 15px; background: ${bgColor}; border-radius: 8px; border: 1px solid ${borderColor};">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                        <span style="font-size: 1.5em;">${icon}</span>
+                        <div style="flex: 1;">
+                            <div style="font-weight: 600; color: #1f2937;">${window.device_name}</div>
+                            <div style="font-size: 0.85em; color: ${textColor}; font-weight: 600;">${statusText}</div>
+                        </div>
+                    </div>
+                    <div style="font-size: 0.75em; color: #6b7280; display: flex; align-items: center; gap: 5px;">
+                        <span>🏠</span>
+                        <span>${window.room_name || 'Ohne Raum'}</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        container.innerHTML = `
+            ${headerHTML}
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px;">
+                ${windowsHTML}
+            </div>
+        `;
+
+    } catch (error) {
+        console.error('Error loading all window statuses:', error);
+        document.getElementById('all-windows-container').innerHTML = `
+            <div class="error" style="padding: 15px; background: #fee2e2; border-radius: 8px; color: #991b1b;">
+                ❌ Fehler beim Laden der Fensterdaten: ${error.message}
+            </div>
+        `;
+    }
+}
+
+/**
+ * Lädt und zeigt aktuell geöffnete Fenster (Legacy - nicht mehr genutzt)
  */
 async function loadCurrentOpenWindows() {
     try {
@@ -1394,6 +1492,6 @@ async function loadWindowStatistics() {
  * Lädt alle Fenster-Daten
  */
 function loadWindowData() {
-    loadCurrentOpenWindows();
+    loadAllWindowStatuses();
     loadWindowStatistics();
 }

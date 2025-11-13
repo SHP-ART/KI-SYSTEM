@@ -2946,6 +2946,22 @@ class WebInterface:
 
         # ===== Window Status Endpoints =====
 
+        @self.app.route('/api/heating/windows/all')
+        def api_heating_windows_all():
+            """Hole alle Fenster mit ihrem aktuellen Status"""
+            try:
+                windows = self.db.get_all_windows_latest_status()
+
+                return jsonify({
+                    'success': True,
+                    'data': windows,
+                    'count': len(windows)
+                })
+
+            except Exception as e:
+                logger.error(f"Error getting all window statuses: {e}")
+                return jsonify({'error': str(e)}), 500
+
         @self.app.route('/api/heating/windows/current')
         def api_heating_windows_current():
             """Hole alle aktuell geöffneten Fenster mit Dauer"""
@@ -3820,7 +3836,7 @@ class WebInterface:
 
         return trends
 
-    def run(self, host='0.0.0.0', port=5000, debug=False):
+    def run(self, host='0.0.0.0', port=8080, debug=False):
         """Starte den Web-Server"""
         logger.info(f"Starting web interface on http://{host}:{port}")
 

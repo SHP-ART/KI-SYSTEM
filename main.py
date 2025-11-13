@@ -228,8 +228,8 @@ Konfiguration:
     parser.add_argument(
         '--port',
         type=int,
-        default=5000,
-        help='Port für Web-Interface (default: 5000)'
+        default=8080,
+        help='Port für Web-Interface (default: 8080)'
     )
 
     parser.add_argument(

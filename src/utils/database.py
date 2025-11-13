@@ -1393,6 +1393,51 @@ class Database:
 
         return [dict(row) for row in cursor.fetchall()]
 
+    def get_all_windows_latest_status(self) -> List[Dict]:
+        """Holt den letzten bekannten Status aller Fenster (filtert Türen/Sensoren)"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        # Hole die letzte Beobachtung pro Fenster
+        # Filtere nur echte Fenster (entferne Türen, Temperatursensoren, etc.)
+        cursor.execute("""
+            WITH latest_obs AS (
+                SELECT
+                    device_id,
+                    device_name,
+                    room_name,
+                    is_open,
+                    contact_alarm,
+                    timestamp,
+                    ROW_NUMBER() OVER (PARTITION BY device_id ORDER BY timestamp DESC) as rn
+                FROM window_observations
+                WHERE (
+                    LOWER(device_name) LIKE '%fenster%'
+                    OR LOWER(device_name) LIKE '%window%'
+                )
+                AND NOT (
+                    LOWER(device_name) LIKE '%tür%'
+                    OR LOWER(device_name) LIKE '%door%'
+                    OR LOWER(device_name) LIKE '%temperatur%'
+                    OR LOWER(device_name) LIKE '%temperature%'
+                    OR LOWER(device_name) LIKE '%gruppe%'
+                    OR LOWER(device_name) LIKE '%group%'
+                )
+            )
+            SELECT
+                device_id,
+                device_name,
+                room_name,
+                is_open,
+                contact_alarm,
+                timestamp
+            FROM latest_obs
+            WHERE rn = 1
+            ORDER BY device_name ASC
+        """)
+
+        return [dict(row) for row in cursor.fetchall()]
+
     def get_window_observations(self, hours_back: int = 24, device_id: str = None,
                                 room_name: str = None) -> List[Dict]:
         """Holt Fenster-Beobachtungen für Analytics"""
