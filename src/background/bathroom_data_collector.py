@@ -180,10 +180,13 @@ class BathroomDataCollector:
 
                 # Führe direkt die Badezimmer-Automation aus, sobald valide Daten vorliegen
                 if self.config.get('enabled', False):
+                    logger.debug(f"Running automation with humidity={humidity}%, temp={temperature}°C")
                     self._run_automation(
                         humidity=humidity,
                         temperature=temperature
                     )
+                else:
+                    logger.debug("Bathroom automation disabled in config")
             else:
                 logger.debug("No sensor values available")
 
@@ -193,11 +196,11 @@ class BathroomDataCollector:
     def _run_automation(self, humidity: Optional[float], temperature: Optional[float]):
         """Startet die Badezimmer-Automationslogik und führt resultierende Aktionen aus"""
         if not self.automation:
-            logger.trace("Bathroom automation not initialized - skipping automation run")
+            logger.warning("Bathroom automation not initialized - skipping automation run")
             return
 
         if not self.engine or not self.engine.platform:
-            logger.trace("No platform available for bathroom automation")
+            logger.warning("No platform available for bathroom automation")
             return
 
         try:
@@ -207,11 +210,16 @@ class BathroomDataCollector:
                 'temperature': temperature
             }
 
+            logger.debug(f"Running bathroom automation: humidity={humidity}%, temperature={temperature}°C")
+            
             actions = self.automation.process(self.engine.platform, current_state)
 
             if not actions:
+                logger.debug("No bathroom automation actions needed")
                 return
 
+            logger.info(f"Bathroom automation generated {len(actions)} action(s)")
+            
             executed = 0
             for action in actions:
                 if self._execute_action(action):

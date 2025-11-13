@@ -8,6 +8,10 @@ let devicesCache = null;
 let devicesCacheTime = 0;
 const CACHE_DURATION = 60000; // 60 Sekunden Cache
 
+// Countdown Timer
+let countdownInterval = null;
+let countdownSeconds = 0;
+
 // ===== MAIN TAB NAVIGATION =====
 
 /**
@@ -333,12 +337,32 @@ async function loadStatus() {
             }
 
             // Luftentfeuchter
+            const countdownDiv = document.getElementById('dehumidifier-countdown');
             if (status.dehumidifier_running) {
                 document.getElementById('dehumidifier-status').textContent = 'An';
                 document.getElementById('dehumidifier-status-icon').textContent = '💨';
+                
+                // Prüfe ob Countdown angezeigt werden soll
+                if (status.dehumidifier_shutdown_in_seconds && status.dehumidifier_shutdown_in_seconds > 0) {
+                    updateCountdown(status.dehumidifier_shutdown_in_seconds);
+                    countdownDiv.style.display = 'block';
+                } else if (status.current_humidity !== null && status.thresholds) {
+                    const humidityLow = status.thresholds.humidity_low;
+                    if (status.current_humidity < humidityLow) {
+                        // Luftfeuchtigkeit unter Schwellwert - wird bald ausschalten
+                        // Fallback: Zeige 5 Minuten wenn Backend keine Zeit liefert
+                        updateCountdown(300);
+                        countdownDiv.style.display = 'block';
+                    } else {
+                        countdownDiv.style.display = 'none';
+                    }
+                } else {
+                    countdownDiv.style.display = 'none';
+                }
             } else {
                 document.getElementById('dehumidifier-status').textContent = 'Aus';
                 document.getElementById('dehumidifier-status-icon').textContent = '⏸️';
+                countdownDiv.style.display = 'none';
             }
 
             // Luftfeuchtigkeit
@@ -1110,3 +1134,43 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Auto-refresh Live-Sensoren alle 5 Sekunden
     liveSensorInterval = setInterval(loadLiveSensorStatus, 5000);
 });
+
+// ===== COUNTDOWN TIMER =====
+
+/**
+ * Startet oder aktualisiert den Countdown-Timer
+ */
+function updateCountdown(seconds) {
+    countdownSeconds = seconds;
+    
+    // Stoppe vorherigen Countdown falls vorhanden
+    if (countdownInterval) {
+        clearInterval(countdownInterval);
+    }
+    
+    // Zeige initialen Wert
+    displayCountdown();
+    
+    // Starte neuen Countdown
+    countdownInterval = setInterval(() => {
+        countdownSeconds--;
+        
+        if (countdownSeconds <= 0) {
+            clearInterval(countdownInterval);
+            countdownInterval = null;
+            document.getElementById('dehumidifier-countdown').style.display = 'none';
+        } else {
+            displayCountdown();
+        }
+    }, 1000);
+}
+
+/**
+ * Zeigt den Countdown-Wert an
+ */
+function displayCountdown() {
+    const minutes = Math.floor(countdownSeconds / 60);
+    const seconds = countdownSeconds % 60;
+    const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    document.getElementById('countdown-timer').textContent = timeString;
+}

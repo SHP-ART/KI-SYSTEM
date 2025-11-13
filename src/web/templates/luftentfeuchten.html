@@ -66,6 +66,9 @@
                 <div>
                     <div class="status-label">Luftentfeuchter</div>
                     <div class="status-value" id="dehumidifier-status">Aus</div>
+                    <div id="dehumidifier-countdown" style="font-size: 0.85em; color: #f59e0b; margin-top: 4px; display: none;">
+                        ⏱️ Schaltet aus in: <span id="countdown-timer">--</span>
+                    </div>
                 </div>
             </div>
             <div class="status-item">
@@ -484,9 +487,9 @@
                         <input type="checkbox" id="heating-boost-enabled" class="toggle-checkbox" checked>
                         <span class="toggle-switch"></span>
                         <div style="flex: 1;">
-                            <div style="font-weight: 600; color: #1f2937;">Heizungs-Boost während Entfeuchtung</div>
+                            <div style="font-weight: 600; color: #1f2937;">Heizungssteuerung aktivieren</div>
                             <div style="font-size: 0.85em; color: #6b7280; margin-top: 2px;">
-                                Erhöht Temperatur um +1°C während Luftentfeuchter läuft (beschleunigt Trocknung)
+                                Aktiviert automatische Heizungsregelung während der Entfeuchtung (+1°C Boost)
                             </div>
                         </div>
                     </label>
@@ -988,5 +991,5 @@
 
 </style>
 
-<script src="{{ url_for('static', filename='js/luftentfeuchten.js') }}"></script>
+<script src="{{ url_for('static', filename='js/luftentfeuchten.js') }}?v=3"></script>
 {% endblock %}

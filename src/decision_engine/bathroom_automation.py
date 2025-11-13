@@ -48,7 +48,8 @@ class BathroomAutomation:
         self.target_temp = config.get('target_temperature', 22.0)
 
         # Heizungs-Boost Einstellungen
-        self.heating_boost_enabled = config.get('heating_boost_enabled', True)
+        # heating_boost_enabled steuert auch, ob die Heizung überhaupt geregelt wird
+        self.heating_boost_enabled = config.get('heating_boost_enabled', False)
         self.heating_boost_delta = config.get('heating_boost_delta', 1.0)
 
         # Frostschutztemperatur bei offenem Fenster
@@ -61,6 +62,7 @@ class BathroomAutomation:
         self.current_event_id = None
         self.event_start_time = None
         self.dehumidifier_start_time = None
+        self.humidity_below_threshold_since = None  # Zeitpunkt, wann Luftfeuchtigkeit unter Schwellwert gefallen ist
 
         # Datenbank für Lernsystem
         self.db = Database() if enable_learning else None
@@ -69,7 +71,7 @@ class BathroomAutomation:
         if self.db and enable_learning:
             self._load_learned_parameters()
 
-        logger.info(f"Bathroom automation initialized: High={self.humidity_high}%, Low={self.humidity_low}%, Target={self.target_temp}°C, Frost={self.frost_protection_temp}°C, Learning={enable_learning}")
+        logger.info(f"Bathroom automation initialized: High={self.humidity_high}%, Low={self.humidity_low}%, Target={self.target_temp}°C, Frost={self.frost_protection_temp}°C, HeatingControl={self.heating_boost_enabled}, Learning={enable_learning}")
 
     def process(self, platform, current_state: Dict) -> List[Dict]:
         """
@@ -121,9 +123,9 @@ class BathroomAutomation:
                         'reason': 'Window open - energy saving'
                     })
 
-            # Setze Heizung auf Frostschutztemperatur
+            # Setze Heizung auf Frostschutztemperatur (nur wenn Heizungssteuerung aktiv)
             heater_id = self.config.get('heater_id')
-            if heater_id and temperature is not None:
+            if self.heating_boost_enabled and heater_id and temperature is not None:
                 # Nur anpassen wenn Temperatur über Frostschutz + 0.5°C liegt
                 if temperature > self.frost_protection_temp + 0.5:
                     logger.info(f"🌡️ Setting heating to frost protection ({self.frost_protection_temp}°C, window open)")
@@ -165,14 +167,16 @@ class BathroomAutomation:
             actions.append(dehumidifier_action)
 
         # === HEIZUNG STEUERUNG ===
-        heating_action = self._control_heating(
-            temperature,
-            humidity,
-            self.dehumidifier_running,
-            platform  # Für Logging
-        )
-        if heating_action:
-            actions.append(heating_action)
+        # Nur ausführen wenn Heizungssteuerung aktiviert ist
+        if self.heating_boost_enabled:
+            heating_action = self._control_heating(
+                temperature,
+                humidity,
+                self.dehumidifier_running,
+                platform  # Für Logging
+            )
+            if heating_action:
+                actions.append(heating_action)
 
         # Reset shower detection wenn Luftfeuchtigkeit wieder normal
         if self.shower_detected and humidity < self.humidity_low:
@@ -332,16 +336,21 @@ class BathroomAutomation:
         should_turn_off = humidity < self.humidity_low
 
         if should_turn_off and self.dehumidifier_running:
-            # Prüfe Verzögerung
-            if self.last_motion_time:
-                minutes_since_motion = (datetime.now() - self.last_motion_time).seconds / 60
-                if minutes_since_motion < self.dehumidifier_delay_minutes:
-                    logger.debug(f"Delaying dehumidifier shutdown (motion detected {minutes_since_motion:.1f} min ago)")
-                    return None
+            # Merke dir, wann Luftfeuchtigkeit unter Schwellwert gefallen ist
+            if self.humidity_below_threshold_since is None:
+                self.humidity_below_threshold_since = datetime.now()
+                logger.debug(f"Humidity dropped below threshold, starting shutdown countdown")
+            
+            # Prüfe ob Verzögerung abgelaufen ist
+            minutes_since_below = (datetime.now() - self.humidity_below_threshold_since).seconds / 60
+            if minutes_since_below < self.dehumidifier_delay_minutes:
+                logger.debug(f"Delaying dehumidifier shutdown ({minutes_since_below:.1f}/{self.dehumidifier_delay_minutes} min)")
+                return None
 
             reason = f'Humidity normalized ({humidity}%)'
             logger.info(f"💨 Turning OFF dehumidifier (humidity: {humidity}%)")
             self.dehumidifier_running = False
+            self.humidity_below_threshold_since = None  # Reset
 
             # Protokolliere Aktion
             self._log_device_action('dehumidifier', dehumidifier_id, 'turn_off', reason, platform)
@@ -351,6 +360,9 @@ class BathroomAutomation:
                 'action': 'turn_off',
                 'reason': reason
             }
+        elif humidity >= self.humidity_low:
+            # Reset wenn Luftfeuchtigkeit wieder steigt
+            self.humidity_below_threshold_since = None
 
         return None
 
@@ -392,10 +404,24 @@ class BathroomAutomation:
 
     def get_status(self, platform) -> Dict:
         """Gibt aktuellen Status zurück"""
+        
+        # Hole tatsächlichen Geräte-Status von der Plattform
+        actual_dehumidifier_running = False
+        dehumidifier_id = self.config.get('dehumidifier_id')
+        if dehumidifier_id:
+            try:
+                device_state = platform.get_state(dehumidifier_id)
+                if device_state:
+                    caps = device_state.get('attributes', {}).get('capabilities', {})
+                    if 'onoff' in caps:
+                        actual_dehumidifier_running = caps['onoff'].get('value', False)
+            except Exception as e:
+                logger.debug(f"Could not get dehumidifier state: {e}")
+        
         status = {
             'enabled': True,
             'shower_detected': self.shower_detected,
-            'dehumidifier_running': self.dehumidifier_running,
+            'dehumidifier_running': actual_dehumidifier_running,  # Tatsächlicher Geräte-Status
             'current_humidity': self._get_humidity(platform),
             'current_temperature': self._get_temperature(platform),
             'thresholds': {
@@ -406,6 +432,14 @@ class BathroomAutomation:
             'last_motion': self.last_motion_time.isoformat() if self.last_motion_time else None,
             'learning_enabled': self.enable_learning
         }
+        
+        # Berechne Zeit bis automatisches Ausschalten (nur wenn Timer bereits von Automation gesetzt wurde)
+        if actual_dehumidifier_running and self.humidity_below_threshold_since:
+            elapsed_seconds = (datetime.now() - self.humidity_below_threshold_since).seconds
+            delay_seconds = self.dehumidifier_delay_minutes * 60
+            remaining_seconds = delay_seconds - elapsed_seconds
+            if remaining_seconds > 0:
+                status['dehumidifier_shutdown_in_seconds'] = remaining_seconds
 
         # Füge Event-Info hinzu wenn aktiv
         if self.current_event_id and self.event_start_time:

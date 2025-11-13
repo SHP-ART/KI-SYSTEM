@@ -938,7 +938,7 @@ class Database:
 
         start_time = datetime.now() - timedelta(days=days_back)
 
-        # Event-Statistiken
+        # Event-Statistiken (nur gültige Events mit sinnvollen Werten)
         cursor.execute("""
             SELECT
                 COUNT(*) as event_count,
@@ -946,7 +946,10 @@ class Database:
                 AVG(peak_humidity) as avg_peak_humidity,
                 AVG(dehumidifier_runtime_minutes) as avg_dehumidifier_runtime
             FROM bathroom_events
-            WHERE start_time >= ? AND end_time IS NOT NULL
+            WHERE start_time >= ? 
+                AND end_time IS NOT NULL
+                AND duration_minutes > 0
+                AND (peak_humidity IS NULL OR peak_humidity >= 0)
         """, (start_time,))
 
         event_stats = dict(cursor.fetchone())

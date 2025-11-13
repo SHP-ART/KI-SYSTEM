@@ -122,19 +122,25 @@ function renderStatistics() {
 
     document.getElementById('stat-events').textContent = stats.event_count || 0;
 
-    if (stats.avg_duration) {
+    if (stats.avg_duration !== null && stats.avg_duration !== undefined) {
         document.getElementById('stat-avg-duration').textContent =
             `${stats.avg_duration.toFixed(1)} Min`;
+    } else {
+        document.getElementById('stat-avg-duration').textContent = '-';
     }
 
-    if (stats.avg_peak_humidity) {
+    if (stats.avg_peak_humidity !== null && stats.avg_peak_humidity !== undefined) {
         document.getElementById('stat-avg-humidity').textContent =
             `${stats.avg_peak_humidity.toFixed(1)}%`;
+    } else {
+        document.getElementById('stat-avg-humidity').textContent = '-';
     }
 
-    if (stats.avg_dehumidifier_runtime) {
+    if (stats.avg_dehumidifier_runtime !== null && stats.avg_dehumidifier_runtime !== undefined) {
         document.getElementById('stat-dehumidifier').textContent =
             `${stats.avg_dehumidifier_runtime.toFixed(1)} Min`;
+    } else {
+        document.getElementById('stat-dehumidifier').textContent = '-';
     }
 }
 
