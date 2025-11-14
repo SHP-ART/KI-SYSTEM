@@ -65,6 +65,11 @@ class BathroomAutomation:
         self.humidity_below_threshold_since = None  # Zeitpunkt, wann Luftfeuchtigkeit unter Schwellwert gefallen ist
         self._state_synced = False  # Flag ob States schon synchronisiert wurden
 
+        # Für verbesserte Duscherkennung
+        self.humidity_history = []  # Letzte 10 Messungen für Steigungsanalyse
+        self.last_humidity_check = None
+        self.humidity_rising_fast = False  # Flag ob Luftfeuchtigkeit schnell steigt
+
         # Datenbank für Lernsystem
         self.db = Database() if enable_learning else None
 
@@ -310,23 +315,81 @@ class BathroomAutomation:
 
     def _detect_shower(self, humidity: float, motion: bool, door_closed: bool) -> bool:
         """
-        Erkennt ob gerade geduscht wird
+        Verbesserte Duscherkennung mit mehreren Kriterien
 
         Kriterien:
-        - Luftfeuchtigkeit über Schwellwert
-        - Optional: Bewegung erkannt
-        - Optional: Tür geschlossen
+        1. Luftfeuchtigkeit über Schwellwert (mit Toleranz)
+        2. Schneller Anstieg der Luftfeuchtigkeit (>3% in 2 Min)
+        3. Bewegung erkannt (wenn Sensor vorhanden)
+        4. Tür geschlossen (wenn Sensor vorhanden)
+
+        Returns:
+            True wenn Dusche erkannt, False sonst
         """
+        if humidity is None:
+            return False
+
+        # Speichere Luftfeuchtigkeit in Historie
+        now = datetime.now()
+        self.humidity_history.append({
+            'time': now,
+            'value': humidity
+        })
+
+        # Halte nur letzte 10 Messungen (ca. 10 Minuten bei 60s Intervall)
+        if len(self.humidity_history) > 10:
+            self.humidity_history.pop(0)
+
+        # === KRITERIUM 1: Hohe Luftfeuchtigkeit ===
+        # Reduziere Schwellwert um 5% für bessere Erkennung
+        humidity_threshold = self.humidity_high - 5.0  # 70% -> 65%
+        high_humidity = humidity > humidity_threshold
+
+        # === KRITERIUM 2: Schneller Anstieg ===
+        humidity_rising_fast = False
+        if len(self.humidity_history) >= 3:  # Mindestens 3 Messungen
+            # Vergleiche aktuelle mit Messung vor 2-3 Minuten
+            old_measurement = self.humidity_history[-3]
+            time_diff = (now - old_measurement['time']).seconds / 60  # in Minuten
+            
+            if time_diff >= 1.0:  # Mindestens 1 Minute zwischen Messungen
+                humidity_diff = humidity - old_measurement['value']
+                rate_per_minute = humidity_diff / time_diff
+                
+                # Schneller Anstieg: >2% pro Minute
+                if rate_per_minute > 2.0:
+                    humidity_rising_fast = True
+                    logger.debug(f"Fast humidity rise detected: +{humidity_diff:.1f}% in {time_diff:.1f}min (rate: {rate_per_minute:.1f}%/min)")
+
+        self.humidity_rising_fast = humidity_rising_fast
+
+        # === KRITERIUM 3: Bewegung ===
+        motion_ok = True
+        if self.config.get('motion_sensor_id'):
+            if self.last_motion_time:
+                time_since_motion = (datetime.now() - self.last_motion_time).seconds / 60
+                # Keine Bewegung seit 30 Min -> Wahrscheinlich keine Dusche
+                motion_ok = time_since_motion <= 30
+            else:
+                # Noch nie Bewegung erkannt
+                motion_ok = False
+
+        # === ENTSCHEIDUNGS-LOGIK ===
+        # Option A: Hohe Luftfeuchtigkeit UND (schneller Anstieg ODER Bewegung)
+        if high_humidity and (humidity_rising_fast or motion):
+            if motion_ok:
+                logger.debug(f"Shower detected: humidity={humidity}%, rising_fast={humidity_rising_fast}, motion={motion}")
+                return True
+
+        # Option B: Sehr hohe Luftfeuchtigkeit (über Original-Schwellwert) alleine reicht
         if humidity > self.humidity_high:
-            # Hohe Luftfeuchtigkeit ist Hauptindikator
+            if motion_ok:
+                logger.debug(f"Shower detected: very high humidity={humidity}%")
+                return True
 
-            # Wenn wir einen Bewegungssensor haben, prüfe ob kürzlich Bewegung war
-            if self.config.get('motion_sensor_id'):
-                if self.last_motion_time:
-                    time_since_motion = (datetime.now() - self.last_motion_time).seconds / 60
-                    if time_since_motion > 30:  # Keine Bewegung seit 30 Min
-                        return False
-
+        # Option C: Starker Anstieg + Bewegung (auch bei mittlerer Luftfeuchtigkeit)
+        if humidity_rising_fast and motion and humidity > 60:
+            logger.debug(f"Shower detected: fast rise + motion, humidity={humidity}%")
             return True
 
         return False
