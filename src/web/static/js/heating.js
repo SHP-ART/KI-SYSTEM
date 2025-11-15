@@ -9,6 +9,11 @@ let currentRoomFilter = 'all';
 let currentMode = 'control'; // control oder optimization
 let temperatureChart = null; // Chart.js Instanz für Temperaturverlauf
 
+// Fenster-Statistik Charts
+let windowDurationChart = null;
+let windowFrequencyChart = null;
+let windowTrendsChart = null;
+
 // Lade alle Heizgeräte beim Seitenaufruf
 document.addEventListener('DOMContentLoaded', () => {
     loadHeaters();
@@ -58,6 +63,11 @@ function setupEventListeners() {
     // Analytics Zeitraum Selector
     document.getElementById('analytics-timeframe')?.addEventListener('change', () => {
         loadHeatingAnalytics();
+    });
+
+    // Fenster-Statistik Zeitraum Selector
+    document.getElementById('window-stats-timeframe')?.addEventListener('change', () => {
+        loadWindowStatistics();
     });
 
     // Speichern
@@ -1335,66 +1345,318 @@ async function loadCurrentOpenWindows() {
  */
 async function loadWindowStatistics() {
     try {
-        const response = await fetchJSON('/api/heating/windows/statistics?days=7');
+        // Zeige Loading
+        const loadingEl = document.getElementById('window-charts-loading');
+        const noDataEl = document.getElementById('window-charts-no-data');
+        if (loadingEl) loadingEl.style.display = 'block';
+        if (noDataEl) noDataEl.style.display = 'none';
 
-        const container = document.getElementById('window-stats-content');
+        // Hole ausgewählten Zeitraum
+        const timeframeSelect = document.getElementById('window-stats-timeframe');
+        const days = timeframeSelect ? parseInt(timeframeSelect.value) : 7;
 
-        if (!response.data || !response.data.by_room || response.data.by_room.length === 0) {
-            container.innerHTML = `
-                <div class="info" style="text-align: center; padding: 15px; color: #6b7280;">
-                    Noch keine Statistiken verfügbar. Daten werden gesammelt...
-                </div>
-            `;
+        // Lade Chart-Daten
+        const response = await fetchJSON(`/api/heating/windows/charts?days=${days}`);
+
+        // Verstecke Loading
+        if (loadingEl) loadingEl.style.display = 'none';
+
+        if (!response.data) {
+            if (noDataEl) noDataEl.style.display = 'block';
             return;
         }
 
-        const statsHTML = response.data.by_room.map(stat => {
-            const avgDurationHours = Math.floor(stat.avg_duration_minutes / 60);
-            const avgDurationMinutes = Math.round(stat.avg_duration_minutes % 60);
-            const maxDurationHours = Math.floor(stat.max_duration_minutes / 60);
-            const maxDurationMinutes = Math.round(stat.max_duration_minutes % 60);
-            const totalHours = Math.floor(stat.total_minutes_open / 60);
+        const data = response.data;
 
-            return `
-                <div style="padding: 15px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb; margin-bottom: 10px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                        <div>
-                            <div style="font-weight: 700; color: #1f2937;">${stat.device_name}</div>
-                            <div style="font-size: 0.85em; color: #6b7280;">${stat.room_name || 'Unbekannter Raum'}</div>
-                        </div>
-                        <div style="background: #dbeafe; padding: 5px 12px; border-radius: 6px;">
-                            <strong style="color: #1e40af;">${stat.open_count}x</strong>
-                            <span style="font-size: 0.85em; color: #6b7280;"> geöffnet</span>
-                        </div>
-                    </div>
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; font-size: 0.85em;">
-                        <div>
-                            <div style="color: #6b7280;">Ø Dauer</div>
-                            <div style="font-weight: 600; color: #1f2937;">${avgDurationHours}h ${avgDurationMinutes}min</div>
-                        </div>
-                        <div>
-                            <div style="color: #6b7280;">Max. Dauer</div>
-                            <div style="font-weight: 600; color: #1f2937;">${maxDurationHours}h ${maxDurationMinutes}min</div>
-                        </div>
-                        <div>
-                            <div style="color: #6b7280;">Gesamt</div>
-                            <div style="font-weight: 600; color: #1f2937;">${totalHours}h offen</div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }).join('');
+        // Prüfe ob Daten vorhanden sind
+        const hasData = (data.duration_by_window && data.duration_by_window.length > 0) ||
+                        (data.frequency_by_window && data.frequency_by_window.length > 0) ||
+                        (data.daily_trends && data.daily_trends.length > 0);
 
-        container.innerHTML = statsHTML;
+        if (!hasData) {
+            if (noDataEl) noDataEl.style.display = 'block';
+            return;
+        }
+
+        // Rendere Charts
+        renderWindowDurationChart(data.duration_by_window);
+        renderWindowFrequencyChart(data.frequency_by_window);
+        renderWindowTrendsChart(data.daily_trends);
 
     } catch (error) {
         console.error('Error loading window statistics:', error);
-        document.getElementById('window-stats-content').innerHTML = `
-            <div class="error" style="padding: 15px; background: #fee2e2; border-radius: 8px; color: #991b1b;">
-                ❌ Fehler beim Laden der Statistiken: ${error.message}
-            </div>
-        `;
+        const loadingEl = document.getElementById('window-charts-loading');
+        if (loadingEl) {
+            loadingEl.style.display = 'block';
+            loadingEl.innerHTML = `
+                <div style="padding: 15px; background: #fee2e2; border-radius: 8px; color: #991b1b;">
+                    ❌ Fehler beim Laden der Statistiken: ${error.message}
+                </div>
+            `;
+        }
     }
+}
+
+/**
+ * Rendert das Öffnungszeiten-Balkendiagramm
+ */
+function renderWindowDurationChart(data) {
+    const ctx = document.getElementById('window-duration-chart');
+    if (!ctx) return;
+
+    // Zerstöre vorherigen Chart
+    if (windowDurationChart) {
+        windowDurationChart.destroy();
+    }
+
+    if (!data || data.length === 0) {
+        ctx.parentElement.innerHTML = '<p style="text-align: center; color: #6b7280; padding: 40px;">Keine Daten verfügbar</p>';
+        return;
+    }
+
+    // Sortiere nach Gesamtstunden (absteigend)
+    const sortedData = [...data].sort((a, b) => b.total_hours - a.total_hours);
+
+    // Limitiere auf Top 10 Fenster
+    const limitedData = sortedData.slice(0, 10);
+
+    const labels = limitedData.map(d => `${d.device_name} (${d.room_name})`);
+    const hours = limitedData.map(d => d.total_hours);
+
+    windowDurationChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Stunden offen',
+                data: hours,
+                backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                borderColor: 'rgba(59, 130, 246, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            indexAxis: 'y', // Horizontale Balken
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const hours = context.parsed.x;
+                            const minutes = Math.round((hours % 1) * 60);
+                            const fullHours = Math.floor(hours);
+                            return `${fullHours}h ${minutes}min offen`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Stunden'
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return value + 'h';
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+/**
+ * Rendert das Öffnungshäufigkeits-Balkendiagramm
+ */
+function renderWindowFrequencyChart(data) {
+    const ctx = document.getElementById('window-frequency-chart');
+    if (!ctx) return;
+
+    // Zerstöre vorherigen Chart
+    if (windowFrequencyChart) {
+        windowFrequencyChart.destroy();
+    }
+
+    if (!data || data.length === 0) {
+        ctx.parentElement.innerHTML = '<p style="text-align: center; color: #6b7280; padding: 40px;">Keine Daten verfügbar</p>';
+        return;
+    }
+
+    // Sortiere nach Häufigkeit (absteigend)
+    const sortedData = [...data].sort((a, b) => b.open_count - a.open_count);
+
+    // Limitiere auf Top 10 Fenster
+    const limitedData = sortedData.slice(0, 10);
+
+    const labels = limitedData.map(d => `${d.device_name} (${d.room_name})`);
+    const counts = limitedData.map(d => d.open_count);
+
+    windowFrequencyChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Anzahl Öffnungen',
+                data: counts,
+                backgroundColor: 'rgba(16, 185, 129, 0.7)',
+                borderColor: 'rgba(16, 185, 129, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            indexAxis: 'y', // Horizontale Balken
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.parsed.x}x geöffnet`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Anzahl Öffnungen'
+                    },
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            }
+        }
+    });
+}
+
+/**
+ * Rendert das Tägliche-Trends-Diagramm (kombiniert Balken + Linie)
+ */
+function renderWindowTrendsChart(data) {
+    const ctx = document.getElementById('window-trends-chart');
+    if (!ctx) return;
+
+    // Zerstöre vorherigen Chart
+    if (windowTrendsChart) {
+        windowTrendsChart.destroy();
+    }
+
+    if (!data || data.length === 0) {
+        ctx.parentElement.innerHTML = '<p style="text-align: center; color: #6b7280; padding: 40px;">Keine Daten verfügbar</p>';
+        return;
+    }
+
+    // Sortiere nach Datum
+    const sortedData = [...data].sort((a, b) => a.date.localeCompare(b.date));
+
+    const labels = sortedData.map(d => {
+        const date = new Date(d.date);
+        return date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+    });
+    const openCounts = sortedData.map(d => d.open_count);
+    const totalHours = sortedData.map(d => d.total_hours);
+
+    windowTrendsChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    type: 'bar',
+                    label: 'Anzahl Öffnungen',
+                    data: openCounts,
+                    backgroundColor: 'rgba(245, 158, 11, 0.7)',
+                    borderColor: 'rgba(245, 158, 11, 1)',
+                    borderWidth: 1,
+                    yAxisID: 'y'
+                },
+                {
+                    type: 'line',
+                    label: 'Stunden offen',
+                    data: totalHours,
+                    borderColor: 'rgba(139, 92, 246, 1)',
+                    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                    borderWidth: 2,
+                    tension: 0.3,
+                    yAxisID: 'y1'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.dataset.label || '';
+                            const value = context.parsed.y;
+                            if (label.includes('Stunden')) {
+                                const hours = Math.floor(value);
+                                const minutes = Math.round((value % 1) * 60);
+                                return `${label}: ${hours}h ${minutes}min`;
+                            }
+                            return `${label}: ${value}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Anzahl Öffnungen'
+                    },
+                    ticks: {
+                        stepSize: 1
+                    }
+                },
+                y1: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Stunden'
+                    },
+                    grid: {
+                        drawOnChartArea: false
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return value + 'h';
+                        }
+                    }
+                }
+            }
+        }
+    });
 }
 
 /**

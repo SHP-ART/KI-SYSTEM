@@ -3037,6 +3037,23 @@ class WebInterface:
                 logger.error(f"Error getting window statistics: {e}")
                 return jsonify({'error': str(e)}), 500
 
+        @self.app.route('/api/heating/windows/charts')
+        def api_heating_windows_charts():
+            """Hole Fenster-Statistiken für Chart-Visualisierungen"""
+            try:
+                days = int(request.args.get('days', 7))
+
+                chart_data = self.db.get_window_statistics_for_charts(days_back=days)
+
+                return jsonify({
+                    'success': True,
+                    'data': chart_data
+                })
+
+            except Exception as e:
+                logger.error(f"Error getting window chart statistics: {e}")
+                return jsonify({'error': str(e)}), 500
+
         # ===== Analytics Endpoints =====
 
         @self.app.route('/api/analytics/comfort')

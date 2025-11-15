@@ -95,13 +95,51 @@
             </div>
         </div>
 
-        <!-- Fenster-Statistik (letzten 7 Tage) -->
+        <!-- Fenster-Statistik mit Charts -->
         <div id="window-statistics-container" style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
-            <h4 style="margin-bottom: 15px;">📊 Fenster-Öffnungsstatistik (7 Tage)</h4>
-            <div id="window-stats-content">
-                <div class="loading" style="text-align: center; padding: 15px; color: #6b7280;">
-                    Berechne Statistiken...
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h4 style="margin: 0;">📊 Fenster-Statistik</h4>
+                <select id="window-stats-timeframe" class="time-range-select" style="padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; background: white; font-size: 0.9em;">
+                    <option value="1">Heute</option>
+                    <option value="7" selected>7 Tage</option>
+                    <option value="30">30 Tage</option>
+                </select>
+            </div>
+
+            <!-- Öffnungszeiten Chart -->
+            <div style="margin-bottom: 30px;">
+                <h5 style="margin-bottom: 10px; color: #374151;">⏱️ Öffnungszeiten pro Fenster</h5>
+                <div class="chart-container" style="height: 300px;">
+                    <canvas id="window-duration-chart"></canvas>
                 </div>
+            </div>
+
+            <!-- Öffnungshäufigkeit Chart -->
+            <div style="margin-bottom: 30px;">
+                <h5 style="margin-bottom: 10px; color: #374151;">🔢 Öffnungshäufigkeit</h5>
+                <div class="chart-container" style="height: 300px;">
+                    <canvas id="window-frequency-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Tägliche Trends Chart -->
+            <div>
+                <h5 style="margin-bottom: 10px; color: #374151;">📈 Tägliche Trends</h5>
+                <div class="chart-container" style="height: 250px;">
+                    <canvas id="window-trends-chart"></canvas>
+                </div>
+                <div style="text-align: center; font-size: 0.85em; color: #6b7280; margin-top: 10px;">
+                    Anzahl der Fensteröffnungen und Gesamtdauer pro Tag
+                </div>
+            </div>
+
+            <!-- Loading/Error States -->
+            <div id="window-charts-loading" class="loading" style="display: none; text-align: center; padding: 20px; color: #6b7280;">
+                Lade Statistiken...
+            </div>
+            <div id="window-charts-no-data" class="info-box" style="display: none;">
+                <strong>ℹ️ Hinweis:</strong> Noch keine Daten für den gewählten Zeitraum vorhanden.
+                <br>Das System sammelt Fenster-Daten alle 60 Sekunden.
             </div>
         </div>
     </div>

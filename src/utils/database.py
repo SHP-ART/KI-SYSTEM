@@ -1524,6 +1524,142 @@ class Database:
 
         return stats
 
+    def get_window_statistics_for_charts(self, days_back: int = 7) -> Dict:
+        """
+        Berechnet Fenster-Statistiken speziell für Chart-Visualisierungen
+
+        Returns:
+            Dict mit:
+            - duration_by_window: Liste mit {device_name, room_name, total_hours, total_minutes}
+            - frequency_by_window: Liste mit {device_name, room_name, open_count}
+            - daily_trends: Liste mit {date, total_opens, total_hours}
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        start_time = datetime.now() - timedelta(days=days_back)
+
+        # 1. Öffnungszeiten pro Fenster (für Balkendiagramm)
+        cursor.execute("""
+            WITH window_sessions AS (
+                SELECT
+                    device_id,
+                    device_name,
+                    room_name,
+                    timestamp,
+                    is_open,
+                    LAG(is_open, 1, 0) OVER (PARTITION BY device_id ORDER BY timestamp) as prev_open
+                FROM window_observations
+                WHERE timestamp >= ?
+                    AND device_id IS NOT NULL
+            ),
+            open_events AS (
+                SELECT
+                    device_id,
+                    device_name,
+                    room_name,
+                    timestamp as opened_at,
+                    LEAD(timestamp) OVER (PARTITION BY device_id ORDER BY timestamp) as closed_at
+                FROM window_sessions
+                WHERE is_open = 1 AND prev_open = 0
+            )
+            SELECT
+                device_name,
+                room_name,
+                CAST(SUM(CAST((julianday(COALESCE(closed_at, datetime('now'))) - julianday(opened_at)) * 24 * 60 AS INTEGER)) AS REAL) as total_minutes
+            FROM open_events
+            GROUP BY device_id, device_name, room_name
+            ORDER BY total_minutes DESC
+        """, (start_time,))
+
+        duration_data = []
+        for row in cursor.fetchall():
+            total_minutes = row['total_minutes'] or 0
+            duration_data.append({
+                'device_name': row['device_name'],
+                'room_name': row['room_name'] or 'Unbekannt',
+                'total_hours': round(total_minutes / 60, 1),
+                'total_minutes': round(total_minutes, 0)
+            })
+
+        # 2. Öffnungshäufigkeit pro Fenster (für Balkendiagramm)
+        cursor.execute("""
+            WITH window_sessions AS (
+                SELECT
+                    device_id,
+                    device_name,
+                    room_name,
+                    timestamp,
+                    is_open,
+                    LAG(is_open, 1, 0) OVER (PARTITION BY device_id ORDER BY timestamp) as prev_open
+                FROM window_observations
+                WHERE timestamp >= ?
+                    AND device_id IS NOT NULL
+            )
+            SELECT
+                device_name,
+                room_name,
+                COUNT(*) as open_count
+            FROM window_sessions
+            WHERE is_open = 1 AND prev_open = 0
+            GROUP BY device_id, device_name, room_name
+            ORDER BY open_count DESC
+        """, (start_time,))
+
+        frequency_data = []
+        for row in cursor.fetchall():
+            frequency_data.append({
+                'device_name': row['device_name'],
+                'room_name': row['room_name'] or 'Unbekannt',
+                'open_count': row['open_count']
+            })
+
+        # 3. Tägliche Trends (für Linien-/Balkendiagramm)
+        cursor.execute("""
+            WITH window_sessions AS (
+                SELECT
+                    device_id,
+                    timestamp,
+                    is_open,
+                    LAG(is_open, 1, 0) OVER (PARTITION BY device_id ORDER BY timestamp) as prev_open,
+                    LEAD(timestamp) OVER (PARTITION BY device_id ORDER BY timestamp) as next_timestamp
+                FROM window_observations
+                WHERE timestamp >= ?
+            ),
+            daily_opens AS (
+                SELECT
+                    DATE(timestamp) as date,
+                    COUNT(*) as open_count,
+                    SUM(CAST((julianday(COALESCE(next_timestamp, datetime('now'))) - julianday(timestamp)) * 24 * 60 AS INTEGER)) as total_minutes
+                FROM window_sessions
+                WHERE is_open = 1 AND prev_open = 0
+                GROUP BY DATE(timestamp)
+            )
+            SELECT
+                date,
+                open_count,
+                CAST(total_minutes AS REAL) / 60 as total_hours
+            FROM daily_opens
+            ORDER BY date ASC
+        """, (start_time,))
+
+        daily_trends = []
+        for row in cursor.fetchall():
+            daily_trends.append({
+                'date': row['date'],
+                'open_count': row['open_count'],
+                'total_hours': round(row['total_hours'] or 0, 1)
+            })
+
+        return {
+            'duration_by_window': duration_data,
+            'frequency_by_window': frequency_data,
+            'daily_trends': daily_trends,
+            'period_days': days_back,
+            'start_date': start_time.strftime('%Y-%m-%d'),
+            'end_date': datetime.now().strftime('%Y-%m-%d')
+        }
+
     def cleanup_window_observations(self, retention_days: int = 90) -> int:
         """Löscht alte Fenster-Beobachtungen"""
         conn = self._get_connection()
