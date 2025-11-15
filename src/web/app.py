@@ -3075,9 +3075,10 @@ class WebInterface:
                     if 5 < value < 30:
                         hourly_data[hour_key]['target_temps'].append(value)
 
-                # Verarbeite Außentemperaturen
+                # Verarbeite Außentemperaturen - nehme nur den neuesten Wert pro Stunde
                 import json
-                seen_weather = set()  # Dedupliziere identische Einträge
+                latest_weather_per_hour = {}  # Speichere nur den neuesten Wert pro Stunde
+                
                 for row in weather_data:
                     timestamp = datetime.fromisoformat(row[0]) if isinstance(row[0], str) else row[0]
                     hour_key = timestamp.replace(minute=0, second=0, microsecond=0)
@@ -3086,11 +3087,16 @@ class WebInterface:
                     outdoor_temp = data_json.get('temperature')
 
                     if outdoor_temp is not None:
-                        # Dedupliziere: Nur einzigartige (hour, temp) Kombinationen
-                        dedup_key = (hour_key, float(outdoor_temp))
-                        if dedup_key not in seen_weather:
-                            seen_weather.add(dedup_key)
-                            hourly_data[hour_key]['outdoor_temps'].append(float(outdoor_temp))
+                        # Behalte nur den neuesten Wert pro Stunde
+                        if hour_key not in latest_weather_per_hour or timestamp > latest_weather_per_hour[hour_key]['timestamp']:
+                            latest_weather_per_hour[hour_key] = {
+                                'timestamp': timestamp,
+                                'temp': float(outdoor_temp)
+                            }
+                
+                # Füge die neuesten Werte zu hourly_data hinzu
+                for hour_key, data in latest_weather_per_hour.items():
+                    hourly_data[hour_key]['outdoor_temps'].append(data['temp'])
 
                 # Erstelle Zeitreihen-Arrays
                 timestamps = []
