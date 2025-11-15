@@ -1,0 +1,504 @@
+openapi: 3.0.3
+info:
+  title: KI Smart Home System API
+  version: 0.9.6
+  description: |
+    RESTful API für das KI-gesteuerte Smart Home System mit Machine Learning, 
+    Heizungsoptimierung und Schimmelprävention.
+  contact:
+    name: KI Smart Home Team
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8080
+    description: Lokaler Entwicklungsserver
+
+tags:
+  - name: Health
+    description: System-Health und Status
+  - name: ML
+    description: Machine Learning Predictions
+  - name: Heating
+    description: Heizungssteuerung und Analytics
+  - name: Bathroom
+    description: Badezimmer-Monitoring und Schimmelprävention
+  - name: Devices
+    description: Geräte-Verwaltung
+  - name: Automations
+    description: Automatisierungen
+  - name: Energy
+    description: Energiepreise und Optimierung
+  - name: Weather
+    description: Wetterdaten
+
+paths:
+  /health:
+    get:
+      summary: Health Check
+      tags: [Health]
+      responses:
+        '200':
+          description: System ist gesund
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /api/status:
+    get:
+      summary: System Status
+      tags: [Health]
+      responses:
+        '200':
+          description: Detaillierter System-Status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  system:
+                    type: object
+                  database:
+                    type: object
+                  collectors:
+                    type: object
+
+  /api/ml/status:
+    get:
+      summary: ML Models Status
+      tags: [ML]
+      responses:
+        '200':
+          description: Status der ML-Modelle
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lighting:
+                    type: object
+                    properties:
+                      model_trained:
+                        type: boolean
+                      data_count:
+                        type: integer
+                      last_updated:
+                        type: string
+                        format: date-time
+                  temperature:
+                    type: object
+                    properties:
+                      model_trained:
+                        type: boolean
+                      data_count:
+                        type: integer
+                      last_updated:
+                        type: string
+                        format: date-time
+
+  /api/ml/lighting/predict:
+    post:
+      summary: Beleuchtungs-Vorhersage
+      tags: [ML]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - hour_of_day
+                - outdoor_light
+                - presence
+              properties:
+                hour_of_day:
+                  type: integer
+                  minimum: 0
+                  maximum: 23
+                  example: 18
+                outdoor_light:
+                  type: number
+                  description: Außenhelligkeit in Lux
+                  example: 100.5
+                presence:
+                  type: boolean
+                  example: true
+                motion_detected:
+                  type: boolean
+                  example: true
+      responses:
+        '200':
+          description: Vorhersage erfolgreich
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  should_turn_on:
+                    type: boolean
+                  brightness:
+                    type: number
+                    minimum: 0
+                    maximum: 1
+                  confidence:
+                    type: number
+
+  /api/ml/temperature/predict:
+    post:
+      summary: Temperatur-Vorhersage
+      tags: [ML]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - current_temperature
+                - outdoor_temperature
+              properties:
+                current_temperature:
+                  type: number
+                  example: 20.0
+                outdoor_temperature:
+                  type: number
+                  example: 5.0
+                presence:
+                  type: boolean
+                  example: true
+                time_of_day:
+                  type: string
+                  format: time
+                  example: "18:00"
+                window_open:
+                  type: boolean
+                  example: false
+      responses:
+        '200':
+          description: Vorhersage erfolgreich
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  predicted_temperature:
+                    type: number
+                  recommended_target:
+                    type: number
+                  energy_saving_potential:
+                    type: number
+
+  /api/heating/status:
+    get:
+      summary: Heizungsstatus
+      tags: [Heating]
+      responses:
+        '200':
+          description: Aktueller Heizungsstatus
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rooms:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        current_temp:
+                          type: number
+                        target_temp:
+                          type: number
+                        heating_active:
+                          type: boolean
+
+  /api/heating/analytics:
+    get:
+      summary: Heizungs-Analytics
+      tags: [Heating]
+      parameters:
+        - name: days
+          in: query
+          schema:
+            type: integer
+            default: 7
+          description: Zeitraum in Tagen
+      responses:
+        '200':
+          description: Analytics-Daten
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  average_temperature:
+                    type: number
+                  heating_hours:
+                    type: number
+                  energy_consumption:
+                    type: number
+
+  /api/heating/frost-protection:
+    get:
+      summary: Frostschutz Status
+      tags: [Heating]
+      responses:
+        '200':
+          description: Frostschutz-Status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enabled:
+                    type: boolean
+                  active_rooms:
+                    type: array
+                    items:
+                      type: string
+
+  /api/bathroom/status:
+    get:
+      summary: Badezimmer Status
+      tags: [Bathroom]
+      responses:
+        '200':
+          description: Aktueller Badezimmer-Status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  temperature:
+                    type: number
+                  humidity:
+                    type: number
+                  dew_point:
+                    type: number
+                  mold_risk:
+                    type: string
+                    enum: [low, medium, high]
+
+  /api/bathroom/analytics:
+    get:
+      summary: Badezimmer Analytics
+      tags: [Bathroom]
+      parameters:
+        - name: days
+          in: query
+          schema:
+            type: integer
+            default: 7
+      responses:
+        '200':
+          description: Analytics-Daten
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  avg_humidity:
+                    type: number
+                  max_humidity:
+                    type: number
+                  ventilation_recommendations:
+                    type: integer
+
+  /api/bathroom/mold-prevention:
+    get:
+      summary: Schimmelprävention
+      tags: [Bathroom]
+      responses:
+        '200':
+          description: Empfehlungen zur Schimmelprävention
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  recommendation:
+                    type: string
+                  action_required:
+                    type: boolean
+                  ventilation_duration:
+                    type: integer
+                  reason:
+                    type: string
+
+  /api/devices:
+    get:
+      summary: Alle Geräte
+      tags: [Devices]
+      responses:
+        '200':
+          description: Liste aller Geräte
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Device'
+
+  /api/devices/{deviceId}:
+    get:
+      summary: Geräte-Details
+      tags: [Devices]
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Geräte-Details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '404':
+          description: Gerät nicht gefunden
+
+  /api/automations:
+    get:
+      summary: Alle Automatisierungen
+      tags: [Automations]
+      responses:
+        '200':
+          description: Liste aller Automatisierungen
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Automation'
+
+  /api/automations/{automationId}/toggle:
+    post:
+      summary: Automatisierung umschalten
+      tags: [Automations]
+      parameters:
+        - name: automationId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: Erfolgreich umgeschaltet
+        '404':
+          description: Automatisierung nicht gefunden
+
+  /api/energy/prices:
+    get:
+      summary: Aktuelle Energiepreise
+      tags: [Energy]
+      responses:
+        '200':
+          description: Energiepreis-Daten
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  current_price:
+                    type: number
+                  price_level:
+                    type: string
+                    enum: [low, medium, high]
+                  forecast_24h:
+                    type: array
+                    items:
+                      type: object
+
+  /api/weather/current:
+    get:
+      summary: Aktuelles Wetter
+      tags: [Weather]
+      responses:
+        '200':
+          description: Wetter-Daten
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  temperature:
+                    type: number
+                  humidity:
+                    type: number
+                  pressure:
+                    type: number
+                  description:
+                    type: string
+
+components:
+  schemas:
+    Device:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        class:
+          type: string
+          enum: [light, thermostat, sensor, switch]
+        zone:
+          type: object
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+        capabilities:
+          type: array
+          items:
+            type: string
+        state:
+          type: object
+
+    Automation:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        enabled:
+          type: boolean
+        trigger:
+          type: object
+        conditions:
+          type: array
+          items:
+            type: object
+        actions:
+          type: array
+          items:
+            type: object
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+security:
+  - BearerAuth: []

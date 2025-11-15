@@ -3,7 +3,7 @@
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import accuracy_score, classification_report
 from datetime import datetime
 import joblib
@@ -63,8 +63,53 @@ class LightingModel:
         features['weather_condition_clear'] = (weather == 'clear').astype(int)
         features['weather_condition_cloudy'] = (weather == 'clouds').astype(int)
         features['weather_condition_rainy'] = (weather == 'rain').astype(int)
+        
+        # Feature Engineering: Rolling Averages
+        if len(data) >= 3:
+            features['brightness_rolling_3'] = data.get('brightness', 0).rolling(window=3, min_periods=1).mean()
+            features['motion_rolling_3'] = data.get('motion_detected', 0).rolling(window=3, min_periods=1).mean()
+        
+        # Feature Engineering: Trends
+        if len(data) >= 2:
+            features['brightness_trend'] = data.get('brightness', 0).diff().fillna(0)
+        
+        # Feature Engineering: Saisonale Features
+        if 'timestamp' in data.columns:
+            features['month'] = data['timestamp'].dt.month
+            features['is_winter'] = data['timestamp'].dt.month.isin([12, 1, 2]).astype(int)
+            features['is_summer'] = data['timestamp'].dt.month.isin([6, 7, 8]).astype(int)
 
         return features
+
+    def _remove_outliers(self, data: pd.DataFrame, column: str) -> pd.DataFrame:
+        """
+        Entfernt Ausreißer mittels IQR-Methode
+        
+        Args:
+            data: DataFrame mit den Daten
+            column: Spaltenname für Ausreißer-Erkennung
+        
+        Returns:
+            DataFrame ohne Ausreißer
+        """
+        if column not in data.columns or data[column].isnull().all():
+            return data
+        
+        Q1 = data[column].quantile(0.25)
+        Q3 = data[column].quantile(0.75)
+        IQR = Q3 - Q1
+        
+        lower_bound = Q1 - 1.5 * IQR
+        upper_bound = Q3 + 1.5 * IQR
+        
+        outliers_before = len(data)
+        data = data[(data[column] >= lower_bound) & (data[column] <= upper_bound)]
+        outliers_removed = outliers_before - len(data)
+        
+        if outliers_removed > 0:
+            logger.info(f"Removed {outliers_removed} outliers from {column} ({outliers_removed/outliers_before*100:.1f}%)")
+        
+        return data
 
     def prepare_training_data(self, sensor_data: List[Dict],
                             light_states: List[Dict]) -> Tuple[pd.DataFrame, pd.Series]:
@@ -98,6 +143,10 @@ class LightingModel:
 
         # Entferne NaN-Werte
         merged = merged.dropna()
+        
+        # Ausreißer-Erkennung für Brightness
+        if 'brightness' in merged.columns:
+            merged = self._remove_outliers(merged, 'brightness')
 
         # Erstelle Features
         X = self._create_features(merged)
@@ -141,6 +190,14 @@ class LightingModel:
 
         # Training
         logger.info(f"Training {self.model_type} with {len(X_train)} samples")
+        
+        # Cross-Validation vor finalem Training
+        logger.info(f"Running 5-Fold Cross-Validation...")
+        cv_scores = cross_val_score(self.model, X, y, cv=5, scoring='accuracy')
+        cv_mean = cv_scores.mean()
+        cv_std = cv_scores.std()
+        logger.info(f"Cross-Validation Accuracy: {cv_mean:.4f} (+/- {cv_std:.4f})")
+        
         self.model.fit(X_train, y_train)
 
         # Evaluation
@@ -157,6 +214,8 @@ class LightingModel:
 
         return {
             'accuracy': float(accuracy),
+            'cv_accuracy_mean': float(cv_mean),
+            'cv_accuracy_std': float(cv_std),
             'samples_train': len(X_train),
             'samples_test': len(X_test),
             'feature_importance': feature_importance,

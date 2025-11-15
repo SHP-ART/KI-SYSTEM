@@ -3,7 +3,7 @@
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from datetime import datetime, timedelta
 import joblib
@@ -81,8 +81,63 @@ class TemperatureModel:
 
         # Energiepreis Level (1=günstig, 2=mittel, 3=teuer)
         features['energy_price_level'] = data.get('energy_price_level', 2)
+        
+        # Feature Engineering: Rolling Averages
+        if len(data) >= 6:
+            features['temp_rolling_6h'] = data.get('current_temperature', 20.0).rolling(window=6, min_periods=1).mean()
+            features['outdoor_temp_rolling_6h'] = data.get('outdoor_temperature', 15.0).rolling(window=6, min_periods=1).mean()
+        
+        if len(data) >= 24:
+            features['temp_rolling_24h'] = data.get('current_temperature', 20.0).rolling(window=24, min_periods=1).mean()
+        
+        # Feature Engineering: Trends
+        if len(data) >= 2:
+            features['temp_trend'] = data.get('current_temperature', 20.0).diff().fillna(0)
+            features['outdoor_temp_trend'] = data.get('outdoor_temperature', 15.0).diff().fillna(0)
+        
+        # Feature Engineering: Saisonale Features
+        if 'timestamp' in data.columns:
+            features['month'] = data['timestamp'].dt.month
+            features['is_winter'] = data['timestamp'].dt.month.isin([12, 1, 2]).astype(int)
+            features['is_summer'] = data['timestamp'].dt.month.isin([6, 7, 8]).astype(int)
+            features['is_transition'] = data['timestamp'].dt.month.isin([3, 4, 5, 9, 10, 11]).astype(int)
+        
+        # Feature Engineering: Temperatur-Differenz
+        features['temp_diff'] = data.get('current_temperature', 20.0) - data.get('outdoor_temperature', 15.0)
 
         return features
+
+    def _remove_outliers(self, data: pd.DataFrame, columns: List[str]) -> pd.DataFrame:
+        """
+        Entfernt Ausreißer mittels IQR-Methode für mehrere Spalten
+        
+        Args:
+            data: DataFrame mit den Daten
+            columns: Liste von Spaltennamen für Ausreißer-Erkennung
+        
+        Returns:
+            DataFrame ohne Ausreißer
+        """
+        original_len = len(data)
+        
+        for column in columns:
+            if column not in data.columns or data[column].isnull().all():
+                continue
+            
+            Q1 = data[column].quantile(0.25)
+            Q3 = data[column].quantile(0.75)
+            IQR = Q3 - Q1
+            
+            lower_bound = Q1 - 1.5 * IQR
+            upper_bound = Q3 + 1.5 * IQR
+            
+            data = data[(data[column] >= lower_bound) & (data[column] <= upper_bound)]
+        
+        outliers_removed = original_len - len(data)
+        if outliers_removed > 0:
+            logger.info(f"Removed {outliers_removed} outliers total ({outliers_removed/original_len*100:.1f}%)")
+        
+        return data
 
     def prepare_training_data(self, sensor_data: List[Dict],
                             temperature_settings: List[Dict]) -> Tuple[pd.DataFrame, pd.Series]:
@@ -109,6 +164,10 @@ class TemperatureModel:
         )
 
         merged = merged.dropna()
+        
+        # Ausreißer-Erkennung für Temperaturwerte und Humidity
+        outlier_columns = ['current_temperature', 'target_temperature', 'outdoor_temperature', 'humidity']
+        merged = self._remove_outliers(merged, outlier_columns)
 
         # Features und Labels
         X = self._create_features(merged)
@@ -148,6 +207,18 @@ class TemperatureModel:
 
         # Training
         logger.info(f"Training {self.model_type} with {len(X_train)} samples")
+        
+        # Cross-Validation vor finalem Training
+        logger.info(f"Running 5-Fold Cross-Validation...")
+        cv_scores_mae = -cross_val_score(self.model, X, y, cv=5, scoring='neg_mean_absolute_error')
+        cv_scores_r2 = cross_val_score(self.model, X, y, cv=5, scoring='r2')
+        cv_mae_mean = cv_scores_mae.mean()
+        cv_mae_std = cv_scores_mae.std()
+        cv_r2_mean = cv_scores_r2.mean()
+        cv_r2_std = cv_scores_r2.std()
+        logger.info(f"Cross-Validation MAE: {cv_mae_mean:.4f} (+/- {cv_mae_std:.4f})")
+        logger.info(f"Cross-Validation R²: {cv_r2_mean:.4f} (+/- {cv_r2_std:.4f})")
+        
         self.model.fit(X_train, y_train)
 
         # Evaluation
@@ -168,6 +239,10 @@ class TemperatureModel:
             'mae': float(mae),
             'rmse': float(rmse),
             'r2_score': float(r2),
+            'cv_mae_mean': float(cv_mae_mean),
+            'cv_mae_std': float(cv_mae_std),
+            'cv_r2_mean': float(cv_r2_mean),
+            'cv_r2_std': float(cv_r2_std),
             'samples_train': len(X_train),
             'samples_test': len(X_test),
             'feature_importance': feature_importance,
