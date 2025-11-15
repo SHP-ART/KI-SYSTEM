@@ -17,13 +17,24 @@ Ein intelligentes Machine Learning-basiertes System zur automatischen Steuerung 
 - **⚙️ Live-Konfiguration**: Einstellungen direkt im Web-Interface ändern (ohne YAML-Editing)
 - **📊 Live Training Progress**: Echtzeit-Fortschrittsanzeige beim ML-Modell-Training mit Progress-Bar
 - **🧹 Datenmanagement**: Trainingsdaten löschen und Modelle neu trainieren über Web-UI
-- **🏠 Raumspezifische Heizpläne**: Optimierte Heizung pro Raum statt globale Einstellungen
+- **🏠 Raumspezifische Heizpläne**: Optimierte Heizung pro Raum mit individuellen Insights und Lernparametern
 - **🔧 Erweiterte Heizungssteuerung**:
   - Fenster-Heizungs-Integration (kein Heizen bei offenen Fenstern)
-  - Schimmelprävention mit Taupunkt-Berechnung
-  - Intelligente Lüftungsempfehlungen basierend auf absoluter Luftfeuchtigkeit
-  - Vorhersage der Duschzeiten für präventives Heizen
-- **🎯 Verbessertes UX**: Sofortiges Feedback bei allen Aktionen, keine "Coming Soon" Meldungen mehr
+  - Monitoring-Modus für Datensammlung ohne aktive Steuerung
+  - Live-Temperaturverlauf mit interaktiven Charts
+  - Fenster-Statistiken mit Häufigkeit und Dauer-Analyse
+  - KI-basierte Optimierungsvorschläge pro Raum
+- **🌡️ Schimmelprävention**:
+  - Automatische Taupunkt-Berechnung (Magnus-Formel)
+  - Echtzeit-Schimmelrisiko-Bewertung (4 Stufen: NIEDRIG/MITTEL/HOCH/KRITISCH)
+  - Intelligente Luftentfeuchter-Steuerung bei erkanntem Risiko
+  - Kondensations-Warnung mit visueller Darstellung
+- **🎯 Automatische ML-Datensammlung**:
+  - Kontinuierliche Sammlung von Temperatur- und Beleuchtungsdaten
+  - Background-Collector für Training Data (alle 15 Minuten)
+  - Automatische Vorbereitung für ML-Modell-Training
+  - Live-Anzeige des Datensammlungs-Status
+- **🎨 Verbessertes UX**: Sofortiges Feedback bei allen Aktionen, keine "Coming Soon" Meldungen mehr
 
 ### Was ist neu in Version 0.8?
 
@@ -44,9 +55,11 @@ Ein intelligentes Machine Learning-basiertes System zur automatischen Steuerung 
   - Intelligente Beleuchtungssteuerung basierend auf Tageszeit, Helligkeit, Bewegung
   - Adaptive Temperaturregelung mit Wettervorhersage
   - Lernt aus deinem Verhalten und passt sich an
+  - Automatische Datensammlung für kontinuierliches Training
 
 - **Energieoptimierung**
-  - Intelligente Heizungssteuerung
+  - Intelligente Heizungssteuerung mit raumspezifischer Optimierung
+  - KI-basierte Vorschläge zur Energieeinsparung
   - Optional: Dynamische Strompreise (aWATTar, Tibber)
   - Energiespar-Empfehlungen in Echtzeit
 
@@ -71,27 +84,36 @@ Ein intelligentes Machine Learning-basiertes System zur automatischen Steuerung 
   - Manuelle Modell-Neutrainierung per Knopfdruck
   - Training History mit Metriken
   - Datenmanagement (Trainingsdaten löschen)
+  - **Automatische Datensammlung**: Kontinuierliches Sammeln von Trainings-Daten
+  - **Live-Zähler**: Echtzeit-Anzeige der gesammelten Events und Messungen
 
 - **Selbstlernendes Badezimmer-System**
   - Automatische Dusch-Erkennung
   - Intelligente Luftentfeuchter-Steuerung
+  - **Schimmelprävention**: Automatische Taupunkt-Berechnung und Risiko-Bewertung
   - Analytics & Statistiken (Events, Dauer, Luftfeuchtigkeit)
   - Vorhersage der nächsten Duschzeit
   - Automatische Schwellwert-Optimierung (täglich um 3:00 Uhr)
   - Trendanalyse und Muster-Erkennung
 
 - **Erweiterte Heizungssteuerung (NEU in v0.9)**
-  - Raumspezifische Heizpläne (jeder Raum individuell)
-  - Fenster-Integration (automatisches Heizen stoppen bei offenen Fenstern)
-  - Schimmelprävention mit Taupunkt-Berechnung (Magnus-Formel)
+  - **Raumspezifische Heizpläne**: Jeder Raum lernt individuell (Aufheizrate, Abkühlrate, Thermische Masse)
+  - **Monitoring-Modus**: Datensammlung ohne aktive Steuerung (Tado X behält die Kontrolle)
+  - **Live-Temperaturverlauf**: Interaktive Charts mit Ist/Soll-Temperatur pro Raum
+  - **Fenster-Integration**: Automatisches Heizen stoppen bei offenen Fenstern
+  - **Fenster-Statistiken**: Häufigkeit, Dauer und Trends mit Bar-Charts
+  - **KI-Insights pro Raum**: Personalisierte Optimierungsvorschläge für jeden Raum
+  - **Schimmelprävention**: Taupunkt-Berechnung mit automatischer Luftentfeuchter-Steuerung
   - Intelligente Lüftungsempfehlungen (absolute Luftfeuchtigkeit)
   - Duschzeit-Vorhersage für präventives Aufheizen
-  - Interaktive Fenster-Statistiken mit Bar-Charts
 
 - **Hintergrund-Datensammlung**
   - Automatisches Sammeln von Sensor-Daten alle 5 Minuten
+  - **ML-Training-Daten**: Kontinuierliche Sammlung von Beleuchtungs-Events und Temperaturmessungen
+  - **Background-Collector**: LightingDataCollector (60s) und TemperatureDataCollector (15min)
   - Langzeit-Analytics für Temperatur und Luftfeuchtigkeit
   - Persistente Speicherung in SQLite-Datenbank
+  - Live-Status im Web-Interface
 
 ### 🏠 Multi-Platform Support
 
@@ -264,33 +286,59 @@ Das Web-Dashboard ist dann erreichbar unter:
 
 **📊 Hauptseiten:**
 
-- **Dashboard** (`/`) - Übersicht über Status, Vorhersagen, Wetter
+- **Dashboard** (`/`) - Übersicht über Status, Vorhersagen, Wetter, Schimmelprävention
 - **Analytics** (`/analytics`) - Temperatur- und Luftfeuchtigkeit-Trends
-- **Badezimmer** (`/bathroom`) - Intelligente Badezimmer-Automatisierung
+- **Heizung** (`/heating`) - Erweiterte Heizungssteuerung mit Raum-Insights und Fenster-Statistiken
+- **Badezimmer** (`/luftentfeuchten`) - Intelligente Badezimmer-Automatisierung mit Schimmelprävention
 - **Geräte** (`/devices`) - Alle verbundenen Geräte verwalten
 - **Räume** (`/rooms`) - Raum-Management
 - **Automatisierungen** (`/automations`) - Automatisierungs-Regeln
-- **Einstellungen** (`/settings`) - System-Konfiguration
+- **Einstellungen** (`/settings`) - System-Konfiguration mit Live-Updates
+
+**🔥 Heizungssteuerung (NEU in v0.9):**
+
+1. **Monitoring/Control-Modus**:
+   - Monitoring: Nur Daten sammeln, Tado X behält Kontrolle
+   - Control: KI steuert aktiv Thermostate
+
+2. **Raumspezifisches Lernen**:
+   - Automatisches Lernen der Aufheizrate (°C/h)
+   - Berechnung der Abkühlrate
+   - Thermische Masse pro Raum
+   - Individuelle Optimierungsvorschläge
+
+3. **Live-Visualisierungen**:
+   - Temperaturverlauf mit Chart.js
+   - Fenster-Statistiken (Häufigkeit, Dauer)
+   - Heizaktivität pro Raum
+
+4. **Fenster-Integration**:
+   - Automatische Heizung stoppen bei offenen Fenstern
+   - Statistiken über Fensteröffnungen
+   - Energy-Loss-Berechnung
 
 **🚿 Badezimmer-Automatisierung:**
 
-1. **Konfiguration** (`/bathroom`):
+1. **Konfiguration** (`/luftentfeuchten`):
    - Sensoren auswählen (Luftfeuchtigkeit, Temperatur)
    - Luftentfeuchter konfigurieren
    - Schwellwerte anpassen (High/Low Luftfeuchtigkeit)
+   - **Schimmelprävention**: Echtzeit-Risikobewertung mit Taupunkt
    - System aktivieren/deaktivieren
 
 2. **Analytics Dashboard** (`/bathroom/analytics`):
    - Echtzeit-Statistiken (Events, Durchschnittswerte)
+   - **Schimmelrisiko-Anzeige**: 4 Stufen (NIEDRIG/MITTEL/HOCH/KRITISCH)
    - Trend-Charts (letzte 10 Events)
    - Häufigste Duschzeiten
    - Wochentags-Verteilung
    - Vorhersage der nächsten Duschzeit
    - Event-Historie
 
-3. **Automatische Optimierung**:
+3. **Automatische Optimierung & Prävention**:
    - Läuft täglich um 3:00 Uhr
    - Optimiert Schwellwerte basierend auf historischen Daten
+   - **Automatische Luftentfeuchter-Steuerung bei Schimmelrisiko**
    - Benötigt mindestens 3 Events für Optimierung
 
 ### API-Endpunkte
@@ -332,12 +380,18 @@ curl http://localhost:8080/api/ml/training-history
 curl -X DELETE http://localhost:8080/api/data/clear
 curl -X DELETE http://localhost:8080/api/data/clear?days_back=30
 
-# NEU in v0.9: Heizung & Fenster
+# NEU in v0.9: Heizung & Fenster & Schimmelprävention
 curl http://localhost:8080/api/heating/windows/charts?days=7
+curl http://localhost:8080/api/heating/insights
+curl http://localhost:8080/api/heating/temperature-history?days=7
+curl http://localhost:8080/api/heating/mode  # GET/POST für Monitoring/Control Toggle
 curl http://localhost:8080/api/humidity/alerts
 curl http://localhost:8080/api/ventilation/recommendation
 curl http://localhost:8080/api/shower/predictions
 curl http://localhost:8080/api/room/learning/<room_name>
+
+# NEU in v0.9: ML-Datensammlung Status
+curl http://localhost:8080/api/ml/status  # Zeigt gesammelte Training-Daten
 ```
 
 ## Verwendung
@@ -493,17 +547,44 @@ decision_engine:
 
 ## Training der ML-Modelle
 
-Das System sammelt automatisch Daten. Nach einigen Tagen Training:
+### Automatische Datensammlung (NEU in v0.9)
+
+Das System sammelt **automatisch** kontinuierlich Trainingsdaten:
+
+- **Temperature Data**: Alle 15 Minuten (HeatingDataCollector)
+- **Lighting Data**: Bei jedem Zustandswechsel (LightingDataCollector)
+
+**Live-Status anzeigen:**
+```bash
+curl http://localhost:8080/api/ml/status
+```
+
+Zeigt:
+- `temperature.data_count`: Anzahl der Temperaturmessungen (Ziel: 200)
+- `lighting.data_count`: Anzahl der Beleuchtungs-Events (Ziel: 100)
+- `days_of_data`: Wie lange Daten gesammelt werden
+- `ready`: Ob genug Daten für Training vorhanden sind
+
+### Manuelles Training
+
+Nach einigen Tagen Datensammlung:
 
 ```bash
 python main.py train
 ```
 
-Minimale Datenmengen:
-- Beleuchtung: 100+ Samples (ca. 2-3 Tage)
-- Heizung: 200+ Samples (ca. 4-5 Tage)
+**Oder über Web-Interface:**
+- Öffne `/settings`
+- Gehe zum "ML Training" Tab
+- Klicke "Training starten"
+- Live-Fortschritt wird angezeigt
 
-Das System trainiert auch automatisch neu, wenn genug neue Daten vorhanden sind.
+**Minimale Datenmengen:**
+- Beleuchtung: 100+ Events (ca. 2-3 Tage)
+- Heizung: 200+ Messungen (ca. 2 Tage bei 15min-Intervall)
+
+**Automatisches Training:**
+Das System trainiert auch automatisch neu (täglich um 2:00 Uhr), wenn genug neue Daten vorhanden sind.
 
 ## Externe APIs
 
@@ -531,6 +612,15 @@ KI-SYSTEM/
 ├── config/
 │   └── config.yaml           # Hauptkonfiguration
 ├── src/
+│   ├── background/           # Background-Services
+│   │   ├── bathroom_data_collector.py
+│   │   ├── bathroom_optimizer.py
+│   │   ├── heating_data_collector.py
+│   │   ├── window_data_collector.py
+│   │   ├── lighting_data_collector.py    # NEU in v0.9
+│   │   ├── temperature_data_collector.py # NEU in v0.9
+│   │   ├── ml_auto_trainer.py
+│   │   └── database_maintenance.py
 │   ├── data_collector/       # Datensammler
 │   │   ├── ha_collector.py   # Home Assistant
 │   │   ├── homey_collector.py # Homey Pro
@@ -542,8 +632,10 @@ KI-SYSTEM/
 │   │   └── energy_optimizer.py
 │   ├── decision_engine/      # Entscheidungs-Engine
 │   │   ├── engine.py
-│   │   ├── bathroom_automation.py    # Badezimmer-Logik
-│   │   └── bathroom_analyzer.py      # Analytics & Muster-Erkennung
+│   │   ├── bathroom_automation.py    # Badezimmer-Logik mit Schimmelprävention
+│   │   ├── bathroom_analyzer.py      # Analytics & Muster-Erkennung
+│   │   ├── heating_optimizer.py      # Heizungs-Optimierung pro Raum
+│   │   └── room_learning.py          # Raumspezifisches Lernen
 │   ├── background/           # Hintergrund-Prozesse
 │   │   ├── data_collector.py         # Auto. Datensammlung
 │   │   └── bathroom_optimizer.py     # Tägliche Optimierung
