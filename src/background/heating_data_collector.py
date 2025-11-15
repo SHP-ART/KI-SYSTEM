@@ -176,7 +176,7 @@ class HeatingDataCollector:
             except:
                 pass
 
-        # Speichere in Datenbank
+        # Speichere in Datenbank (beide Tabellen für Analytics und ML)
         observation_id = self.db.add_heating_observation(
             device_id=device_id,
             room_name=room_name,
@@ -187,6 +187,24 @@ class HeatingDataCollector:
             humidity=humidity,
             power_percentage=None  # Könnte später von capable_dim oder measure_power kommen
         )
+
+        # Zusätzlich: Speichere für ML-Training in continuous_measurements
+        if current_temp is not None and target_temp is not None:
+            device_name = device.get('name', 'Unknown')
+            self.db.add_continuous_measurement(
+                device_id=device_id,
+                device_name=device_name,
+                room_name=room_name or 'Unknown',
+                current_temp=current_temp,
+                target_temp=target_temp,
+                outdoor_temp=outdoor_temp or 20.0,  # Fallback
+                humidity=humidity,
+                heating_active=is_heating,
+                presence=False,  # TODO: Motion-Sensor Integration
+                window_open=False,  # TODO: Window-Sensor Integration
+                energy_price_level=2  # TODO: Energy Price Integration
+            )
+            logger.debug(f"Saved ML training data for {device_name}")
 
         return observation_id
 

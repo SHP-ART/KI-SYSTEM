@@ -147,6 +147,49 @@ class Database:
             )
         """)
 
+        # === ML TRAINING DATEN ===
+        
+        # Lighting Events für LightingModel
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS lighting_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME NOT NULL,
+                device_id TEXT NOT NULL,
+                device_name TEXT,
+                room_name TEXT,
+                state TEXT NOT NULL,
+                brightness INTEGER,
+                hour_of_day INTEGER,
+                day_of_week INTEGER,
+                is_weekend BOOLEAN,
+                outdoor_light REAL,
+                presence BOOLEAN,
+                motion_detected BOOLEAN
+            )
+        """)
+
+        # Temperature Readings für TemperatureModel
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS continuous_measurements (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME NOT NULL,
+                device_id TEXT NOT NULL,
+                device_name TEXT,
+                room_name TEXT,
+                current_temperature REAL,
+                target_temperature REAL,
+                outdoor_temperature REAL,
+                humidity REAL,
+                heating_active BOOLEAN,
+                presence BOOLEAN,
+                window_open BOOLEAN,
+                hour_of_day INTEGER,
+                day_of_week INTEGER,
+                is_weekend BOOLEAN,
+                energy_price_level INTEGER
+            )
+        """)
+
         # Automatisierungs-Trigger (für neue Automation UI)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS automation_triggers (
@@ -309,6 +352,16 @@ class Database:
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_bathroom_measurements_event
             ON bathroom_measurements(event_id, timestamp)
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_lighting_events_time
+            ON lighting_events(timestamp, device_id)
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_continuous_measurements_time
+            ON continuous_measurements(timestamp, device_id)
         """)
 
         cursor.execute("""
@@ -2045,6 +2098,105 @@ class Database:
 
         result = cursor.fetchone()
         return dict(result) if result else None
+
+    # === ML TRAINING DATA COLLECTION ===
+
+    def add_lighting_event(self, device_id: str, device_name: str, room_name: str,
+                          state: str, brightness: int = None, outdoor_light: float = None,
+                          presence: bool = False, motion_detected: bool = False):
+        """Fügt ein Beleuchtungs-Event für ML-Training hinzu"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        now = datetime.now()
+        
+        cursor.execute("""
+            INSERT INTO lighting_events
+            (timestamp, device_id, device_name, room_name, state, brightness,
+             hour_of_day, day_of_week, is_weekend, outdoor_light, presence, motion_detected)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            now, device_id, device_name, room_name, state, brightness,
+            now.hour, now.weekday(), now.weekday() >= 5,
+            outdoor_light, presence, motion_detected
+        ))
+        
+        conn.commit()
+        logger.debug(f"Lighting event saved: {device_name} ({room_name}) -> {state}")
+
+    def add_continuous_measurement(self, device_id: str, device_name: str, room_name: str,
+                                  current_temp: float, target_temp: float,
+                                  outdoor_temp: float = None, humidity: float = None,
+                                  heating_active: bool = False, presence: bool = False,
+                                  window_open: bool = False, energy_price_level: int = 2):
+        """Fügt eine kontinuierliche Temperaturmessung für ML-Training hinzu"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        now = datetime.now()
+        
+        cursor.execute("""
+            INSERT INTO continuous_measurements
+            (timestamp, device_id, device_name, room_name, current_temperature, target_temperature,
+             outdoor_temperature, humidity, heating_active, presence, window_open,
+             hour_of_day, day_of_week, is_weekend, energy_price_level)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            now, device_id, device_name, room_name, current_temp, target_temp,
+            outdoor_temp, humidity, heating_active, presence, window_open,
+            now.hour, now.weekday(), now.weekday() >= 5, energy_price_level
+        ))
+        
+        conn.commit()
+        logger.debug(f"Temperature measurement saved: {device_name} ({room_name}) {current_temp}°C")
+
+    def get_lighting_events_count(self) -> int:
+        """Gibt Anzahl der Lighting Events zurück"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM lighting_events")
+        return cursor.fetchone()[0]
+
+    def get_continuous_measurements_count(self) -> int:
+        """Gibt Anzahl der Temperaturmessungen zurück"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM continuous_measurements")
+        return cursor.fetchone()[0]
+
+    def get_lighting_events(self, days_back: int = 30, limit: int = None) -> List[Dict]:
+        """Holt Lighting Events für ML-Training"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        query = """
+            SELECT * FROM lighting_events
+            WHERE timestamp >= ?
+            ORDER BY timestamp DESC
+        """
+        
+        if limit:
+            query += f" LIMIT {limit}"
+        
+        cursor.execute(query, (datetime.now() - timedelta(days=days_back),))
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_continuous_measurements(self, days_back: int = 30, limit: int = None) -> List[Dict]:
+        """Holt Temperaturmessungen für ML-Training"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        query = """
+            SELECT * FROM continuous_measurements
+            WHERE timestamp >= ?
+            ORDER BY timestamp DESC
+        """
+        
+        if limit:
+            query += f" LIMIT {limit}"
+        
+        cursor.execute(query, (datetime.now() - timedelta(days=days_back),))
+        return [dict(row) for row in cursor.fetchall()]
 
     def close(self):
         """Schließt die Datenbankverbindung"""

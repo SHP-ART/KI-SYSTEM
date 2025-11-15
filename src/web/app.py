@@ -24,6 +24,8 @@ from src.background.ml_auto_trainer import MLAutoTrainer
 from src.background.heating_data_collector import HeatingDataCollector
 from src.background.window_data_collector import WindowDataCollector
 from src.background.bathroom_data_collector import BathroomDataCollector
+from src.background.lighting_data_collector import LightingDataCollector
+from src.background.temperature_data_collector import TemperatureDataCollector
 from src.background.database_maintenance import DatabaseMaintenanceJob
 from src.utils.database import Database
 
@@ -43,10 +45,12 @@ class WebInterface:
         # Initialisiere Decision Engine
         try:
             self.engine = DecisionEngine(config_path)
+            self.config = self.engine.config  # Store config reference
             logger.info("Decision Engine for web interface initialized")
         except Exception as e:
             logger.error(f"Failed to initialize Decision Engine: {e}")
             self.engine = None
+            self.config = {}
 
         # Initialisiere Database
         self.db = Database()
@@ -117,6 +121,28 @@ class WebInterface:
             logger.info("Window Data Collector initialized (60s interval)")
         except Exception as e:
             logger.error(f"Failed to initialize Window Data Collector: {e}")
+
+        # Lighting Data Collector für ML Training (60s interval)
+        self.lighting_collector = None
+        try:
+            self.lighting_collector = LightingDataCollector(
+                db=self.db,
+                config=self.config
+            )
+            logger.info("Lighting Data Collector initialized (ML Training)")
+        except Exception as e:
+            logger.error(f"Failed to initialize Lighting Data Collector: {e}")
+
+        # Temperature Data Collector für ML Training (5min interval)
+        self.temperature_collector = None
+        try:
+            self.temperature_collector = TemperatureDataCollector(
+                db=self.db,
+                config=self.config
+            )
+            logger.info("Temperature Data Collector initialized (ML Training)")
+        except Exception as e:
+            logger.error(f"Failed to initialize Temperature Data Collector: {e}")
 
         # Initialisiere Database Maintenance Job (läuft täglich um 5:00 Uhr)
         self.db_maintenance = None
@@ -830,31 +856,28 @@ class WebInterface:
                         'temperature_last_trained': None
                     }
 
-                # Zähle verfügbare Daten
+                # Zähle verfügbare Daten aus den neuen ML-Tabellen
                 lighting_count = 0
                 temp_count = 0
                 days_of_data = 0
 
                 try:
-                    # Lighting events
-                    result = self.db.execute(
-                        "SELECT COUNT(*) as count FROM decisions WHERE device_id LIKE '%light%' OR device_id LIKE '%lamp%'"
-                    )
-                    lighting_count = result[0]['count'] if result else 0
+                    # Lighting events aus neuer Tabelle
+                    lighting_count = self.db.get_lighting_events_count()
 
-                    # Temperature readings
-                    result = self.db.execute(
-                        "SELECT COUNT(*) as count FROM sensor_data WHERE sensor_id LIKE '%temp%' OR sensor_id LIKE '%temperature%'"
-                    )
-                    temp_count = result[0]['count'] if result else 0
+                    # Temperature readings aus neuer Tabelle
+                    temp_count = self.db.get_continuous_measurements_count()
 
-                    # Days of data
-                    result = self.db.execute(
-                        "SELECT MIN(timestamp) as first_reading FROM sensor_data"
-                    )
-                    if result and result[0]['first_reading']:
-                        first_reading = datetime.fromisoformat(result[0]['first_reading'])
+                    # Days of data - prüfe beide Tabellen
+                    conn = self.db._get_connection()
+                    cursor = conn.cursor()
+                    
+                    cursor.execute("SELECT MIN(timestamp) as first_reading FROM continuous_measurements")
+                    result = cursor.fetchone()
+                    if result and result['first_reading']:
+                        first_reading = datetime.fromisoformat(result['first_reading'])
                         days_of_data = (datetime.now() - first_reading).days
+                        
                 except Exception as e:
                     logger.warning(f"Could not count ML data: {e}")
 
@@ -4173,6 +4196,16 @@ class WebInterface:
             self.window_collector.start()
             logger.info("Window Data Collector started (collects every 60s)")
 
+        # Starte Lighting Data Collector (für ML Training)
+        if self.lighting_collector:
+            self.lighting_collector.start()
+            logger.info("Lighting Data Collector started (for ML Training)")
+
+        # Starte Temperature Data Collector (für ML Training)
+        if self.temperature_collector:
+            self.temperature_collector.start()
+            logger.info("Temperature Data Collector started (for ML Training)")
+
         # Starte Database Maintenance Job
         if self.db_maintenance:
             self.db_maintenance.start()
@@ -4205,6 +4238,14 @@ class WebInterface:
             if self.window_collector:
                 self.window_collector.stop()
                 logger.info("Window Data Collector stopped")
+
+            if self.lighting_collector:
+                self.lighting_collector.stop()
+                logger.info("Lighting Data Collector stopped")
+
+            if self.temperature_collector:
+                self.temperature_collector.stop()
+                logger.info("Temperature Data Collector stopped")
 
             if self.db_maintenance:
                 self.db_maintenance.stop()
