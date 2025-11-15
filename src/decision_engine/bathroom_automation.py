@@ -414,13 +414,46 @@ class BathroomAutomation:
         if not dehumidifier_id:
             return None
 
+        # Prüfe Schimmelrisiko (falls aktiviert)
+        mold_risk_detected = False
+        mold_risk_level = None
+        if self.mold_prevention:
+            try:
+                # Hole Temperatur für Taupunkt-Berechnung
+                temperature = self._get_temperature(platform)
+                if temperature is not None:
+                    room_name = self.config.get('room_name', 'Bad')
+                    analysis = self.mold_prevention.analyze_room_humidity(
+                        room_name=room_name,
+                        temperature=temperature,
+                        humidity=humidity
+                    )
+                    
+                    if analysis and 'condensation_risk' in analysis:
+                        risk_data = analysis['condensation_risk']
+                        mold_risk_level = risk_data.get('risk_level')
+                        # Einschalten bei kritischem oder hohem Risiko
+                        if mold_risk_level in ['KRITISCH', 'HOCH']:
+                            mold_risk_detected = True
+                            logger.warning(f"⚠️ Mold risk detected: {mold_risk_level} (humidity: {humidity}%, dewpoint: {analysis.get('dewpoint', 'N/A')}°C)")
+            except Exception as e:
+                logger.error(f"Error checking mold risk: {e}")
+
         # EINSCHALTEN wenn:
         # - Luftfeuchtigkeit zu hoch
         # - Oder Dusche aktiv erkannt
-        should_turn_on = (humidity > self.humidity_high) or shower_active
+        # - Oder Schimmelrisiko erkannt
+        should_turn_on = (humidity > self.humidity_high) or shower_active or mold_risk_detected
 
         if should_turn_on and not self.dehumidifier_running:
-            reason = f'High humidity ({humidity}%) or shower detected'
+            # Bestimme Grund
+            if mold_risk_detected:
+                reason = f'Mold risk detected: {mold_risk_level} (humidity: {humidity}%)'
+            elif shower_active:
+                reason = f'Shower detected (humidity: {humidity}%)'
+            else:
+                reason = f'High humidity ({humidity}%)'
+            
             logger.info(f"💨 Turning ON dehumidifier (humidity: {humidity}%)")
             self.dehumidifier_running = True
             self.dehumidifier_start_time = datetime.now()
@@ -436,8 +469,33 @@ class BathroomAutomation:
 
         # AUSSCHALTEN wenn:
         # - Luftfeuchtigkeit wieder niedrig
-        # - UND keine kürzliche Bewegung (Verzögerung)
-        should_turn_off = humidity < self.humidity_low
+        # - UND kein Schimmelrisiko mehr
+        # - UND Verzögerung abgelaufen
+        
+        # Prüfe erneut Schimmelrisiko für Ausschalt-Entscheidung
+        mold_risk_still_present = False
+        if self.mold_prevention and self.dehumidifier_running:
+            try:
+                temperature = self._get_temperature(platform)
+                if temperature is not None:
+                    room_name = self.config.get('room_name', 'Bad')
+                    analysis = self.mold_prevention.analyze_room_humidity(
+                        room_name=room_name,
+                        temperature=temperature,
+                        humidity=humidity
+                    )
+                    
+                    if analysis and 'condensation_risk' in analysis:
+                        risk_data = analysis['condensation_risk']
+                        risk_level = risk_data.get('risk_level')
+                        # Weiterlaufen bei kritischem oder hohem Risiko
+                        if risk_level in ['KRITISCH', 'HOCH']:
+                            mold_risk_still_present = True
+                            logger.info(f"🛡️ Keeping dehumidifier running due to {risk_level} mold risk")
+            except Exception as e:
+                logger.error(f"Error checking mold risk for shutdown: {e}")
+        
+        should_turn_off = humidity < self.humidity_low and not mold_risk_still_present
 
         if should_turn_off and self.dehumidifier_running:
             # Merke dir, wann Luftfeuchtigkeit unter Schwellwert gefallen ist
