@@ -35,6 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadHeatingAnalytics();
 
     // Lade neue Features
+    loadMoldPreventionStatus();
     loadHumidityAlerts();
     loadVentilationRecommendations();
     loadShowerPredictions();
@@ -1848,5 +1849,116 @@ async function loadShowerPredictions() {
     } catch (error) {
         console.error('Error loading shower predictions:', error);
         document.getElementById('shower-predictions-card').style.display = 'none';
+    }
+}
+
+/**
+ * Lädt aktuellen Schimmelprävention-Status
+ */
+async function loadMoldPreventionStatus() {
+    try {
+        const response = await fetchJSON('/api/status');
+        
+        const container = document.getElementById('mold-status-container');
+        const card = document.getElementById('mold-prevention-card');
+
+        if (!response.mold_prevention) {
+            container.innerHTML = `
+                <div style="padding: 20px; text-align: center; color: #6b7280;">
+                    ℹ️ Schimmelprävention nicht konfiguriert
+                </div>
+            `;
+            return;
+        }
+
+        const mold = response.mold_prevention;
+        
+        // Risiko-Level Farben
+        const riskStyles = {
+            'NIEDRIG': { bg: '#d1fae5', border: '#059669', color: '#065f46', icon: '🟢' },
+            'MITTEL': { bg: '#fef3c7', border: '#d97706', color: '#92400e', icon: '🟡' },
+            'HOCH': { bg: '#fed7aa', border: '#ea580c', color: '#7c2d12', icon: '🟠' },
+            'KRITISCH': { bg: '#fee2e2', border: '#dc2626', color: '#7f1d1d', icon: '🔴' }
+        };
+
+        const style = riskStyles[mold.risk_level] || riskStyles['MITTEL'];
+
+        // Hauptstatus-Anzeige
+        let statusHTML = `
+            <div style="padding: 20px; background: ${style.bg}; border-left: 4px solid ${style.border}; border-radius: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: start; flex-wrap: wrap; gap: 20px;">
+                    <div style="flex: 1; min-width: 250px;">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                            <span style="font-size: 2em;">${style.icon}</span>
+                            <div>
+                                <div style="font-size: 1.5em; font-weight: 700; color: ${style.color};">${mold.risk_level}</div>
+                                <div style="font-size: 0.85em; color: #6b7280;">Schimmelrisiko</div>
+                            </div>
+                        </div>
+                        ${mold.risk_level === 'KRITISCH' ? `
+                            <div style="margin-top: 10px; padding: 10px; background: white; border-radius: 6px; font-size: 0.9em; color: #991b1b;">
+                                <strong>⚠️ Sofortmaßnahmen erforderlich!</strong>
+                            </div>
+                        ` : ''}
+                    </div>
+
+                    <!-- Messwerte -->
+                    <div style="flex: 2; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
+                        <div style="background: white; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                            <div style="font-size: 0.75em; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px;">Luftfeuchtigkeit</div>
+                            <div style="font-size: 1.8em; font-weight: 700; color: #1f2937;">${mold.humidity !== null && mold.humidity !== undefined ? mold.humidity.toFixed(1) : '--'}%</div>
+                        </div>
+                        
+                        <div style="background: white; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                            <div style="font-size: 0.75em; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px;">Temperatur</div>
+                            <div style="font-size: 1.8em; font-weight: 700; color: #1f2937;">${mold.temperature !== null && mold.temperature !== undefined ? mold.temperature.toFixed(1) : '--'}°C</div>
+                        </div>
+                        
+                        <div style="background: white; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                            <div style="font-size: 0.75em; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px;">Taupunkt</div>
+                            <div style="font-size: 1.8em; font-weight: 700; color: #1f2937;">${mold.dewpoint !== null && mold.dewpoint !== undefined ? mold.dewpoint.toFixed(1) : '--'}°C</div>
+                        </div>
+                        
+                        <div style="background: white; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                            <div style="font-size: 0.75em; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px;">Kondensation</div>
+                            <div style="font-size: 1.5em; font-weight: 700; color: ${mold.condensation_possible ? '#dc2626' : '#059669'};">
+                                ${mold.condensation_possible ? '⚠️ Möglich' : '✓ Keine'}
+                            </div>
+                        </div>
+                        
+                        <div style="background: white; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                            <div style="font-size: 0.75em; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px;">Luftentfeuchter</div>
+                            <div style="font-size: 1.5em; font-weight: 700; color: ${mold.dehumidifier_running ? '#059669' : '#6b7280'};">
+                                ${mold.dehumidifier_running ? '✓ Aktiv' : '○ Aus'}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Empfehlungen -->
+                ${mold.recommendations && mold.recommendations.length > 0 ? `
+                    <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(0,0,0,0.1);">
+                        <div style="font-weight: 600; color: ${style.color}; margin-bottom: 10px;">💡 Empfehlungen:</div>
+                        <ul style="margin: 0; padding-left: 20px; color: #374151;">
+                            ${mold.recommendations.map(rec => `<li style="margin-bottom: 5px;">${rec}</li>`).join('')}
+                        </ul>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+
+        container.innerHTML = statusHTML;
+
+        // Zeige Karte immer an
+        card.style.display = 'block';
+
+    } catch (error) {
+        console.error('Error loading mold prevention status:', error);
+        const container = document.getElementById('mold-status-container');
+        container.innerHTML = `
+            <div style="padding: 20px; text-align: center; color: #ef4444;">
+                ⚠️ Fehler beim Laden der Schimmelprävention
+            </div>
+        `;
     }
 }

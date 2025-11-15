@@ -144,11 +144,29 @@
         </div>
     </div>
 
+    <!-- Schimmelprävention & Raumklima -->
+    <div class="card" id="mold-prevention-card">
+        <h3>🛡️ Schimmelprävention & Raumklima</h3>
+        <p class="card-description">Echtzeit-Analyse des Schimmelrisikos basierend auf Temperatur, Luftfeuchtigkeit und Taupunkt</p>
+        
+        <!-- Aktueller Status -->
+        <div id="mold-status-container" style="margin-bottom: 20px;">
+            <div class="loading" style="text-align: center; padding: 20px;">
+                Lade Schimmelrisiko-Analyse...
+            </div>
+        </div>
+
+        <!-- Historische Warnungen -->
+        <div id="humidity-alerts-container" style="display: none;">
+            <h4 style="margin: 20px 0 10px 0; font-size: 1em; color: #6b7280;">📋 Letzte Warnungen</h4>
+        </div>
+    </div>
+
     <!-- Humidity Alerts & Schimmelprävention -->
     <div class="card" id="humidity-alerts-card" style="display: none;">
         <h3>⚠️ Luftfeuchtigkeits-Warnungen</h3>
         <p class="card-description">Schimmelrisiko-Analyse basierend auf Temperatur und Luftfeuchtigkeit</p>
-        <div id="humidity-alerts-container">
+        <div id="humidity-alerts-container-old">
             <div class="loading" style="text-align: center; padding: 20px;">
                 Lade Warnungen...
             </div>
