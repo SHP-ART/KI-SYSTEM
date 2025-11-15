@@ -1377,8 +1377,11 @@ async function loadWindowStatistics() {
         // Zeige Loading
         const loadingEl = document.getElementById('window-charts-loading');
         const noDataEl = document.getElementById('window-charts-no-data');
+        const statsContainer = document.getElementById('window-room-stats');
+
         if (loadingEl) loadingEl.style.display = 'block';
         if (noDataEl) noDataEl.style.display = 'none';
+        if (statsContainer) statsContainer.innerHTML = '';
 
         // Hole ausgewählten Zeitraum
         const timeframeSelect = document.getElementById('window-stats-timeframe');
@@ -1390,27 +1393,36 @@ async function loadWindowStatistics() {
         // Verstecke Loading
         if (loadingEl) loadingEl.style.display = 'none';
 
-        if (!response.data) {
+        if (!response.data || !response.data.frequency_by_window) {
             if (noDataEl) noDataEl.style.display = 'block';
             return;
         }
 
-        const data = response.data;
+        const frequencyData = response.data.frequency_by_window;
 
         // Prüfe ob Daten vorhanden sind
-        const hasData = (data.duration_by_window && data.duration_by_window.length > 0) ||
-                        (data.frequency_by_window && data.frequency_by_window.length > 0) ||
-                        (data.daily_trends && data.daily_trends.length > 0);
-
-        if (!hasData) {
+        if (!frequencyData || frequencyData.length === 0) {
             if (noDataEl) noDataEl.style.display = 'block';
             return;
         }
 
-        // Rendere Charts
-        renderWindowDurationChart(data.duration_by_window);
-        renderWindowFrequencyChart(data.frequency_by_window);
-        renderWindowTrendsChart(data.daily_trends);
+        // Gruppiere nach Raum
+        const roomStats = {};
+        frequencyData.forEach(window => {
+            const roomName = window.room_name || 'Unbekannt';
+            if (!roomStats[roomName]) {
+                roomStats[roomName] = {
+                    room: roomName,
+                    total_openings: 0,
+                    windows: []
+                };
+            }
+            roomStats[roomName].total_openings += window.open_count;
+            roomStats[roomName].windows.push(window);
+        });
+
+        // Rendere Raum-Karten
+        renderRoomStats(Object.values(roomStats), statsContainer);
 
     } catch (error) {
         console.error('Error loading window statistics:', error);
@@ -1424,6 +1436,52 @@ async function loadWindowStatistics() {
             `;
         }
     }
+}
+
+/**
+ * Rendert Raum-Statistik-Karten
+ */
+function renderRoomStats(roomStats, container) {
+    if (!container) return;
+
+    // Sortiere nach Anzahl der Öffnungen (absteigend)
+    const sortedRooms = [...roomStats].sort((a, b) => b.total_openings - a.total_openings);
+
+    // Erstelle Karten
+    container.innerHTML = sortedRooms.map(room => {
+        // Berechne Durchschnitt pro Tag
+        const timeframeSelect = document.getElementById('window-stats-timeframe');
+        const days = timeframeSelect ? parseInt(timeframeSelect.value) : 7;
+        const avgPerDay = (room.total_openings / days).toFixed(1);
+
+        const windowCount = room.windows.length;
+        const windowLabel = windowCount === 1 ? 'Fenster' : 'Fenster';
+
+        return `
+            <div class="room-ventilation-card" style="background: linear-gradient(135deg, #f0f9ff 0%, #ffffff 100%); border: 1px solid #bfdbfe; border-radius: 12px; padding: 20px; transition: all 0.2s;">
+                <div style="font-size: 2em; margin-bottom: 10px;">🪟</div>
+                <h4 style="margin: 0 0 15px 0; color: #1e40af; font-size: 1.1em;">${room.room}</h4>
+                <div style="background: white; padding: 12px; border-radius: 8px; margin-bottom: 10px;">
+                    <div style="font-size: 2.5em; font-weight: 700; color: #3b82f6; margin-bottom: 5px;">
+                        ${room.total_openings}×
+                    </div>
+                    <div style="font-size: 0.85em; color: #6b7280;">
+                        Gelüftet
+                    </div>
+                </div>
+                <div style="display: flex; gap: 8px; font-size: 0.85em; color: #6b7280;">
+                    <div style="flex: 1; padding: 8px; background: rgba(59, 130, 246, 0.1); border-radius: 6px; text-align: center;">
+                        <div style="font-weight: 600; color: #3b82f6;">${avgPerDay}×</div>
+                        <div style="font-size: 0.8em;">pro Tag</div>
+                    </div>
+                    <div style="flex: 1; padding: 8px; background: rgba(59, 130, 246, 0.1); border-radius: 6px; text-align: center;">
+                        <div style="font-weight: 600; color: #3b82f6;">${windowCount}</div>
+                        <div style="font-size: 0.8em;">${windowLabel}</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
 }
 
 /**

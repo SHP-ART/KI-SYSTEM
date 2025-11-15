@@ -95,10 +95,10 @@
             </div>
         </div>
 
-        <!-- Fenster-Statistik mit Charts -->
+        <!-- Fenster-Statistik - Vereinfacht nach Räumen -->
         <div id="window-statistics-container" style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h4 style="margin: 0;">📊 Fenster-Statistik</h4>
+                <h4 style="margin: 0;">📊 Lüftungsstatistik nach Raum</h4>
                 <select id="window-stats-timeframe" class="time-range-select" style="padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; background: white; font-size: 0.9em;">
                     <option value="1">Heute</option>
                     <option value="7" selected>7 Tage</option>
@@ -106,31 +106,9 @@
                 </select>
             </div>
 
-            <!-- Öffnungszeiten Chart -->
-            <div style="margin-bottom: 30px;">
-                <h5 style="margin-bottom: 10px; color: #374151;">⏱️ Öffnungszeiten pro Fenster</h5>
-                <div class="chart-container" style="height: 300px;">
-                    <canvas id="window-duration-chart"></canvas>
-                </div>
-            </div>
-
-            <!-- Öffnungshäufigkeit Chart -->
-            <div style="margin-bottom: 30px;">
-                <h5 style="margin-bottom: 10px; color: #374151;">🔢 Öffnungshäufigkeit</h5>
-                <div class="chart-container" style="height: 300px;">
-                    <canvas id="window-frequency-chart"></canvas>
-                </div>
-            </div>
-
-            <!-- Tägliche Trends Chart -->
-            <div>
-                <h5 style="margin-bottom: 10px; color: #374151;">📈 Tägliche Trends</h5>
-                <div class="chart-container" style="height: 250px;">
-                    <canvas id="window-trends-chart"></canvas>
-                </div>
-                <div style="text-align: center; font-size: 0.85em; color: #6b7280; margin-top: 10px;">
-                    Anzahl der Fensteröffnungen und Gesamtdauer pro Tag
-                </div>
+            <!-- Raum-Statistik Grid -->
+            <div id="window-room-stats" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px;">
+                <!-- Wird dynamisch gefüllt -->
             </div>
 
             <!-- Loading/Error States -->
@@ -1237,6 +1215,12 @@
 
 .temp-timeframe-btn.active:hover {
     background: #2563eb !important;
+}
+
+/* Raum-Lüftungs-Karten Hover-Effekt */
+.room-ventilation-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
 }
 </style>
 
