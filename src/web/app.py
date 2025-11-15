@@ -536,8 +536,51 @@ class WebInterface:
 
             elif request.method == 'POST':
                 # Update Konfiguration
-                # TODO: Implementiere Config-Update
-                return jsonify({'success': True, 'message': 'Config update coming soon'})
+                data = request.get_json()
+                if not data:
+                    return jsonify({'success': False, 'error': 'Keine Daten erhalten'}), 400
+
+                updated = []
+                errors = []
+
+                # Validiere und update jedes Feld
+                for key, value in data.items():
+                    # Validierung
+                    if key == 'decision_mode' and value not in ['auto', 'manual', 'learning']:
+                        errors.append(f"Ungültiger Modus: {value}")
+                        continue
+                    if key == 'confidence_threshold' and not (0 <= float(value) <= 1):
+                        errors.append(f"Confidence muss zwischen 0 und 1 liegen: {value}")
+                        continue
+
+                    # Map UI keys to config paths
+                    config_key_map = {
+                        'platform_type': 'platform.type',
+                        'data_collection_interval': 'data_collection.interval_seconds',
+                        'decision_mode': 'decision_engine.mode',
+                        'confidence_threshold': 'decision_engine.confidence_threshold'
+                    }
+
+                    config_key = config_key_map.get(key, key)
+
+                    # Update config
+                    if self.engine.config.update(config_key, value):
+                        updated.append(key)
+                    else:
+                        errors.append(f"Fehler beim Speichern von {key}")
+
+                if errors:
+                    return jsonify({
+                        'success': False,
+                        'updated': updated,
+                        'errors': errors
+                    }), 400
+
+                return jsonify({
+                    'success': True,
+                    'message': f'{len(updated)} Einstellungen aktualisiert',
+                    'updated': updated
+                })
 
         # === Settings APIs ===
 
@@ -735,9 +778,9 @@ class WebInterface:
                         'ready': temp_count >= 200 and days_of_data >= 3
                     },
                     'auto_trainer': {
-                        'enabled': True,  # TODO: Load from config
-                        'run_hour': 2,     # TODO: Load from config
-                        'last_run': None   # TODO: Load from status
+                        'enabled': self.engine.config.get('ml_auto_trainer.enabled', True),
+                        'run_hour': self.engine.config.get('ml_auto_trainer.run_hour', 2),
+                        'last_run': self.db.get_system_status('last_ml_training')['value'] if self.db.get_system_status('last_ml_training') else None
                     },
                     'days_of_data': days_of_data
                 })
@@ -3433,6 +3476,40 @@ class WebInterface:
                 })
             except Exception as e:
                 logger.error(f"Error during vacuum: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
+
+        @self.app.route('/api/data/clear', methods=['DELETE', 'POST'])
+        def api_clear_training_data():
+            """
+            Löscht Trainingsdaten (GEFÄHRLICH - nicht umkehrbar!)
+            Query params:
+              - days_back: Optional - nur Daten älter als X Tage löschen
+                          Wenn nicht angegeben: ALLE Daten löschen
+            """
+            try:
+                # Erlaube sowohl DELETE als auch POST für Kompatibilität
+                days_back = request.args.get('days_back', type=int)
+
+                if days_back is None:
+                    # ALLE Daten löschen - sehr gefährlich!
+                    logger.warning("User requested to clear ALL training data")
+                    deleted_counts = self.db.clear_all_training_data(days_back=None)
+                    message = f"ALLE Trainingsdaten gelöscht: {sum(deleted_counts.values())} Zeilen"
+                else:
+                    # Nur alte Daten löschen
+                    logger.info(f"User requested to clear data older than {days_back} days")
+                    deleted_counts = self.db.clear_all_training_data(days_back=days_back)
+                    message = f"Daten älter als {days_back} Tage gelöscht: {sum(deleted_counts.values())} Zeilen"
+
+                return jsonify({
+                    'success': True,
+                    'deleted_rows': sum(deleted_counts.values()),
+                    'details': deleted_counts,
+                    'message': message
+                })
+
+            except Exception as e:
+                logger.error(f"Error clearing training data: {e}")
                 return jsonify({'success': False, 'error': str(e)}), 500
 
     def _calculate_heating_analytics(self, days_back: int) -> dict:

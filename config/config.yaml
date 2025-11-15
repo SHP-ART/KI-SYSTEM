@@ -97,6 +97,13 @@ decision_engine:
       condition: "away_mode == true"
       action: "eco_mode == true"
 
+# Automatisches ML-Training
+ml_auto_trainer:
+  enabled: true
+  run_hour: 2  # Uhrzeit (0-23) für tägliches Training
+  min_samples_lighting: 100
+  min_samples_heating: 200
+
 # Datenbank
 database:
   type: "sqlite"

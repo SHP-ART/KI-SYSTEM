@@ -279,6 +279,17 @@ class Database:
             )
         """)
 
+        # === SYSTEM STATUS ===
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS system_status (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                key TEXT UNIQUE NOT NULL,
+                value TEXT,
+                timestamp DATETIME NOT NULL
+            )
+        """)
+
         # Erstelle Indizes für bessere Performance
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_sensor_timestamp
@@ -628,6 +639,67 @@ class Database:
 
         total_deleted = sum(deleted_counts.values())
         logger.info(f"Cleaned up {total_deleted} rows older than {retention_days} days: {deleted_counts}")
+
+        return deleted_counts
+
+    def clear_all_training_data(self, days_back: int = None) -> Dict[str, int]:
+        """
+        Löscht ALLE Trainingsdaten (oder nur Daten älter als X Tage)
+        WARNUNG: Diese Aktion kann nicht rückgängig gemacht werden!
+
+        Args:
+            days_back: Wenn angegeben, lösche nur Daten älter als X Tage.
+                      Wenn None, lösche ALLE Daten.
+
+        Returns:
+            Dict mit Anzahl der gelöschten Zeilen pro Tabelle
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        deleted_counts = {}
+
+        if days_back is not None:
+            cutoff_date = datetime.now() - timedelta(days=days_back)
+            logger.warning(f"Clearing training data older than {days_back} days (before {cutoff_date})")
+        else:
+            cutoff_date = None
+            logger.warning("Clearing ALL training data - this cannot be undone!")
+
+        # Definiere Tabellen die geleert werden sollen
+        tables_with_timestamp = [
+            'sensor_data',
+            'external_data',
+            'decisions',
+            'bathroom_events',
+            'bathroom_measurements',
+            'bathroom_device_actions',
+            'bathroom_continuous_measurements',
+            'heating_observations',
+            'heating_insights',
+            'heating_schedules',
+            'humidity_alerts',
+            'ventilation_recommendations',
+            'shower_predictions'
+        ]
+
+        for table in tables_with_timestamp:
+            if cutoff_date:
+                # Lösche nur alte Daten
+                timestamp_col = 'start_time' if table == 'bathroom_events' else 'timestamp'
+                cursor.execute(f"DELETE FROM {table} WHERE {timestamp_col} < ?", (cutoff_date,))
+            else:
+                # Lösche ALLE Daten
+                cursor.execute(f"DELETE FROM {table}")
+
+            deleted_counts[table] = cursor.rowcount
+
+        # Behalte IMMER system_status und learned_parameters (kritische Config-Daten)
+        # Diese werden NICHT gelöscht, auch nicht bei "clear all"
+
+        conn.commit()
+
+        total_deleted = sum(deleted_counts.values())
+        logger.warning(f"Cleared {total_deleted} rows of training data: {deleted_counts}")
 
         return deleted_counts
 
@@ -1946,6 +2018,33 @@ class Database:
         """, (today_start, today_end))
 
         return [dict(row) for row in cursor.fetchall()]
+
+    # === SYSTEM STATUS METHODEN ===
+
+    def set_system_status(self, key: str, value: str):
+        """Setzt einen System-Status-Wert (z.B. last_ml_training_run)"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            INSERT OR REPLACE INTO system_status (key, value, timestamp)
+            VALUES (?, ?, ?)
+        """, (key, value, datetime.now()))
+
+        conn.commit()
+
+    def get_system_status(self, key: str) -> Optional[Dict]:
+        """Holt einen System-Status-Wert"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT key, value, timestamp FROM system_status
+            WHERE key = ?
+        """, (key,))
+
+        result = cursor.fetchone()
+        return dict(result) if result else None
 
     def close(self):
         """Schließt die Datenbankverbindung"""

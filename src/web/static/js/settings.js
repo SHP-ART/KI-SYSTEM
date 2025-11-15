@@ -234,15 +234,30 @@ document.getElementById('retrain-models').addEventListener('click', async () => 
         return;
     }
 
-    resultEl.textContent = 'Training wird gestartet... (Diese Funktion ist in Entwicklung)';
+    resultEl.textContent = 'Training wird gestartet... Dies kann einige Minuten dauern.';
     resultEl.className = 'action-result';
     resultEl.style.display = 'block';
 
-    // TODO: Implementiere Modell-Training API
-    setTimeout(() => {
-        resultEl.textContent = 'Modell-Training ist noch nicht implementiert.';
+    try {
+        const response = await fetch('/api/ml/train', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: 'all' })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            resultEl.textContent = data.message;
+            resultEl.className = 'action-result success';
+        } else {
+            resultEl.textContent = `Fehler: ${data.message || 'Training fehlgeschlagen'}`;
+            resultEl.className = 'action-result error';
+        }
+    } catch (error) {
+        resultEl.textContent = `Fehler beim Training: ${error.message}`;
         resultEl.className = 'action-result error';
-    }, 1000);
+    }
 });
 
 // Daten löschen
@@ -257,15 +272,33 @@ document.getElementById('clear-data').addEventListener('click', async () => {
         return;
     }
 
-    resultEl.textContent = 'Daten werden gelöscht... (Diese Funktion ist in Entwicklung)';
+    resultEl.textContent = 'Daten werden gelöscht... Dies kann nicht rückgängig gemacht werden.';
     resultEl.className = 'action-result';
     resultEl.style.display = 'block';
 
-    // TODO: Implementiere Daten-Lösch API
-    setTimeout(() => {
-        resultEl.textContent = 'Daten-Löschung ist noch nicht implementiert.';
+    try {
+        const response = await fetch('/api/data/clear', {
+            method: 'DELETE'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            resultEl.textContent = `Erfolgreich: ${data.message}`;
+            resultEl.className = 'action-result success';
+
+            // Reload page nach 2 Sekunden um Stats zu aktualisieren
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+        } else {
+            resultEl.textContent = `Fehler: ${data.error || 'Löschung fehlgeschlagen'}`;
+            resultEl.className = 'action-result error';
+        }
+    } catch (error) {
+        resultEl.textContent = `Fehler beim Löschen: ${error.message}`;
         resultEl.className = 'action-result error';
-    }, 1000);
+    }
 });
 
 // Sensor Configuration

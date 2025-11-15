@@ -93,3 +93,36 @@ class ConfigLoader:
     def get_all(self) -> Dict[str, Any]:
         """Gibt die gesamte Konfiguration zurück"""
         return self.config
+
+    def update(self, key: str, value: Any) -> bool:
+        """
+        Aktualisiert einen Config-Wert mit Dot-Notation und speichert in YAML
+        Beispiel: config.update('decision_engine.mode', 'learning')
+
+        Returns:
+            bool: True wenn erfolgreich, False bei Fehler
+        """
+        keys = key.split('.')
+        config_ref = self.config
+
+        # Navigate to parent
+        for k in keys[:-1]:
+            if k not in config_ref:
+                config_ref[k] = {}
+            config_ref = config_ref[k]
+
+        # Set value
+        config_ref[keys[-1]] = value
+
+        # Save to YAML
+        return self._save_config()
+
+    def _save_config(self) -> bool:
+        """Speichert die aktuelle Konfiguration in die YAML-Datei"""
+        try:
+            with open(self.config_path, 'w', encoding='utf-8') as f:
+                yaml.dump(self.config, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+            return True
+        except Exception as e:
+            print(f"Fehler beim Speichern der Config: {e}")
+            return False

@@ -166,6 +166,44 @@ class HeatingOptimizer:
             logger.warning(f"Could not get window status for room {room_name}: {e}")
             return False  # Im Fehlerfall: sicher annehmen dass Fenster zu sind
 
+    def _get_room_name_for_device(self, device_id: str) -> str:
+        """
+        Holt den Raumnamen für ein Heizgerät aus den Observations
+
+        Returns:
+            Room name oder "Unbekannt" falls nicht gefunden
+        """
+        try:
+            conn = self.db._get_connection()
+            cursor = conn.cursor()
+
+            # Hole den häufigsten Raumnamen für dieses Gerät
+            cursor.execute("""
+                SELECT room_name, COUNT(*) as count
+                FROM heating_observations
+                WHERE device_id = ? AND room_name IS NOT NULL
+                GROUP BY room_name
+                ORDER BY count DESC
+                LIMIT 1
+            """, (device_id,))
+
+            result = cursor.fetchone()
+            if result and result[0]:
+                return result[0]
+
+            # Fallback: versuche aus device_id zu extrahieren (z.B. "climate.wohnzimmer")
+            if '.' in device_id:
+                parts = device_id.split('.')
+                if len(parts) > 1:
+                    # Erste Buchstabe groß, Rest klein
+                    return parts[1].replace('_', ' ').title()
+
+            return "Unbekannt"
+
+        except Exception as e:
+            logger.warning(f"Could not get room name for device {device_id}: {e}")
+            return "Unbekannt"
+
     def analyze_patterns(self, days_back: int = 14) -> Dict:
         """
         Analysiert Heizmuster der letzten X Tage
@@ -583,10 +621,13 @@ class HeatingOptimizer:
 
         # Speichere Zeitplan in DB (nur wenn device_id angegeben)
         if device_id and schedule:
+            # Hole Raumnamen aus den Observations
+            room_name = self._get_room_name_for_device(device_id)
+
             for entry in schedule:
                 self.db.save_heating_schedule(
                     device_id=device_id,
-                    room_name="Alle",  # TODO: Raumspezifisch
+                    room_name=room_name,
                     schedule_type='optimized',
                     day_of_week=entry['day_of_week'],
                     hour=entry['hour'],
