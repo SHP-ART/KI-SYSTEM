@@ -11,6 +11,7 @@ from typing import Dict, Set
 
 from src.utils.database import Database
 from src.data_collector.platform_factory import PlatformFactory
+from src.utils.sensor_helper import SensorHelper
 
 
 class LightingDataCollector:
@@ -23,13 +24,15 @@ class LightingDataCollector:
     - Zeitstempel und Kontext (Tageszeit, Anwesenheit, etc.)
     """
     
-    def __init__(self, db: Database = None, config: dict = None):
+    def __init__(self, db: Database = None, config: dict = None, engine=None):
         self.db = db or Database()
         self.config = config or {}
+        self.engine = engine
         self.interval = self.config.get('data_collection', {}).get('lighting_interval', 60)
         self.running = False
         self.thread = None
         self.last_states: Dict[str, Dict] = {}  # device_id -> last known state
+        self.sensor_helper = SensorHelper(engine) if engine else None
         
         # Platform-spezifische Collector
         self.collectors = []
@@ -128,7 +131,8 @@ class LightingDataCollector:
                     # Zusatzkontext
                     outdoor_light = self._get_outdoor_light()
                     presence = self._detect_presence(room_name)
-                    
+                    motion_detected = self.sensor_helper.get_motion_detected(room_name) if self.sensor_helper and room_name else False
+
                     # In DB speichern
                     self.db.add_lighting_event(
                         device_id=device_id,
@@ -138,7 +142,7 @@ class LightingDataCollector:
                         brightness=brightness,
                         outdoor_light=outdoor_light,
                         presence=presence,
-                        motion_detected=False  # TODO: Motion-Sensor Integration
+                        motion_detected=motion_detected
                     )
                     
                     logger.debug(f"Lighting event: {device_name} -> {state_str} (brightness: {brightness})")
@@ -163,10 +167,13 @@ class LightingDataCollector:
     
     def _get_outdoor_light(self) -> float:
         """Holt Außenhelligkeit (Luxwert oder Sonnenstand)"""
-        # TODO: Von Wetterstation oder Sonnenstand berechnen
+        if self.sensor_helper:
+            return self.sensor_helper.get_outdoor_brightness()
+
+        # Fallback: Einfache Zeit-basierte Schätzung
         now = datetime.now()
         hour = now.hour
-        
+
         # Grobe Schätzung: 0-100
         if 6 <= hour <= 20:
             # Tag: höhere Helligkeit
@@ -177,8 +184,10 @@ class LightingDataCollector:
     
     def _detect_presence(self, room_name: str) -> bool:
         """Detektiert Anwesenheit im Raum"""
-        # TODO: Motion-Sensor oder Presence-Detection Integration
-        # Für jetzt: Immer False (konservativ)
+        if self.sensor_helper and room_name:
+            return self.sensor_helper.get_presence_in_room(room_name)
+
+        # Fallback: konservativ
         return False
     
     def get_stats(self) -> Dict:

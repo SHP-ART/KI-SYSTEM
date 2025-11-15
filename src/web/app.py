@@ -1232,8 +1232,8 @@ class WebInterface:
                                     timestamp = datetime.fromtimestamp(sensor['last_updated'] / 1000)
                                     if not last_motion or timestamp > last_motion:
                                         last_motion = timestamp
-                                except:
-                                    pass
+                                except (ValueError, OSError, OverflowError, TypeError) as e:
+                                    logger.debug(f"Could not parse timestamp: {e}")
 
                     return jsonify({
                         'present': present,
@@ -1786,8 +1786,8 @@ class WebInterface:
                             else:
                                 platform.turn_off(device_id)
                             controlled += 1
-                    except:
-                        pass
+                    except Exception as e:
+                        logger.warning(f"Could not control device {device_id}: {e}")
 
                 return jsonify({'success': True, 'devices_controlled': controlled})
 
@@ -4071,8 +4071,9 @@ class WebInterface:
             if row_dict.get('metrics'):
                 try:
                     row_dict['metrics'] = json.loads(row_dict['metrics'])
-                except:
-                    pass
+                except (json.JSONDecodeError, TypeError) as e:
+                    logger.debug(f"Could not parse metrics JSON: {e}")
+                    row_dict['metrics'] = None
             history.append(row_dict)
 
         return history

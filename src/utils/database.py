@@ -559,8 +559,9 @@ class Database:
             if result.get('metadata'):
                 try:
                     result['metadata'] = json.loads(result['metadata'])
-                except:
-                    pass
+                except (json.JSONDecodeError, TypeError) as e:
+                    logger.debug(f"Failed to parse metadata JSON: {e}")
+                    result['metadata'] = None
             results.append(result)
 
         return results

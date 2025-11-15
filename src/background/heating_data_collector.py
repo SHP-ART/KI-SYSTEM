@@ -14,6 +14,7 @@ from datetime import datetime
 from typing import Optional
 from loguru import logger
 from src.utils.database import Database
+from src.utils.sensor_helper import SensorHelper
 
 
 class HeatingDataCollector:
@@ -31,6 +32,7 @@ class HeatingDataCollector:
         self.thread = None
         self.last_collection = None
         self.db = Database()
+        self.sensor_helper = SensorHelper(engine) if engine else None
 
         logger.info(f"Heating Data Collector initialized ({interval_seconds}s interval)")
 
@@ -173,8 +175,8 @@ class HeatingDataCollector:
                     if zone.get('id') == zone_id:
                         room_name = zone.get('name')
                         break
-            except:
-                pass
+            except (AttributeError, KeyError, TypeError) as e:
+                logger.debug(f"Could not fetch zone name for zone_id {zone_id}: {e}")
 
         # Speichere in Datenbank (beide Tabellen für Analytics und ML)
         observation_id = self.db.add_heating_observation(
@@ -191,6 +193,11 @@ class HeatingDataCollector:
         # Zusätzlich: Speichere für ML-Training in continuous_measurements
         if current_temp is not None and target_temp is not None:
             device_name = device.get('name', 'Unknown')
+            # Hole zusätzliche Sensor-Daten
+            presence = self.sensor_helper.get_presence_in_room(room_name) if self.sensor_helper and room_name else False
+            window_open = self.sensor_helper.get_window_open(room_name) if self.sensor_helper and room_name else False
+            energy_level = self.sensor_helper.get_energy_price_level() if self.sensor_helper else 2
+
             self.db.add_continuous_measurement(
                 device_id=device_id,
                 device_name=device_name,
@@ -200,9 +207,9 @@ class HeatingDataCollector:
                 outdoor_temp=outdoor_temp or 20.0,  # Fallback
                 humidity=humidity,
                 heating_active=is_heating,
-                presence=False,  # TODO: Motion-Sensor Integration
-                window_open=False,  # TODO: Window-Sensor Integration
-                energy_price_level=2  # TODO: Energy Price Integration
+                presence=presence,
+                window_open=window_open,
+                energy_price_level=energy_level
             )
             logger.debug(f"Saved ML training data for {device_name}")
 

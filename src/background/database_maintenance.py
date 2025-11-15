@@ -128,7 +128,8 @@ def start_database_maintenance(retention_days: int = None, run_hour: int = 3):
         try:
             config = ConfigLoader()
             retention_days = config.get('database.retention_days', 90)
-        except:
+        except Exception as e:
+            logger.warning(f"Could not load retention_days from config: {e}")
             retention_days = 90
 
     job = DatabaseMaintenanceJob(retention_days=retention_days, run_hour=run_hour)
