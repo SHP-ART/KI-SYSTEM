@@ -178,8 +178,8 @@ class WindowDataCollector:
                     if zone.get('id') == zone_id:
                         room_name = zone.get('name')
                         break
-            except:
-                pass
+            except (AttributeError, KeyError, TypeError) as e:
+                logger.debug(f"Could not fetch zone name for zone_id {zone_id}: {e}")
 
         # Speichere in Datenbank
         observation_id = self.db.add_window_observation(

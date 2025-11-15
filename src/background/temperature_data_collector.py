@@ -10,6 +10,7 @@ from loguru import logger
 from typing import Dict, Optional
 
 from src.utils.database import Database
+from src.utils.sensor_helper import SensorHelper
 
 
 class TemperatureDataCollector:
@@ -25,12 +26,14 @@ class TemperatureDataCollector:
     - Energiepreis-Level
     """
     
-    def __init__(self, db: Database | None = None, config: dict | None = None):
+    def __init__(self, db: Database | None = None, config: dict | None = None, engine=None):
         self.db = db or Database()
         self.config = config or {}
+        self.engine = engine
         self.interval = self.config.get('data_collection', {}).get('temperature_interval', 300)  # 5 Minuten
         self.running = False
         self.thread = None
+        self.sensor_helper = SensorHelper(engine) if engine else None
         
         # Platform-spezifische Collector
         self.collectors = []
@@ -124,8 +127,8 @@ class TemperatureDataCollector:
                     # Fensterstatus für diesen Raum
                     window_open = self._check_window_status(room_name, devices)
                     
-                    # Anwesenheit (TODO: Motion-Sensor)
-                    presence = False
+                    # Anwesenheit
+                    presence = self.sensor_helper.get_presence_in_room(room_name) if self.sensor_helper and room_name else False
                     
                     # Humidity (falls verfügbar)
                     humidity = caps.get('measure_humidity', {}).get('value')
@@ -204,8 +207,16 @@ class TemperatureDataCollector:
     def _get_outdoor_temperature(self) -> Optional[float]:
         """Holt Außentemperatur"""
         try:
-            # TODO: Von Weather Collector holen
-            # Für jetzt: Dummy-Wert
+            # Versuche von Wetterstation oder DB
+            if self.sensor_helper and self.sensor_helper.db:
+                weather_data = self.sensor_helper.db.get_latest_external_data('weather')
+                if weather_data and 'data' in weather_data:
+                    data = weather_data['data']
+                    temp = data.get('temperature') or data.get('temp')
+                    if temp is not None:
+                        return float(temp)
+
+            # Fallback: Weather Collector direkt
             from src.data_collector.weather_collector import WeatherCollector
             weather = WeatherCollector(config=self.config)
             data = weather.get_current_weather()
@@ -217,8 +228,10 @@ class TemperatureDataCollector:
     def _get_energy_price_level(self) -> int:
         """Holt Energiepreis-Level (1=niedrig, 2=mittel, 3=hoch)"""
         try:
-            # TODO: Von Energy Price Collector holen
-            # Für jetzt: Default mittel
+            if self.sensor_helper:
+                return self.sensor_helper.get_energy_price_level()
+
+            # Fallback: Default mittel
             return 2
         except Exception as e:
             logger.debug(f"Could not get energy price level: {e}")

@@ -153,25 +153,136 @@ def cmd_train(engine: DecisionEngine):
     """Trainiert die ML-Modelle mit historischen Daten"""
     logger.info("Starting model training...")
 
-    # Hole Trainingsdaten aus DB
-    training_data = engine.db.get_training_data(hours_back=168)  # 1 Woche
+    print("\n=== Training ML Models ===\n")
 
-    print("\n=== Training Models ===")
+    # Hole verfügbare Daten
+    lighting_events_count = engine.db.get_lighting_events_count()
+    heating_observations = engine.db.get_heating_observations(days_back=30)
 
-    # Training Lighting Model
-    # TODO: Implementiere vollständiges Training mit echten Daten
-    # Dies ist ein vereinfachtes Beispiel
+    print(f"Available data:")
+    print(f"  Lighting events: {lighting_events_count}")
+    print(f"  Heating observations: {len(heating_observations)}")
+    print()
 
-    print("Training models requires historical data.")
-    print("Make sure the system has been running for at least a few days.")
-    print("\nCurrent data available:")
-    for sensor_type, data in training_data.items():
-        print(f"  {sensor_type}: {len(data)} records")
+    success_count = 0
+    total_models = 2
 
-    print("\nNote: Automatic training will happen after enough data is collected.")
-    print("Minimum required: 100+ samples for lighting, 200+ for heating\n")
+    # ===== TRAIN LIGHTING MODEL =====
+    print("1. Training Lighting Model...")
+    print("-" * 50)
 
-    return 0
+    MIN_LIGHTING_SAMPLES = 100
+
+    if lighting_events_count >= MIN_LIGHTING_SAMPLES:
+        try:
+            # Hole Daten
+            lighting_events = engine.db.get_lighting_events(days_back=30)
+            sensor_data = engine.db.get_sensor_data(hours_back=30*24)
+
+            # Bereite Trainingsdaten vor
+            X, y = engine.lighting_model.prepare_training_data(
+                sensor_data=sensor_data,
+                light_states=lighting_events
+            )
+
+            # Trainiere Modell
+            metrics = engine.lighting_model.train(X, y)
+
+            if 'error' not in metrics:
+                # Speichere Modell
+                model_path = "models/lighting_model.pkl"
+                engine.lighting_model.save(model_path)
+
+                # Speichere Training-Historie
+                engine.db.insert_training_history(
+                    model_name="lighting_model",
+                    model_type=metrics['model_type'],
+                    metrics=metrics,
+                    model_path=model_path
+                )
+
+                print(f"✓ Success!")
+                print(f"  Accuracy: {metrics['accuracy']:.2%}")
+                print(f"  Samples (train/test): {metrics['samples_train']}/{metrics['samples_test']}")
+                print(f"  Model saved to: {model_path}")
+                success_count += 1
+            else:
+                print(f"✗ Failed: {metrics['error']}")
+
+        except Exception as e:
+            logger.exception("Lighting model training failed")
+            print(f"✗ Error: {e}")
+    else:
+        print(f"✗ Insufficient data: {lighting_events_count}/{MIN_LIGHTING_SAMPLES} samples")
+        print(f"  Need {MIN_LIGHTING_SAMPLES - lighting_events_count} more samples")
+
+    print()
+
+    # ===== TRAIN TEMPERATURE MODEL =====
+    print("2. Training Temperature Model...")
+    print("-" * 50)
+
+    MIN_HEATING_SAMPLES = 200
+
+    if len(heating_observations) >= MIN_HEATING_SAMPLES:
+        try:
+            # Hole zusätzliche Sensordaten
+            sensor_data = engine.db.get_sensor_data(hours_back=30*24)
+
+            # Bereite Trainingsdaten vor (verwende heating_observations direkt)
+            X, y = engine.temperature_model.prepare_training_data(
+                sensor_data=sensor_data,
+                temperature_settings=heating_observations
+            )
+
+            # Trainiere Modell
+            metrics = engine.temperature_model.train(X, y)
+
+            if 'error' not in metrics:
+                # Speichere Modell
+                model_path = "models/temperature_model.pkl"
+                engine.temperature_model.save(model_path)
+
+                # Speichere Training-Historie
+                engine.db.insert_training_history(
+                    model_name="temperature_model",
+                    model_type=metrics['model_type'],
+                    metrics=metrics,
+                    model_path=model_path
+                )
+
+                print(f"✓ Success!")
+                print(f"  MAE: {metrics['mae']:.2f}°C")
+                print(f"  RMSE: {metrics['rmse']:.2f}°C")
+                print(f"  R² Score: {metrics['r2_score']:.3f}")
+                print(f"  Samples (train/test): {metrics['samples_train']}/{metrics['samples_test']}")
+                print(f"  Model saved to: {model_path}")
+                success_count += 1
+            else:
+                print(f"✗ Failed: {metrics['error']}")
+
+        except Exception as e:
+            logger.exception("Temperature model training failed")
+            print(f"✗ Error: {e}")
+    else:
+        print(f"✗ Insufficient data: {len(heating_observations)}/{MIN_HEATING_SAMPLES} samples")
+        print(f"  Need {MIN_HEATING_SAMPLES - len(heating_observations)} more samples")
+
+    print()
+    print("=" * 50)
+    print(f"Training complete: {success_count}/{total_models} models trained successfully")
+    print()
+
+    if success_count == 0:
+        print("⚠ No models were trained. System needs more data.")
+        print("  Recommendation: Run in 'learning' mode for at least 3-7 days")
+        return 1
+    elif success_count < total_models:
+        print("⚠ Some models failed to train. Check logs for details.")
+        return 0
+    else:
+        print("✓ All models trained successfully!")
+        return 0
 
 
 def cmd_web(args):

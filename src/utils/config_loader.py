@@ -3,14 +3,35 @@
 import yaml
 import os
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from dotenv import load_dotenv
+from loguru import logger
+
+try:
+    from pydantic import ValidationError
+    from .config_schema import KISystemConfig
+    PYDANTIC_AVAILABLE = True
+except ImportError:
+    PYDANTIC_AVAILABLE = False
+    logger.warning("Pydantic not available - config validation disabled. Install with: pip install pydantic")
+
+
+class ConfigValidationError(Exception):
+    """Custom exception for configuration validation errors"""
+    pass
 
 
 class ConfigLoader:
     """Lädt und verwaltet Konfiguration aus YAML und .env Dateien"""
 
-    def __init__(self, config_path: str = None):
+    def __init__(self, config_path: str = None, validate: bool = True):
+        """
+        Initialize ConfigLoader
+
+        Args:
+            config_path: Path to config.yaml file
+            validate: Whether to validate config with Pydantic (default: True)
+        """
         # Load environment variables
         load_dotenv()
 
@@ -21,6 +42,10 @@ class ConfigLoader:
         self.config_path = Path(config_path)
         self.config = self._load_config()
         self._merge_env_variables()
+
+        # Validate configuration if requested and Pydantic is available
+        if validate and PYDANTIC_AVAILABLE:
+            self._validate_config()
 
     def _load_config(self) -> Dict[str, Any]:
         """Lädt die YAML-Konfiguration"""
@@ -60,13 +85,62 @@ class ConfigLoader:
 
         # Weather API
         if os.getenv('WEATHER_API_KEY'):
+            if 'external_data' not in self.config:
+                self.config['external_data'] = {}
+            if 'weather' not in self.config['external_data']:
+                self.config['external_data']['weather'] = {}
             self.config['external_data']['weather']['api_key'] = os.getenv('WEATHER_API_KEY')
 
         # Energy API
         if os.getenv('ENERGY_API_KEY'):
+            if 'external_data' not in self.config:
+                self.config['external_data'] = {}
+            if 'energy_prices' not in self.config['external_data']:
+                self.config['external_data']['energy_prices'] = {}
             self.config['external_data']['energy_prices']['api_key'] = os.getenv('ENERGY_API_KEY')
         if os.getenv('ENERGY_PROVIDER'):
+            if 'external_data' not in self.config:
+                self.config['external_data'] = {}
+            if 'energy_prices' not in self.config['external_data']:
+                self.config['external_data']['energy_prices'] = {}
             self.config['external_data']['energy_prices']['provider'] = os.getenv('ENERGY_PROVIDER')
+
+    def _validate_config(self):
+        """
+        Validates configuration using Pydantic schema
+
+        Raises:
+            ConfigValidationError: If configuration is invalid
+        """
+        try:
+            # Validate config against Pydantic schema
+            validated_config = KISystemConfig(**self.config)
+            logger.info("Configuration validated successfully")
+
+            # Update config with validated data (ensures all defaults are set)
+            self.config = validated_config.model_dump(mode='python')
+
+        except ValidationError as e:
+            # Format validation errors nicely
+            error_messages = []
+            for error in e.errors():
+                location = " -> ".join(str(loc) for loc in error['loc'])
+                message = error['msg']
+                error_messages.append(f"  • {location}: {message}")
+
+            error_text = "\n".join([
+                "Configuration validation failed:",
+                *error_messages,
+                "",
+                "Please check your config/config.yaml file and .env variables."
+            ])
+
+            logger.error(error_text)
+            raise ConfigValidationError(error_text) from e
+
+        except Exception as e:
+            logger.error(f"Unexpected error during config validation: {e}")
+            raise ConfigValidationError(f"Config validation error: {e}") from e
 
     def get(self, key: str, default: Any = None) -> Any:
         """
