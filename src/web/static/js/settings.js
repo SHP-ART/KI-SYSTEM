@@ -1304,6 +1304,22 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialisiere Tab-System
     initTabs();
 
+    // "Was ist neu" Banner schließen
+    const dismissBtn = document.getElementById('dismiss-whats-new');
+    if (dismissBtn) {
+        dismissBtn.addEventListener('click', () => {
+            const banner = dismissBtn.closest('.card');
+            banner.style.display = 'none';
+            localStorage.setItem('whats-new-v0.9-dismissed', 'true');
+        });
+
+        // Prüfe ob Banner bereits geschlossen wurde
+        if (localStorage.getItem('whats-new-v0.9-dismissed') === 'true') {
+            const banner = dismissBtn.closest('.card');
+            banner.style.display = 'none';
+        }
+    }
+
     // Lade initiale Daten
     loadConfig();
     loadSensorConfig();
