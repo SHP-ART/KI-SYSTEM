@@ -9,6 +9,9 @@ from datetime import datetime, timedelta
 from loguru import logger
 from src.utils.database import Database
 from src.decision_engine.bathroom_analyzer import BathroomAnalyzer
+from src.decision_engine.mold_prevention import MoldPreventionSystem
+from src.decision_engine.ventilation_optimizer import VentilationOptimizer
+from src.decision_engine.shower_predictor import ShowerPredictor
 
 
 class BathroomAutomation:
@@ -73,11 +76,16 @@ class BathroomAutomation:
         # Datenbank für Lernsystem
         self.db = Database() if enable_learning else None
 
+        # Neue intelligente Module
+        self.mold_prevention = MoldPreventionSystem(db=self.db) if self.db else None
+        self.ventilation = VentilationOptimizer(db=self.db) if self.db else None
+        self.shower_predictor = ShowerPredictor(db=self.db) if self.db else None
+
         # Lade gelernte Parameter
         if self.db and enable_learning:
             self._load_learned_parameters()
 
-        logger.info(f"Bathroom automation initialized: High={self.humidity_high}%, Low={self.humidity_low}%, Target={self.target_temp}°C, Frost={self.frost_protection_temp}°C, HeatingControl={self.heating_boost_enabled}, Learning={enable_learning}")
+        logger.info(f"Bathroom automation initialized: High={self.humidity_high}%, Low={self.humidity_low}%, Target={self.target_temp}°C, Frost={self.frost_protection_temp}°C, HeatingControl={self.heating_boost_enabled}, Learning={enable_learning}, MoldPrevention={self.mold_prevention is not None}, VentilationOptimizer={self.ventilation is not None}, ShowerPredictor={self.shower_predictor is not None}")
 
     def process(self, platform, current_state: Dict) -> List[Dict]:
         """

@@ -213,6 +213,72 @@ class Database:
             )
         """)
 
+        # === RAUMSPEZIFISCHES LERNEN FÜR HEIZUNG ===
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS heating_room_learning (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                room_name TEXT NOT NULL,
+                device_id TEXT,
+                timestamp DATETIME NOT NULL,
+                parameter_name TEXT NOT NULL,
+                parameter_value REAL NOT NULL,
+                confidence REAL,
+                samples_used INTEGER,
+                notes TEXT,
+                UNIQUE(room_name, parameter_name, timestamp)
+            )
+        """)
+
+        # === SCHIMMEL-PRÄVENTION & LUFTFEUCHTIGKEIT ===
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS humidity_alerts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME NOT NULL,
+                room_name TEXT NOT NULL,
+                alert_type TEXT NOT NULL,
+                humidity REAL,
+                temperature REAL,
+                dewpoint REAL,
+                condensation_risk BOOLEAN,
+                severity TEXT,
+                recommendation TEXT,
+                acknowledged BOOLEAN DEFAULT 0
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ventilation_recommendations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME NOT NULL,
+                room_name TEXT,
+                indoor_temp REAL,
+                indoor_humidity REAL,
+                outdoor_temp REAL,
+                outdoor_humidity REAL,
+                is_beneficial BOOLEAN,
+                absolute_humidity_diff REAL,
+                recommended_duration_minutes INTEGER,
+                recommendation_text TEXT
+            )
+        """)
+
+        # === VORHERSAGE-SYSTEM ===
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS shower_predictions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME NOT NULL,
+                predicted_time DATETIME NOT NULL,
+                confidence REAL,
+                typical_hour INTEGER,
+                typical_weekday INTEGER,
+                pattern_strength REAL,
+                samples_used INTEGER
+            )
+        """)
+
         # Erstelle Indizes für bessere Performance
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_sensor_timestamp
@@ -247,6 +313,26 @@ class Database:
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_heating_schedules_device
             ON heating_schedules(device_id, day_of_week, hour)
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_room_learning_room
+            ON heating_room_learning(room_name, parameter_name, timestamp)
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_humidity_alerts_time
+            ON humidity_alerts(timestamp, room_name, acknowledged)
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ventilation_recs_time
+            ON ventilation_recommendations(timestamp, room_name)
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_shower_predictions_time
+            ON shower_predictions(predicted_time, confidence)
         """)
 
         conn.commit()
@@ -1677,6 +1763,189 @@ class Database:
 
         logger.info(f"Deleted {deleted_count} old window observations (older than {retention_days} days)")
         return deleted_count
+
+    # ===== Raumspezifisches Lernen Methoden =====
+
+    def save_room_learning_parameter(self, room_name: str, parameter_name: str,
+                                      value: float, confidence: float = 0.7,
+                                      samples: int = 0, notes: str = None):
+        """Speichert gelernten Parameter für einen Raum"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            INSERT INTO heating_room_learning
+            (room_name, timestamp, parameter_name, parameter_value, confidence, samples_used, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (room_name, datetime.now(), parameter_name, value, confidence, samples, notes))
+
+        conn.commit()
+        logger.info(f"Saved room learning: {room_name} - {parameter_name}={value}")
+
+    def get_room_learning_parameter(self, room_name: str, parameter_name: str,
+                                     min_confidence: float = 0.6) -> Optional[float]:
+        """Holt gelernten Parameter für einen Raum"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT parameter_value
+            FROM heating_room_learning
+            WHERE room_name = ? AND parameter_name = ? AND confidence >= ?
+            ORDER BY timestamp DESC
+            LIMIT 1
+        """, (room_name, parameter_name, min_confidence))
+
+        result = cursor.fetchone()
+        return result['parameter_value'] if result else None
+
+    # ===== Luftfeuchtigkeit & Schimmel-Prävention Methoden =====
+
+    def add_humidity_alert(self, room_name: str, alert_type: str, humidity: float,
+                          temperature: float, dewpoint: float, condensation_risk: bool,
+                          severity: str, recommendation: str):
+        """Fügt Luftfeuchtigkeit/Schimmel-Warnung hinzu"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            INSERT INTO humidity_alerts
+            (timestamp, room_name, alert_type, humidity, temperature, dewpoint,
+             condensation_risk, severity, recommendation)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (datetime.now(), room_name, alert_type, humidity, temperature,
+              dewpoint, condensation_risk, severity, recommendation))
+
+        conn.commit()
+        logger.warning(f"Humidity alert: {room_name} - {alert_type} ({severity})")
+
+    def get_active_humidity_alerts(self, room_name: str = None,
+                                   hours_back: int = 24) -> List[Dict]:
+        """Holt aktive Luftfeuchtigkeit-Warnungen"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        start_time = datetime.now() - timedelta(hours=hours_back)
+
+        query = """
+            SELECT * FROM humidity_alerts
+            WHERE timestamp >= ? AND acknowledged = 0
+        """
+        params = [start_time]
+
+        if room_name:
+            query += " AND room_name = ?"
+            params.append(room_name)
+
+        query += " ORDER BY timestamp DESC"
+
+        cursor.execute(query, params)
+        return [dict(row) for row in cursor.fetchall()]
+
+    def acknowledge_humidity_alert(self, alert_id: int):
+        """Markiert eine Warnung als bestätigt"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            UPDATE humidity_alerts
+            SET acknowledged = 1
+            WHERE id = ?
+        """, (alert_id,))
+
+        conn.commit()
+
+    def add_ventilation_recommendation(self, room_name: str, indoor_temp: float,
+                                       indoor_humidity: float, outdoor_temp: float,
+                                       outdoor_humidity: float, is_beneficial: bool,
+                                       abs_humidity_diff: float, duration_minutes: int,
+                                       recommendation: str):
+        """Fügt Lüftungsempfehlung hinzu"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            INSERT INTO ventilation_recommendations
+            (timestamp, room_name, indoor_temp, indoor_humidity, outdoor_temp,
+             outdoor_humidity, is_beneficial, absolute_humidity_diff,
+             recommended_duration_minutes, recommendation_text)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (datetime.now(), room_name, indoor_temp, indoor_humidity, outdoor_temp,
+              outdoor_humidity, is_beneficial, abs_humidity_diff, duration_minutes,
+              recommendation))
+
+        conn.commit()
+
+    def get_latest_ventilation_recommendation(self, room_name: str = None) -> Optional[Dict]:
+        """Holt die neueste Lüftungsempfehlung"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        query = """
+            SELECT * FROM ventilation_recommendations
+            WHERE 1=1
+        """
+        params = []
+
+        if room_name:
+            query += " AND room_name = ?"
+            params.append(room_name)
+
+        query += " ORDER BY timestamp DESC LIMIT 1"
+
+        cursor.execute(query, params)
+        result = cursor.fetchone()
+        return dict(result) if result else None
+
+    # ===== Dusch-Vorhersage Methoden =====
+
+    def save_shower_prediction(self, predicted_time: datetime, confidence: float,
+                               typical_hour: int, typical_weekday: int,
+                               pattern_strength: float, samples: int):
+        """Speichert Dusch-Vorhersage"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            INSERT INTO shower_predictions
+            (timestamp, predicted_time, confidence, typical_hour, typical_weekday,
+             pattern_strength, samples_used)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (datetime.now(), predicted_time, confidence, typical_hour, typical_weekday,
+              pattern_strength, samples))
+
+        conn.commit()
+
+    def get_next_shower_prediction(self, min_confidence: float = 0.6) -> Optional[Dict]:
+        """Holt die nächste Dusch-Vorhersage"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT * FROM shower_predictions
+            WHERE predicted_time > ? AND confidence >= ?
+            ORDER BY predicted_time ASC
+            LIMIT 1
+        """, (datetime.now(), min_confidence))
+
+        result = cursor.fetchone()
+        return dict(result) if result else None
+
+    def get_shower_predictions_today(self) -> List[Dict]:
+        """Holt alle Vorhersagen für heute"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_end = today_start + timedelta(days=1)
+
+        cursor.execute("""
+            SELECT * FROM shower_predictions
+            WHERE predicted_time BETWEEN ? AND ?
+            ORDER BY predicted_time ASC
+        """, (today_start, today_end))
+
+        return [dict(row) for row in cursor.fetchall()]
 
     def close(self):
         """Schließt die Datenbankverbindung"""

@@ -3103,6 +3103,98 @@ class WebInterface:
                 logger.error(f"Error getting ML performance analytics: {e}")
                 return jsonify({'error': str(e)}), 500
 
+        # ===== Smart Features: Mold Prevention, Ventilation, Predictions =====
+
+        @self.app.route('/api/humidity/alerts')
+        def api_humidity_alerts():
+            """Hole aktive Luftfeuchtigkeits-Warnungen"""
+            try:
+                room_name = request.args.get('room', None)
+                hours_back = int(request.args.get('hours', 24))
+
+                alerts = self.db.get_active_humidity_alerts(
+                    room_name=room_name,
+                    hours_back=hours_back
+                )
+
+                return jsonify({
+                    'success': True,
+                    'alerts': alerts,
+                    'count': len(alerts)
+                })
+
+            except Exception as e:
+                logger.error(f"Error getting humidity alerts: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @self.app.route('/api/ventilation/recommendation')
+        def api_ventilation_recommendation():
+            """Hole Lüftungsempfehlung für einen Raum"""
+            try:
+                room_name = request.args.get('room', 'Badezimmer')
+
+                recommendation = self.db.get_latest_ventilation_recommendation(room_name=room_name)
+
+                return jsonify({
+                    'success': True,
+                    'recommendation': recommendation
+                })
+
+            except Exception as e:
+                logger.error(f"Error getting ventilation recommendation: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @self.app.route('/api/shower/predictions')
+        def api_shower_predictions():
+            """Hole Dusch-Vorhersagen für heute"""
+            try:
+                predictions = self.db.get_shower_predictions_today()
+
+                return jsonify({
+                    'success': True,
+                    'predictions': predictions,
+                    'count': len(predictions)
+                })
+
+            except Exception as e:
+                logger.error(f"Error getting shower predictions: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @self.app.route('/api/shower/next')
+        def api_next_shower():
+            """Hole nächste Dusch-Vorhersage"""
+            try:
+                min_confidence = float(request.args.get('confidence', 0.6))
+
+                prediction = self.db.get_next_shower_prediction(min_confidence=min_confidence)
+
+                return jsonify({
+                    'success': True,
+                    'prediction': prediction
+                })
+
+            except Exception as e:
+                logger.error(f"Error getting next shower prediction: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @self.app.route('/api/room/learning/<room_name>')
+        def api_room_learning(room_name):
+            """Hole gelerntes Profil für einen Raum"""
+            try:
+                from src.decision_engine.room_learning import RoomLearningSystem
+                room_learning = RoomLearningSystem(db=self.db)
+
+                profile = room_learning.get_room_profile(room_name)
+
+                return jsonify({
+                    'success': True,
+                    'profile': profile
+                })
+
+            except Exception as e:
+                logger.error(f"Error getting room learning profile: {e}")
+                return jsonify({'error': str(e)}), 500
+
         # ===== System Update Endpoints =====
 
         @self.app.route('/api/system/version')

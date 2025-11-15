@@ -60,10 +60,11 @@ class HeatingOptimizer:
                 # Prüfe ob gerade geheizt wird
                 is_heating = self._is_heating(state, current_temp, target_temp)
 
-                # Fenster-Status (wenn verfügbar)
-                window_open = False  # TODO: Fenster-Erkennung implementieren
+                # Fenster-Status (Fenster-Integration aktiviert!)
+                window_open = self._get_window_status_for_room(room_name, platform)
 
                 # Anwesenheit (wenn verfügbar)
+                # TODO: Präsenz-Erkennung über Motion-Sensoren implementieren
                 presence = True  # Default: anwesend
 
                 if current_temp and target_temp:
@@ -128,6 +129,42 @@ class HeatingOptimizer:
             return target_temp > current_temp + 0.5  # 0.5°C Hysterese
 
         return False
+
+    def _get_window_status_for_room(self, room_name: str, platform) -> bool:
+        """
+        Holt Fenster-Status für einen Raum
+
+        Returns:
+            True wenn mindestens ein Fenster im Raum offen ist, sonst False
+        """
+        try:
+            # Hole alle aktuellen Fenster-Stati aus der Datenbank
+            windows = self.db.get_all_windows_latest_status()
+
+            if not windows:
+                return False  # Keine Fenster gefunden
+
+            # Filtere nach Raum und prüfe Status
+            for window in windows:
+                window_room = window.get('room_name', '')
+                is_open = window.get('is_open', False)
+
+                # Prüfe ob Fenster zum Raum gehört
+                if window_room and room_name:
+                    # Normalisiere Raumnamen für Vergleich
+                    window_room_lower = window_room.lower().strip()
+                    room_name_lower = room_name.lower().strip()
+
+                    if window_room_lower == room_name_lower or room_name_lower in window_room_lower:
+                        if is_open:
+                            logger.debug(f"Window open detected in {room_name}: {window.get('device_name')}")
+                            return True
+
+            return False  # Kein offenes Fenster gefunden
+
+        except Exception as e:
+            logger.warning(f"Could not get window status for room {room_name}: {e}")
+            return False  # Im Fehlerfall: sicher annehmen dass Fenster zu sind
 
     def analyze_patterns(self, days_back: int = 14) -> Dict:
         """
