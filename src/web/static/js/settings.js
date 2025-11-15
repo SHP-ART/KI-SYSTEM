@@ -226,6 +226,71 @@ document.getElementById('test-connection').addEventListener('click', async () =>
     }
 });
 
+// Training Progress Tracking
+let trainingProgressInterval = null;
+
+async function pollTrainingProgress() {
+    try {
+        const response = await fetch('/api/ml/train/status');
+        const status = await response.json();
+
+        const container = document.getElementById('training-progress-container');
+        const progressBar = document.getElementById('training-progress-bar');
+        const progressPercent = document.getElementById('training-progress-percent');
+        const modelName = document.getElementById('training-model-name');
+        const stepText = document.getElementById('training-step');
+
+        if (status.status === 'training') {
+            // Zeige Progress Bar
+            container.style.display = 'block';
+
+            // Update UI
+            const modelDisplayName = status.model === 'lighting' ? 'Lighting Model' : 'Temperature Model';
+            modelName.textContent = `Training: ${modelDisplayName}`;
+            stepText.textContent = status.step || 'Bitte warten...';
+
+            const progress = status.progress || 0;
+            progressBar.style.width = `${progress}%`;
+            progressPercent.textContent = `${progress}%`;
+
+        } else if (status.status === 'completed') {
+            // Training fertig - zeige 100% kurz an
+            progressBar.style.width = '100%';
+            progressPercent.textContent = '100%';
+            stepText.textContent = 'Abgeschlossen!';
+
+            // Stoppe Polling
+            clearInterval(trainingProgressInterval);
+            trainingProgressInterval = null;
+
+            // Verstecke Progress nach 3 Sekunden
+            setTimeout(() => {
+                container.style.display = 'none';
+            }, 3000);
+
+        } else if (status.status === 'error') {
+            // Fehler
+            stepText.textContent = `Fehler: ${status.error || 'Unbekannter Fehler'}`;
+            progressBar.style.background = 'linear-gradient(90deg, #f44336, #d32f2f)';
+
+            // Stoppe Polling
+            clearInterval(trainingProgressInterval);
+            trainingProgressInterval = null;
+
+        } else if (status.status === 'idle') {
+            // Kein Training läuft
+            if (trainingProgressInterval) {
+                clearInterval(trainingProgressInterval);
+                trainingProgressInterval = null;
+            }
+            container.style.display = 'none';
+        }
+
+    } catch (error) {
+        console.error('Error polling training progress:', error);
+    }
+}
+
 // Modelle neu trainieren
 document.getElementById('retrain-models').addEventListener('click', async () => {
     const resultEl = document.getElementById('action-result');
@@ -237,6 +302,13 @@ document.getElementById('retrain-models').addEventListener('click', async () => 
     resultEl.textContent = 'Training wird gestartet... Dies kann einige Minuten dauern.';
     resultEl.className = 'action-result';
     resultEl.style.display = 'block';
+
+    // Zeige Progress Bar und starte Polling
+    document.getElementById('training-progress-container').style.display = 'block';
+    if (trainingProgressInterval) {
+        clearInterval(trainingProgressInterval);
+    }
+    trainingProgressInterval = setInterval(pollTrainingProgress, 500);  // Poll alle 500ms
 
     try {
         const response = await fetch('/api/ml/train', {
@@ -253,10 +325,22 @@ document.getElementById('retrain-models').addEventListener('click', async () => 
         } else {
             resultEl.textContent = `Fehler: ${data.message || 'Training fehlgeschlagen'}`;
             resultEl.className = 'action-result error';
+
+            // Stoppe Polling bei Fehler
+            if (trainingProgressInterval) {
+                clearInterval(trainingProgressInterval);
+                trainingProgressInterval = null;
+            }
         }
     } catch (error) {
         resultEl.textContent = `Fehler beim Training: ${error.message}`;
         resultEl.className = 'action-result error';
+
+        // Stoppe Polling bei Fehler
+        if (trainingProgressInterval) {
+            clearInterval(trainingProgressInterval);
+            trainingProgressInterval = null;
+        }
     }
 });
 

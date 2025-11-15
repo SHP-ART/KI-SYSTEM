@@ -853,6 +853,23 @@ class WebInterface:
                 logger.warning(f"Could not get training history: {e}")
                 return jsonify({'history': []})
 
+        @self.app.route('/api/ml/train/status', methods=['GET'])
+        def api_ml_training_status():
+            """API: Live Training Progress Status"""
+            try:
+                if self.ml_auto_trainer:
+                    progress = self.ml_auto_trainer.get_training_progress()
+                    return jsonify(progress)
+                else:
+                    return jsonify({
+                        'status': 'unavailable',
+                        'error': 'ML Auto-Trainer nicht verfügbar'
+                    }), 503
+
+            except Exception as e:
+                logger.error(f"Error getting training status: {e}")
+                return jsonify({'error': str(e)}), 500
+
         @self.app.route('/api/sensors/available', methods=['GET'])
         def api_get_available_sensors():
             """API: Hole alle verfügbaren Sensoren"""

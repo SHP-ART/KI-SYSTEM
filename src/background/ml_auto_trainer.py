@@ -43,6 +43,17 @@ class MLAutoTrainer:
         self.db = Database()
         self.status_file = Path('data/ml_training_status.json')
 
+        # Progress Tracking für Live-Updates
+        self.training_progress = {
+            'status': 'idle',  # idle, training, completed, error
+            'model': None,     # 'lighting', 'temperature', or None
+            'progress': 0,     # 0-100
+            'step': '',        # Aktueller Schritt
+            'started_at': None,
+            'completed_at': None,
+            'error': None
+        }
+
     def start(self):
         """Startet den Background-Prozess"""
         if self.running:
@@ -60,6 +71,44 @@ class MLAutoTrainer:
         if self.thread:
             self.thread.join(timeout=5)
         logger.info("MLAutoTrainer stopped")
+
+    def get_training_progress(self) -> Dict:
+        """
+        Gibt aktuellen Training-Progress zurück (für API)
+
+        Returns:
+            Dict mit Status, Progress, Step, etc.
+        """
+        return self.training_progress.copy()
+
+    def _update_progress(self, status: str = None, model: str = None,
+                        progress: int = None, step: str = None, error: str = None):
+        """
+        Aktualisiert den Training-Progress
+
+        Args:
+            status: idle, training, completed, error
+            model: lighting, temperature, oder None
+            progress: 0-100
+            step: Beschreibung des aktuellen Schritts
+            error: Fehlermeldung falls status=error
+        """
+        if status is not None:
+            self.training_progress['status'] = status
+        if model is not None:
+            self.training_progress['model'] = model
+        if progress is not None:
+            self.training_progress['progress'] = progress
+        if step is not None:
+            self.training_progress['step'] = step
+        if error is not None:
+            self.training_progress['error'] = error
+
+        # Timestamps
+        if status == 'training' and self.training_progress['started_at'] is None:
+            self.training_progress['started_at'] = datetime.now().isoformat()
+        if status in ['completed', 'error']:
+            self.training_progress['completed_at'] = datetime.now().isoformat()
 
     def _run_loop(self):
         """Haupt-Loop des Background-Prozesses"""
@@ -112,6 +161,7 @@ class MLAutoTrainer:
                 status['lighting_last_trained'] = datetime.now().isoformat()
                 status['lighting_trained'] = True
                 logger.success("✅ Lighting Model trained successfully!")
+                self._update_progress(status='completed')
             else:
                 logger.warning("❌ Lighting Model training failed")
 
@@ -123,11 +173,17 @@ class MLAutoTrainer:
                 status['temperature_last_trained'] = datetime.now().isoformat()
                 status['temperature_trained'] = True
                 logger.success("✅ Temperature Model trained successfully!")
+                self._update_progress(status='completed')
             else:
                 logger.warning("❌ Temperature Model training failed")
 
         # Speichere Status
         self._save_status(status)
+
+        # Reset zu idle nach einiger Zeit (5 Sekunden)
+        time.sleep(5)
+        if self.training_progress['status'] == 'completed':
+            self._update_progress(status='idle', model=None, progress=0, step='')
 
     def _should_train_lighting(self, status: Dict) -> bool:
         """
@@ -227,7 +283,10 @@ class MLAutoTrainer:
             True bei Erfolg
         """
         try:
+            self._update_progress(status='training', model='lighting', progress=0, step='Initialisierung...')
+
             # Hole Trainingsdaten aus DB
+            self._update_progress(progress=10, step='Lade Sensordaten aus Datenbank...')
             sensor_data = []
             result = self.db.execute(
                 "SELECT timestamp, sensor_id, value FROM sensor_data ORDER BY timestamp DESC LIMIT 10000"
@@ -240,6 +299,7 @@ class MLAutoTrainer:
                 })
 
             # Hole Licht-Entscheidungen
+            self._update_progress(progress=25, step='Lade Licht-Events aus Datenbank...')
             light_states = []
             result = self.db.execute(
                 "SELECT timestamp, device_id, action, state_before, state_after FROM decisions WHERE device_id LIKE '%light%' ORDER BY timestamp DESC LIMIT 5000"
@@ -254,33 +314,41 @@ class MLAutoTrainer:
 
             if len(light_states) < self.MIN_LIGHTING_SAMPLES:
                 logger.warning(f"Not enough light events: {len(light_states)} < {self.MIN_LIGHTING_SAMPLES}")
+                self._update_progress(status='error', error=f'Nicht genug Daten: {len(light_states)} Events')
                 return False
 
             # Erstelle und trainiere Modell
+            self._update_progress(progress=40, step='Bereite Trainingsdaten vor...')
             model = LightingModel(model_type="random_forest")
             X, y = model.prepare_training_data(sensor_data, light_states)
 
             if len(X) < 50:
                 logger.warning(f"Not enough training samples after preparation: {len(X)}")
+                self._update_progress(status='error', error=f'Zu wenig Samples nach Vorbereitung: {len(X)}')
                 return False
 
+            self._update_progress(progress=50, step=f'Trainiere Modell mit {len(X)} Samples...')
             metrics = model.train(X, y)
 
             # Speichere Modell
+            self._update_progress(progress=80, step='Speichere trainiertes Modell...')
             models_dir = Path('models')
             models_dir.mkdir(exist_ok=True)
             model.save_model(str(models_dir / 'lighting_model.pkl'))
 
             # Speichere Metriken
+            self._update_progress(progress=90, step='Speichere Metriken...')
             self._save_training_metrics('lighting', metrics)
 
             logger.info(f"Lighting Model trained with accuracy: {metrics.get('accuracy', 0):.2f}")
+            self._update_progress(progress=100, step='Lighting Model erfolgreich trainiert!')
             return True
 
         except Exception as e:
             logger.error(f"Error training lighting model: {e}")
             import traceback
             logger.error(traceback.format_exc())
+            self._update_progress(status='error', error=str(e))
             return False
 
     def _train_temperature_model(self) -> bool:
@@ -291,7 +359,10 @@ class MLAutoTrainer:
             True bei Erfolg
         """
         try:
+            self._update_progress(status='training', model='temperature', progress=0, step='Initialisierung...')
+
             # Hole Trainingsdaten aus DB
+            self._update_progress(progress=10, step='Lade Temperaturdaten aus Datenbank...')
             sensor_data = []
             result = self.db.execute(
                 "SELECT timestamp, sensor_id, value FROM sensor_data WHERE sensor_id LIKE '%temp%' ORDER BY timestamp DESC LIMIT 10000"
@@ -305,33 +376,41 @@ class MLAutoTrainer:
 
             if len(sensor_data) < self.MIN_TEMPERATURE_SAMPLES:
                 logger.warning(f"Not enough temperature readings: {len(sensor_data)} < {self.MIN_TEMPERATURE_SAMPLES}")
+                self._update_progress(status='error', error=f'Nicht genug Daten: {len(sensor_data)} Readings')
                 return False
 
             # Erstelle und trainiere Modell
+            self._update_progress(progress=30, step='Bereite Trainingsdaten vor...')
             model = TemperatureModel(model_type="gradient_boosting")
             X, y = model.prepare_training_data(sensor_data)
 
             if len(X) < 50:
                 logger.warning(f"Not enough training samples after preparation: {len(X)}")
+                self._update_progress(status='error', error=f'Zu wenig Samples nach Vorbereitung: {len(X)}')
                 return False
 
+            self._update_progress(progress=50, step=f'Trainiere Modell mit {len(X)} Samples...')
             metrics = model.train(X, y)
 
             # Speichere Modell
+            self._update_progress(progress=80, step='Speichere trainiertes Modell...')
             models_dir = Path('models')
             models_dir.mkdir(exist_ok=True)
             model.save_model(str(models_dir / 'temperature_model.pkl'))
 
             # Speichere Metriken
+            self._update_progress(progress=90, step='Speichere Metriken...')
             self._save_training_metrics('temperature', metrics)
 
             logger.info(f"Temperature Model trained with R²: {metrics.get('r2_score', 0):.2f}")
+            self._update_progress(progress=100, step='Temperature Model erfolgreich trainiert!')
             return True
 
         except Exception as e:
             logger.error(f"Error training temperature model: {e}")
             import traceback
             logger.error(traceback.format_exc())
+            self._update_progress(status='error', error=str(e))
             return False
 
     def _load_status(self) -> Dict:

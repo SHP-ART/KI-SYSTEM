@@ -407,6 +407,19 @@
                 <button class="btn btn-danger" id="clear-data">Daten löschen</button>
             </div>
             <div id="action-result" class="action-result"></div>
+
+            <!-- Training Progress Bar -->
+            <div id="training-progress-container" style="display: none; margin-top: 20px;">
+                <div style="margin-bottom: 10px;">
+                    <strong id="training-model-name"></strong>
+                    <span id="training-step" style="margin-left: 10px; color: #666;"></span>
+                </div>
+                <div style="width: 100%; background-color: #e0e0e0; border-radius: 8px; overflow: hidden; height: 30px;">
+                    <div id="training-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #4CAF50, #45a049); transition: width 0.3s ease; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;">
+                        <span id="training-progress-percent">0%</span>
+                    </div>
+                </div>
+            </div>
         </div>
         </div>
     </div>
