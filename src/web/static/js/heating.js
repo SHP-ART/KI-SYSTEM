@@ -33,6 +33,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Lade Heizungs-Analytics
     loadHeatingAnalytics();
+
+    // Lade neue Features
+    loadHumidityAlerts();
+    loadVentilationRecommendations();
+    loadShowerPredictions();
 });
 
 // Event Listeners einrichten
@@ -1665,4 +1670,183 @@ function renderWindowTrendsChart(data) {
 function loadWindowData() {
     loadAllWindowStatuses();
     loadWindowStatistics();
+}
+
+// ===== NEUE API-INTEGRATIONEN =====
+
+/**
+ * Lädt Luftfeuchtigkeits-Warnungen (Schimmelprävention)
+ */
+async function loadHumidityAlerts() {
+    try {
+        const response = await fetchJSON('/api/humidity/alerts');
+        
+        const container = document.getElementById('humidity-alerts-container');
+        const card = document.getElementById('humidity-alerts-card');
+
+        if (!response.alerts || response.alerts.length === 0) {
+            card.style.display = 'none';
+            return;
+        }
+
+        // Zeige Card wenn Warnungen vorhanden
+        card.style.display = 'block';
+
+        const alertsHTML = response.alerts.map(alert => {
+            const severityColors = {
+                'critical': { bg: '#fee2e2', border: '#dc2626', icon: '🚨' },
+                'warning': { bg: '#fef3c7', border: '#f59e0b', icon: '⚠️' },
+                'info': { bg: '#dbeafe', border: '#3b82f6', icon: 'ℹ️' }
+            };
+            
+            const colors = severityColors[alert.severity] || severityColors['info'];
+
+            return `
+                <div style="margin-bottom: 12px; padding: 15px; background: ${colors.bg}; border-left: 4px solid ${colors.border}; border-radius: 8px;">
+                    <div style="display: flex; align-items: start; gap: 12px;">
+                        <span style="font-size: 1.5em;">${colors.icon}</span>
+                        <div style="flex: 1;">
+                            <div style="font-weight: 600; color: #1f2937; margin-bottom: 4px;">${alert.room_name || 'Unbekannter Raum'}</div>
+                            <div style="font-size: 0.9em; color: #6b7280; margin-bottom: 8px;">${alert.message}</div>
+                            ${alert.recommendation ? `
+                                <div style="font-size: 0.85em; color: #374151; background: white; padding: 8px; border-radius: 4px;">
+                                    💡 ${alert.recommendation}
+                                </div>
+                            ` : ''}
+                            <div style="font-size: 0.75em; color: #9ca3af; margin-top: 8px;">
+                                ${alert.current_humidity}% Luftfeuchtigkeit bei ${alert.current_temperature}°C
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        container.innerHTML = alertsHTML;
+
+    } catch (error) {
+        console.error('Error loading humidity alerts:', error);
+        document.getElementById('humidity-alerts-card').style.display = 'none';
+    }
+}
+
+/**
+ * Lädt Lüftungsempfehlungen
+ */
+async function loadVentilationRecommendations() {
+    try {
+        const response = await fetchJSON('/api/ventilation/recommendation');
+        
+        const container = document.getElementById('ventilation-recommendations-container');
+        const card = document.getElementById('ventilation-card');
+
+        if (!response.recommendations || response.recommendations.length === 0) {
+            card.style.display = 'none';
+            return;
+        }
+
+        // Zeige Card wenn Empfehlungen vorhanden
+        card.style.display = 'block';
+
+        const recommendationsHTML = response.recommendations.map(rec => {
+            const priorityColors = {
+                'high': { bg: '#fee2e2', border: '#ef4444', icon: '🔴' },
+                'medium': { bg: '#fef3c7', border: '#f59e0b', icon: '🟡' },
+                'low': { bg: '#dbeafe', border: '#3b82f6', icon: '🔵' }
+            };
+            
+            const colors = priorityColors[rec.priority] || priorityColors['medium'];
+
+            return `
+                <div style="margin-bottom: 12px; padding: 15px; background: ${colors.bg}; border-left: 4px solid ${colors.border}; border-radius: 8px;">
+                    <div style="display: flex; align-items: start; gap: 12px;">
+                        <span style="font-size: 1.5em;">${colors.icon}</span>
+                        <div style="flex: 1;">
+                            <div style="font-weight: 600; color: #1f2937; margin-bottom: 4px;">
+                                ${rec.room_name || 'Allgemein'} - ${rec.action}
+                            </div>
+                            <div style="font-size: 0.9em; color: #6b7280; margin-bottom: 8px;">${rec.reason}</div>
+                            ${rec.duration_minutes ? `
+                                <div style="font-size: 0.85em; color: #374151;">
+                                    ⏱️ Empfohlene Dauer: ${rec.duration_minutes} Minuten
+                                </div>
+                            ` : ''}
+                            ${rec.expected_benefit ? `
+                                <div style="font-size: 0.85em; color: #059669; margin-top: 4px;">
+                                    ✅ ${rec.expected_benefit}
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        container.innerHTML = recommendationsHTML;
+
+    } catch (error) {
+        console.error('Error loading ventilation recommendations:', error);
+        document.getElementById('ventilation-card').style.display = 'none';
+    }
+}
+
+/**
+ * Lädt Dusch-Vorhersagen
+ */
+async function loadShowerPredictions() {
+    try {
+        const response = await fetchJSON('/api/shower/predictions');
+        
+        const container = document.getElementById('shower-predictions-container');
+        const card = document.getElementById('shower-predictions-card');
+
+        if (!response.predictions || response.predictions.length === 0) {
+            card.style.display = 'none';
+            return;
+        }
+
+        // Zeige Card wenn Vorhersagen vorhanden
+        card.style.display = 'block';
+
+        const predictionsHTML = response.predictions.map(pred => {
+            const confidence = Math.round(pred.confidence * 100);
+            const confidenceColor = confidence > 70 ? '#10b981' : confidence > 50 ? '#f59e0b' : '#6b7280';
+
+            return `
+                <div style="margin-bottom: 12px; padding: 15px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <div style="font-weight: 600; color: #1f2937;">
+                            🚿 ${pred.predicted_time}
+                        </div>
+                        <div style="font-size: 0.85em; padding: 4px 8px; background: ${confidenceColor}; color: white; border-radius: 4px;">
+                            ${confidence}% Wahrscheinlichkeit
+                        </div>
+                    </div>
+                    ${pred.typical_duration ? `
+                        <div style="font-size: 0.9em; color: #6b7280;">
+                            ⏱️ Typische Dauer: ${pred.typical_duration} Minuten
+                        </div>
+                    ` : ''}
+                    ${pred.day_of_week ? `
+                        <div style="font-size: 0.85em; color: #9ca3af; margin-top: 4px;">
+                            📅 Basierend auf ${pred.day_of_week}-Muster
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }).join('');
+
+        container.innerHTML = `
+            <div style="margin-bottom: 15px; padding: 12px; background: #eff6ff; border-radius: 8px; border-left: 4px solid #3b82f6;">
+                <div style="font-size: 0.9em; color: #1e40af;">
+                    <strong>ℹ️ Hinweis:</strong> Vorhersagen basieren auf ${response.training_days || 0} Tagen Trainingsdaten
+                </div>
+            </div>
+            ${predictionsHTML}
+        `;
+
+    } catch (error) {
+        console.error('Error loading shower predictions:', error);
+        document.getElementById('shower-predictions-card').style.display = 'none';
+    }
 }

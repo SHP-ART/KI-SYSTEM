@@ -107,6 +107,33 @@ document.getElementById('confidence-threshold').addEventListener('input', (e) =>
     document.getElementById('confidence-value').textContent = parseFloat(e.target.value).toFixed(2);
 });
 
+// === CONFIG UPDATE API ===
+
+/**
+ * Speichert komplette Konfiguration über /api/config/update
+ */
+async function saveConfigViaAPI(configUpdates) {
+    try {
+        const response = await fetch('/api/config/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(configUpdates)
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Fehler beim Speichern der Konfiguration');
+        }
+
+        return { success: true, message: data.message };
+
+    } catch (error) {
+        console.error('Error saving config:', error);
+        return { success: false, error: error.message };
+    }
+}
+
 // === ALLGEMEIN-TAB SPEICHERN ===
 
 // Speichere Datensammlungs-Einstellungen
