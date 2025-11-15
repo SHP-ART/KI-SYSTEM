@@ -143,6 +143,105 @@ class WebInterface:
                 'app_version': src.__version__
             }
 
+    def _get_mold_prevention_status(self):
+        """Hole aktuellen Schimmelprävention-Status"""
+        try:
+            # Hole Badezimmer-Daten
+            bathroom_config_path = Path('data/luftentfeuchten_config.json')
+            if not bathroom_config_path.exists():
+                return None
+            
+            with open(bathroom_config_path) as f:
+                config = json.load(f)
+            
+            if not config.get('enabled'):
+                return None
+            
+            # Hole aktuelle Sensordaten
+            platform = self.engine.platform
+            humidity_sensor = config.get('humidity_sensor_id')
+            temp_sensor = config.get('temperature_sensor_id')
+            dehumidifier_id = config.get('dehumidifier_id')
+            
+            humidity = None
+            temperature = None
+            dehumidifier_on = False
+            
+            if humidity_sensor:
+                sensor_state = platform.get_state(humidity_sensor)
+                if sensor_state:
+                    caps = sensor_state.get('attributes', {}).get('capabilities', {})
+                    if 'measure_humidity' in caps:
+                        humidity = caps['measure_humidity'].get('value')
+            
+            if temp_sensor:
+                sensor_state = platform.get_state(temp_sensor)
+                if sensor_state:
+                    caps = sensor_state.get('attributes', {}).get('capabilities', {})
+                    if 'measure_temperature' in caps:
+                        temperature = caps['measure_temperature'].get('value')
+            
+            if dehumidifier_id:
+                device_state = platform.get_state(dehumidifier_id)
+                if device_state:
+                    caps = device_state.get('attributes', {}).get('capabilities', {})
+                    if 'onoff' in caps:
+                        dehumidifier_on = caps['onoff'].get('value', False)
+            
+            # Berechne Schimmelrisiko wenn Daten verfügbar
+            if humidity is not None and temperature is not None:
+                from src.decision_engine.mold_prevention import MoldPreventionSystem
+                
+                mold_system = MoldPreventionSystem(db=self.db)
+                
+                room_name = config.get('room_name', 'Bad')
+                analysis = mold_system.analyze_room_humidity(
+                    room_name=room_name,
+                    temperature=temperature,
+                    humidity=humidity
+                )
+                
+                risk_data = analysis.get('condensation_risk', {})
+                risk_level = risk_data.get('risk_level', 'UNBEKANNT')
+                risk_score = risk_data.get('risk_score', 0)
+                condensation = risk_data.get('condensation_possible', False)
+                dewpoint = analysis.get('dewpoint')
+                
+                # Icon basierend auf Risiko-Level
+                risk_icons = {
+                    'NIEDRIG': '🟢',
+                    'MITTEL': '🟡',
+                    'HOCH': '🟠',
+                    'KRITISCH': '🔴'
+                }
+                risk_icon = risk_icons.get(risk_level, '⚪')
+                
+                return {
+                    'enabled': True,
+                    'risk_level': risk_level,
+                    'risk_icon': risk_icon,
+                    'risk_score': risk_score,
+                    'dewpoint': dewpoint,
+                    'condensation_possible': condensation,
+                    'humidity': humidity,
+                    'temperature': temperature,
+                    'dehumidifier_running': dehumidifier_on,
+                    'recommendations': analysis.get('recommendations', [])
+                }
+            
+            return {
+                'enabled': True,
+                'risk_level': 'UNBEKANNT',
+                'risk_icon': '⚪',
+                'humidity': humidity,
+                'temperature': temperature,
+                'dehumidifier_running': dehumidifier_on
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting mold prevention status: {e}")
+            return None
+
     def _register_routes(self):
         """Registriere alle Flask-Routen"""
 
@@ -240,7 +339,8 @@ class WebInterface:
                         'price': state.get('energy_price'),
                         'price_level': state.get('energy_price_level'),
                         'consumption': state.get('power_consumption')
-                    }
+                    },
+                    'mold_prevention': self._get_mold_prevention_status()
                 })
             except Exception as e:
                 logger.error(f"Error getting status: {e}")

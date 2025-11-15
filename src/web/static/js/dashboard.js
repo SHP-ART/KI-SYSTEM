@@ -42,6 +42,32 @@ async function updateStatus() {
         const levelNames = { 1: 'Niedrig', 2: 'Mittel', 3: 'Hoch' };
         document.getElementById('price-level').textContent = levelNames[priceLevel] || '--';
 
+        // Schimmelprävention
+        if (data.mold_prevention) {
+            const mold = data.mold_prevention;
+            const riskDisplay = mold.risk_icon ? `${mold.risk_icon} ${mold.risk_level}` : mold.risk_level;
+            document.getElementById('mold-risk-level').textContent = riskDisplay;
+            document.getElementById('mold-dewpoint').textContent = mold.dewpoint !== null && mold.dewpoint !== undefined ? 
+                `${mold.dewpoint.toFixed(1)}°C` : '--';
+            document.getElementById('mold-condensation').textContent = mold.condensation_possible ? 
+                '⚠️ Möglich' : '✓ Keine Gefahr';
+            document.getElementById('mold-dehumidifier').textContent = mold.dehumidifier_running ? 
+                '✓ Aktiv' : '○ Aus';
+            
+            // Färbe Risiko-Level basierend auf Stufe
+            const riskElement = document.getElementById('mold-risk-level');
+            riskElement.classList.remove('risk-low', 'risk-medium', 'risk-high', 'risk-critical');
+            if (mold.risk_level === 'NIEDRIG') {
+                riskElement.classList.add('risk-low');
+            } else if (mold.risk_level === 'MITTEL') {
+                riskElement.classList.add('risk-medium');
+            } else if (mold.risk_level === 'HOCH') {
+                riskElement.classList.add('risk-high');
+            } else if (mold.risk_level === 'KRITISCH') {
+                riskElement.classList.add('risk-critical');
+            }
+        }
+
     } catch (error) {
         console.error('Error updating status:', error);
     }
