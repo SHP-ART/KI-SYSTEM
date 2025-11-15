@@ -216,6 +216,8 @@ class Database:
                 presence_detected BOOLEAN,
                 window_open BOOLEAN,
                 energy_price_level INTEGER,
+                humidity REAL,
+                power_percentage REAL,
                 hour_of_day INTEGER,
                 day_of_week INTEGER,
                 is_weekend BOOLEAN
@@ -1291,12 +1293,31 @@ class Database:
 
     # === HEIZUNGS-OPTIMIERUNG METHODEN ===
 
-    def add_heating_observation(self, device_id: str, room_name: str,
-                               current_temp: float, target_temp: float,
-                               outdoor_temp: float, is_heating: bool,
-                               presence: bool, window_open: bool,
-                               energy_level: int = 2):
-        """Fügt eine Heizungs-Beobachtung hinzu"""
+    def add_heating_observation(self, device_id: str, room_name: str = None,
+                               current_temp: float = None, target_temp: float = None,
+                               outdoor_temp: float = None, is_heating: bool = False,
+                               presence: bool = None, window_open: bool = None,
+                               energy_level: int = 2, humidity: float = None,
+                               power_percentage: float = None):
+        """
+        Fügt eine Heizungs-Beobachtung hinzu (vereinheitlichte Methode)
+
+        Args:
+            device_id: ID des Heizgeräts (erforderlich)
+            room_name: Name des Raums (optional)
+            current_temp: Aktuelle Temperatur (optional)
+            target_temp: Ziel-Temperatur (optional)
+            outdoor_temp: Außentemperatur (optional)
+            is_heating: Ob aktuell geheizt wird (default: False)
+            presence: Anwesenheit erkannt (optional)
+            window_open: Fenster offen (optional)
+            energy_level: Energiepreis-Level 1-3 (default: 2)
+            humidity: Luftfeuchtigkeit (optional)
+            power_percentage: Leistung in % (optional)
+
+        Returns:
+            ID der eingefügten Zeile
+        """
         conn = self._get_connection()
         cursor = conn.cursor()
 
@@ -1306,8 +1327,8 @@ class Database:
             INSERT INTO heating_observations
             (timestamp, device_id, room_name, current_temperature, target_temperature,
              outdoor_temperature, is_heating, presence_detected, window_open,
-             energy_price_level, hour_of_day, day_of_week, is_weekend)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             energy_price_level, humidity, power_percentage, hour_of_day, day_of_week, is_weekend)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             now,
             device_id,
@@ -1315,16 +1336,19 @@ class Database:
             current_temp,
             target_temp,
             outdoor_temp,
-            is_heating,
-            presence,
-            window_open,
+            1 if is_heating else 0,
+            1 if presence else 0 if presence is not None else None,
+            1 if window_open else 0 if window_open is not None else None,
             energy_level,
+            humidity,
+            power_percentage,
             now.hour,
             now.weekday(),
-            now.weekday() >= 5
+            1 if now.weekday() >= 5 else 0
         ))
 
         conn.commit()
+        return cursor.lastrowid
 
     def add_heating_insight(self, insight_type: str, recommendation: str,
                            device_id: str = None, room_name: str = None,
@@ -1423,42 +1447,6 @@ class Database:
             """, (min_confidence,))
 
         return [dict(row) for row in cursor.fetchall()]
-
-    # ===== Heizungs-Monitoring Methoden =====
-
-    def add_heating_observation(self, device_id: str, room_name: str = None,
-                                current_temp: float = None, target_temp: float = None,
-                                is_heating: bool = False, outdoor_temp: float = None,
-                                humidity: float = None, power_percentage: float = None):
-        """Fügt eine Heizungsbeobachtung hinzu (für Analytics)"""
-        from datetime import datetime
-
-        conn = self._get_connection()
-        cursor = conn.cursor()
-
-        now = datetime.now()
-
-        cursor.execute("""
-            INSERT INTO heating_observations
-            (timestamp, device_id, room_name, current_temp, target_temp,
-             is_heating, outdoor_temp, humidity, hour_of_day, day_of_week, power_percentage)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            now,
-            device_id,
-            room_name,
-            current_temp,
-            target_temp,
-            1 if is_heating else 0,
-            outdoor_temp,
-            humidity,
-            now.hour,
-            now.weekday(),
-            power_percentage
-        ))
-
-        conn.commit()
-        return cursor.lastrowid
 
     def get_heating_observations(self, days_back: int = 7, device_id: str = None,
                                  room_name: str = None) -> List[Dict]:

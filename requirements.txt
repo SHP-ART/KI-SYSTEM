@@ -18,6 +18,7 @@ pytz==2023.3
 # Utilities
 schedule==1.2.0
 loguru==0.7.2
+pydantic==2.5.3
 
 # Web Interface
 flask==3.0.0
