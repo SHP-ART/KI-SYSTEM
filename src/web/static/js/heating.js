@@ -35,7 +35,6 @@ document.addEventListener('DOMContentLoaded', () => {
     loadHeatingAnalytics();
 
     // Lade neue Features
-    loadMoldPreventionStatus();
     loadHumidityAlerts();
     loadVentilationRecommendations();
     loadShowerPredictions();
