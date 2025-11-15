@@ -2,17 +2,30 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![Version](https://img.shields.io/badge/version-0.8-blue.svg)](https://github.com/dein-username/KI-SYSTEM/releases)
+[![Version](https://img.shields.io/badge/version-0.9-blue.svg)](https://github.com/dein-username/KI-SYSTEM/releases)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 Ein intelligentes Machine Learning-basiertes System zur automatischen Steuerung von Beleuchtung, Heizung und anderen Smart-Home-Geräten. Das System lernt aus deinem Verhalten und optimiert automatisch Energieverbrauch und Komfort.
 
-**Version:** 0.8 | **Unterstützte Plattformen:** 🏠 Home Assistant · 🔷 Homey Pro
+**Version:** 0.9 | **Unterstützte Plattformen:** 🏠 Home Assistant · 🔷 Homey Pro
 
 [Features](#features) · [Installation](#installation) · [Web-Dashboard](#web-dashboard) · [Dokumentation](#dokumentation) · [Contributing](CONTRIBUTING.md)
 
-## 🆕 Was ist neu in Version 0.8?
+## 🆕 Was ist neu in Version 0.9?
+
+- **⚙️ Live-Konfiguration**: Einstellungen direkt im Web-Interface ändern (ohne YAML-Editing)
+- **📊 Live Training Progress**: Echtzeit-Fortschrittsanzeige beim ML-Modell-Training mit Progress-Bar
+- **🧹 Datenmanagement**: Trainingsdaten löschen und Modelle neu trainieren über Web-UI
+- **🏠 Raumspezifische Heizpläne**: Optimierte Heizung pro Raum statt globale Einstellungen
+- **🔧 Erweiterte Heizungssteuerung**:
+  - Fenster-Heizungs-Integration (kein Heizen bei offenen Fenstern)
+  - Schimmelprävention mit Taupunkt-Berechnung
+  - Intelligente Lüftungsempfehlungen basierend auf absoluter Luftfeuchtigkeit
+  - Vorhersage der Duschzeiten für präventives Heizen
+- **🎯 Verbessertes UX**: Sofortiges Feedback bei allen Aktionen, keine "Coming Soon" Meldungen mehr
+
+### Was ist neu in Version 0.8?
 
 - **🌐 Web-Dashboard**: Komplett neues Web-Interface mit modernem Design
 - **🚿 Badezimmer-Automatisierung**: Selbstlernendes System für intelligente Luftentfeuchter-Steuerung
@@ -37,13 +50,27 @@ Ein intelligentes Machine Learning-basiertes System zur automatischen Steuerung 
   - Optional: Dynamische Strompreise (aWATTar, Tibber)
   - Energiespar-Empfehlungen in Echtzeit
 
-### 🌐 Web-Dashboard (NEU in v0.8)
+### 🌐 Web-Dashboard
 
 - **Modernes Web-Interface**
   - Echtzeit-Übersicht über alle Geräte und Sensoren
   - Interaktive Analytics-Dashboards mit Trend-Charts
   - Responsive Design für Desktop, Tablet und Mobile
   - Dunkles Theme für bessere Lesbarkeit
+
+- **Live-Konfiguration (NEU in v0.9)**
+  - Einstellungen direkt im Web-Interface ändern
+  - Konfiguration ohne manuelles YAML-Editing
+  - Sofortige Validierung und Speicherung
+  - Unterstützt: Modus, Confidence-Schwellwerte, Intervalle
+
+- **ML Training Management (NEU in v0.9)**
+  - Live-Fortschrittsanzeige beim Training
+  - Echtzeit-Status mit animierter Progress-Bar
+  - Detaillierte Schritt-Anzeige (Daten laden, Training, Speichern)
+  - Manuelle Modell-Neutrainierung per Knopfdruck
+  - Training History mit Metriken
+  - Datenmanagement (Trainingsdaten löschen)
 
 - **Selbstlernendes Badezimmer-System**
   - Automatische Dusch-Erkennung
@@ -52,6 +79,14 @@ Ein intelligentes Machine Learning-basiertes System zur automatischen Steuerung 
   - Vorhersage der nächsten Duschzeit
   - Automatische Schwellwert-Optimierung (täglich um 3:00 Uhr)
   - Trendanalyse und Muster-Erkennung
+
+- **Erweiterte Heizungssteuerung (NEU in v0.9)**
+  - Raumspezifische Heizpläne (jeder Raum individuell)
+  - Fenster-Integration (automatisches Heizen stoppen bei offenen Fenstern)
+  - Schimmelprävention mit Taupunkt-Berechnung (Magnus-Formel)
+  - Intelligente Lüftungsempfehlungen (absolute Luftfeuchtigkeit)
+  - Duschzeit-Vorhersage für präventives Aufheizen
+  - Interaktive Fenster-Statistiken mit Bar-Charts
 
 - **Hintergrund-Datensammlung**
   - Automatisches Sammeln von Sensor-Daten alle 5 Minuten
@@ -274,6 +309,35 @@ curl http://localhost:8080/api/bathroom/analytics?days=30
 
 # Badezimmer-Events
 curl http://localhost:8080/api/bathroom/events?days=7&limit=50
+
+# NEU in v0.9: Konfiguration verwalten
+curl http://localhost:8080/api/config
+curl -X POST http://localhost:8080/api/config/update \
+  -H "Content-Type: application/json" \
+  -d '{"decision_mode": "learning", "confidence_threshold": 0.8}'
+
+# NEU in v0.9: ML Training
+curl -X POST http://localhost:8080/api/ml/train \
+  -H "Content-Type: application/json" \
+  -d '{"model": "all"}'
+
+# NEU in v0.9: Training Status (Live Progress)
+curl http://localhost:8080/api/ml/train/status
+
+# NEU in v0.9: ML Status & History
+curl http://localhost:8080/api/ml/status
+curl http://localhost:8080/api/ml/training-history
+
+# NEU in v0.9: Daten löschen
+curl -X DELETE http://localhost:8080/api/data/clear
+curl -X DELETE http://localhost:8080/api/data/clear?days_back=30
+
+# NEU in v0.9: Heizung & Fenster
+curl http://localhost:8080/api/heating/windows/charts?days=7
+curl http://localhost:8080/api/humidity/alerts
+curl http://localhost:8080/api/ventilation/recommendation
+curl http://localhost:8080/api/shower/predictions
+curl http://localhost:8080/api/room/learning/<room_name>
 ```
 
 ## Verwendung
@@ -606,7 +670,7 @@ Optional: Bewegungsmelder, Tür-Sensor für erweiterte Funktionen.
 
 ## Roadmap
 
-### ✅ Implementiert (v0.8)
+### ✅ Implementiert (v0.9)
 
 - [x] Home Assistant Support
 - [x] Homey Pro Support
@@ -616,12 +680,22 @@ Optional: Bewegungsmelder, Tür-Sensor für erweiterte Funktionen.
   - [x] Geräte-Verwaltung
   - [x] Raum-Management
   - [x] Automatisierungs-Konfiguration
+  - [x] **Live-Konfiguration ohne YAML-Editing (v0.9)**
+  - [x] **Live Training Progress mit Progress-Bar (v0.9)**
+  - [x] **Datenmanagement über UI (v0.9)**
 - [x] **Selbstlernendes Badezimmer-System**
   - [x] Dusch-Erkennung
   - [x] Automatische Luftentfeuchter-Steuerung
   - [x] Analytics & Event-Tracking
   - [x] Vorhersage-System
   - [x] Automatische Optimierung
+- [x] **Intelligente Heizungssteuerung (v0.9)**
+  - [x] Raumspezifische Heizpläne
+  - [x] Fenster-Integration
+  - [x] Schimmelprävention (Taupunkt-Berechnung)
+  - [x] Intelligente Lüftungsempfehlungen
+  - [x] Duschzeit-Vorhersage
+  - [x] Interaktive Fenster-Statistiken
 - [x] **Hintergrund-Datensammlung**
   - [x] Automatisches Sensor-Logging
   - [x] Langzeit-Analytics
@@ -629,11 +703,12 @@ Optional: Bewegungsmelder, Tür-Sensor für erweiterte Funktionen.
 
 ### 🚀 Geplant
 
+- [ ] Wetter-Forecast Integration für präventives Heizen
+- [ ] Präsenz-Erkennung über Motion-Sensoren
 - [ ] Smartphone-App (iOS/Android)
 - [ ] MQTT-Support für direkte Geräte-Steuerung
 - [ ] Mehr ML-Modelle
   - [ ] Jalousien-Steuerung
-  - [ ] Lüftungs-Optimierung
   - [ ] Waschmaschinen-Zeitplanung
 - [ ] Voice-Control Integration (Alexa, Google Home)
 - [ ] Multi-Home Support (mehrere Standorte)
@@ -646,6 +721,7 @@ Optional: Bewegungsmelder, Tür-Sensor für erweiterte Funktionen.
   - [ ] Kostenoptimierung mit dynamischen Tarifen
   - [ ] Push-Benachrichtigungen
   - [ ] Backup & Restore-Funktion
+  - [ ] Authentifizierung & User-Management
 
 ## Beitragen
 
