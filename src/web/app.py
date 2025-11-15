@@ -3078,13 +3078,25 @@ class WebInterface:
                 # Verarbeite Außentemperaturen - nehme nur den neuesten Wert pro Stunde
                 import json
                 latest_weather_per_hour = {}  # Speichere nur den neuesten Wert pro Stunde
-                
+
                 for row in weather_data:
                     timestamp = datetime.fromisoformat(row[0]) if isinstance(row[0], str) else row[0]
                     hour_key = timestamp.replace(minute=0, second=0, microsecond=0)
 
                     data_json = json.loads(row[1]) if isinstance(row[1], str) else row[1]
-                    outdoor_temp = data_json.get('temperature')
+
+                    # Unterscheide zwischen verschiedenen Datenquellen
+                    outdoor_temp = None
+                    if data_json.get('source') == 'homey':
+                        # Homey-Daten: Extrahiere spezifischen Außentemperatursensor
+                        sensors = data_json.get('sensors', [])
+                        for sensor in sensors:
+                            if sensor.get('name') == 'Außentemperatur':
+                                outdoor_temp = sensor.get('temperature')
+                                break
+                    else:
+                        # OpenWeatherMap oder andere Quellen: Verwende direktes temperature Feld
+                        outdoor_temp = data_json.get('temperature')
 
                     if outdoor_temp is not None:
                         # Behalte nur den neuesten Wert pro Stunde
@@ -3533,6 +3545,72 @@ class WebInterface:
 
             except Exception as e:
                 logger.error(f"Error triggering update: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
+
+        @self.app.route('/api/system/restart', methods=['POST'])
+        def restart_server():
+            """Startet den Webserver neu"""
+            try:
+                import os
+                import signal
+
+                logger.info("Restarting web server...")
+
+                # Sende Response zuerst
+                response = jsonify({
+                    'success': True,
+                    'message': 'Server wird neu gestartet... Seite lädt in 5 Sekunden neu.'
+                })
+
+                # Verzögerter Neustart nach Response
+                def delayed_restart():
+                    import time
+                    time.sleep(1)  # Warte kurz damit Response gesendet wird
+
+                    # Erkenne ob PM2 verwendet wird
+                    pm2_running = subprocess.run(
+                        ['pm2', 'list'],
+                        capture_output=True,
+                        text=True
+                    ).returncode == 0
+
+                    if pm2_running and 'ki-smart-home' in subprocess.run(['pm2', 'list'], capture_output=True, text=True).stdout:
+                        # PM2 Neustart
+                        subprocess.Popen(['pm2', 'restart', 'ki-smart-home'])
+                    else:
+                        # Manueller Neustart
+                        # Hole aktuellen Port
+                        import psutil
+                        current_process = psutil.Process()
+                        port = 5000  # Default
+
+                        # Versuche Port aus Commandline args zu extrahieren
+                        for i, arg in enumerate(current_process.cmdline()):
+                            if arg == '--port' and i + 1 < len(current_process.cmdline()):
+                                port = int(current_process.cmdline()[i + 1])
+                                break
+
+                        # Starte neuen Prozess
+                        subprocess.Popen(
+                            [sys.executable, 'main.py', 'web', '--host', '0.0.0.0', '--port', str(port)],
+                            stdout=open('logs/restart.log', 'a'),
+                            stderr=subprocess.STDOUT,
+                            start_new_session=True
+                        )
+
+                        # Beende aktuellen Prozess
+                        time.sleep(0.5)
+                        os.kill(os.getpid(), signal.SIGTERM)
+
+                # Starte Neustart in separatem Thread
+                import threading
+                restart_thread = threading.Thread(target=delayed_restart, daemon=True)
+                restart_thread.start()
+
+                return response
+
+            except Exception as e:
+                logger.error(f"Error restarting server: {e}")
                 return jsonify({'success': False, 'error': str(e)}), 500
 
         # === DATENBANK-MANAGEMENT ENDPOINTS ===

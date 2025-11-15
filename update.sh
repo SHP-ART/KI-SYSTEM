@@ -149,30 +149,45 @@ if command -v pm2 &> /dev/null; then
     echo "   pm2 stop ki-smart-home     # Nur dieses System stoppen"
     echo ""
     echo "⚠️  Hinweis: Nur 'ki-smart-home' wird neu gestartet, nicht andere PM2-Prozesse!"
+
+    # Setze CURRENT_PORT für spätere Ausgabe
+    CURRENT_PORT=$(pm2 jlist | grep -o '"pm_exec_path":"[^"]*web"' | wc -l | xargs -I {} echo 8080)
 else
     echo "Das System wird in 3 Sekunden neu gestartet..."
     sleep 3
+
+    # Erkenne aktuellen Port
+    echo "🔍 Erkenne aktuellen Port..."
+    CURRENT_PORT=$(lsof -ti :5000 -ti :8080 -ti :3000 2>/dev/null | head -1 | xargs -I {} lsof -Pan -p {} -i 2>/dev/null | grep LISTEN | awk '{print $9}' | cut -d':' -f2 | head -1)
+    if [ -z "$CURRENT_PORT" ]; then
+        CURRENT_PORT=5000
+        echo "  ℹ️  Kein laufender Port gefunden, verwende Standard: $CURRENT_PORT"
+    else
+        echo "  ✓ Erkannter Port: $CURRENT_PORT"
+    fi
 
     # Finde und stoppe laufende Instanz
     echo "🔄 Stoppe laufende Instanz..."
     pkill -f "python.*main.py.*web" || true
     sleep 2
 
-    # Starte neu im Hintergrund
-    echo "🚀 Starte System neu..."
-    nohup python main.py web --host 0.0.0.0 --port 8080 > logs/update.log 2>&1 &
-    sleep 2
+    # Starte neu im Hintergrund auf dem gleichen Port
+    echo "🚀 Starte System neu auf Port $CURRENT_PORT..."
+    nohup python main.py web --host 0.0.0.0 --port $CURRENT_PORT > logs/update.log 2>&1 &
+    sleep 3
 
     # Prüfe ob Server läuft
-    if lsof -i :8080 >/dev/null 2>&1; then
-        echo "✓ System erfolgreich gestartet!"
+    if lsof -i :$CURRENT_PORT >/dev/null 2>&1; then
+        echo "✓ System erfolgreich auf Port $CURRENT_PORT gestartet!"
     else
         echo "⚠️  System konnte nicht automatisch gestartet werden."
-        echo "Bitte manuell starten mit: python main.py web"
+        echo "Bitte manuell starten mit: python main.py web --port $CURRENT_PORT"
     fi
 fi
 
 echo ""
-echo "🌐 Web-Dashboard: http://localhost:8080"
+# Zeige korrekten Port an (verwende CURRENT_PORT falls gesetzt, sonst 8080)
+DISPLAY_PORT=${CURRENT_PORT:-8080}
+echo "🌐 Web-Dashboard: http://localhost:$DISPLAY_PORT"
 echo ""
 echo "✨ Update erfolgreich abgeschlossen!"

@@ -643,6 +643,66 @@ async function installUpdate() {
 document.getElementById('check-update').addEventListener('click', checkForUpdates);
 document.getElementById('install-update').addEventListener('click', installUpdate);
 
+// ===== Server Restart Function =====
+
+// Starte Webserver neu
+async function restartServer() {
+    const resultEl = document.getElementById('restart-result');
+    const restartBtn = document.getElementById('restart-server');
+
+    if (!confirm('Webserver wird neu gestartet.\n\nDie Seite wird in 5 Sekunden automatisch neu geladen.\n\nFortfahren?')) {
+        return;
+    }
+
+    try {
+        restartBtn.disabled = true;
+        resultEl.textContent = '🔄 Server wird neu gestartet... Bitte warten...';
+        resultEl.className = 'action-result loading';
+        resultEl.style.display = 'block';
+
+        const response = await fetch('/api/system/restart', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            resultEl.textContent = '✓ ' + data.message;
+            resultEl.className = 'action-result success';
+
+            // Warte 5 Sekunden und reload
+            let countdown = 5;
+            const countdownInterval = setInterval(() => {
+                countdown--;
+                if (countdown > 0) {
+                    resultEl.textContent = `✓ Server wird neu gestartet... Seite lädt in ${countdown} Sekunden neu.`;
+                } else {
+                    clearInterval(countdownInterval);
+                    resultEl.textContent = '🔄 Lade Seite neu...';
+                    window.location.reload();
+                }
+            }, 1000);
+        } else {
+            resultEl.textContent = '✗ Fehler: ' + (data.error || 'Unbekannter Fehler');
+            resultEl.className = 'action-result error';
+            restartBtn.disabled = false;
+        }
+
+    } catch (error) {
+        // Fehler ist erwartet, da Server neu startet
+        resultEl.textContent = '🔄 Server startet neu... Seite wird in 5 Sekunden neu geladen.';
+        resultEl.className = 'action-result loading';
+
+        setTimeout(() => {
+            window.location.reload();
+        }, 5000);
+    }
+}
+
+// Event Listener für Restart-Button
+document.getElementById('restart-server').addEventListener('click', restartServer);
+
 // ===== ML Training Status Functions =====
 
 // Lade ML Status
