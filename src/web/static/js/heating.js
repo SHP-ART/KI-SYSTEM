@@ -8,6 +8,7 @@ let currentFilter = 'all';
 let currentRoomFilter = 'all';
 let currentMode = 'control'; // control oder optimization
 let temperatureChart = null; // Chart.js Instanz für Temperaturverlauf
+let currentTempTimeframe = 24; // Aktueller Zeitraum für Temperaturverlauf in Stunden
 
 // Fenster-Statistik Charts
 let windowDurationChart = null;
@@ -73,6 +74,27 @@ function setupEventListeners() {
     // Fenster-Statistik Zeitraum Selector
     document.getElementById('window-stats-timeframe')?.addEventListener('change', () => {
         loadWindowStatistics();
+    });
+
+    // Temperaturverlauf Zeitraum Selector
+    document.querySelectorAll('.temp-timeframe-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            // Entferne active class von allen Buttons
+            document.querySelectorAll('.temp-timeframe-btn').forEach(b => {
+                b.classList.remove('active');
+                b.style.background = 'white';
+                b.style.color = '#374151';
+            });
+
+            // Setze active class für aktuellen Button
+            btn.classList.add('active');
+            btn.style.background = '#3b82f6';
+            btn.style.color = 'white';
+
+            // Aktualisiere Zeitraum und lade Daten neu
+            currentTempTimeframe = parseInt(btn.dataset.hours);
+            loadTemperatureHistory();
+        });
     });
 
     // Speichern
@@ -210,10 +232,12 @@ async function loadOutdoorTemp() {
     }
 }
 
-// Lade Temperaturverlauf für Chart (24 Stunden)
-async function loadTemperatureHistory() {
+// Lade Temperaturverlauf für Chart
+async function loadTemperatureHistory(hours = null) {
     try {
-        const response = await fetchJSON('/api/heating/temperature-history?hours=24');
+        // Verwende übergebenen Wert oder aktuellen Zeitraum
+        const timeframe = hours || currentTempTimeframe;
+        const response = await fetchJSON(`/api/heating/temperature-history?hours=${timeframe}`);
 
         if (!response.success) {
             console.error('Error loading temperature history:', response.error);

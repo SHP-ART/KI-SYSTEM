@@ -254,7 +254,23 @@
 
     <!-- Temperaturverlauf -->
     <div class="card">
-        <h3>📊 Temperaturverlauf (24 Stunden)</h3>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h3 style="margin: 0;">📊 Temperaturverlauf</h3>
+            <div class="temp-timeframe-selector" style="display: flex; gap: 5px;">
+                <button class="temp-timeframe-btn active" data-hours="24" style="padding: 6px 12px; border: 1px solid #d1d5db; background: #3b82f6; color: white; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.2s;">
+                    24h
+                </button>
+                <button class="temp-timeframe-btn" data-hours="48" style="padding: 6px 12px; border: 1px solid #d1d5db; background: white; color: #374151; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.2s;">
+                    2 Tage
+                </button>
+                <button class="temp-timeframe-btn" data-hours="72" style="padding: 6px 12px; border: 1px solid #d1d5db; background: white; color: #374151; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.2s;">
+                    3 Tage
+                </button>
+                <button class="temp-timeframe-btn" data-hours="168" style="padding: 6px 12px; border: 1px solid #d1d5db; background: white; color: #374151; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.2s;">
+                    7 Tage
+                </button>
+            </div>
+        </div>
         <div class="chart-container">
             <canvas id="temperature-chart"></canvas>
         </div>
@@ -1211,6 +1227,16 @@
     text-align: center;
     color: #9ca3af;
     margin-top: 10px;
+}
+
+/* Temperaturverlauf Zeitraum Buttons */
+.temp-timeframe-btn:hover {
+    background: #e5e7eb !important;
+    border-color: #9ca3af !important;
+}
+
+.temp-timeframe-btn.active:hover {
+    background: #2563eb !important;
 }
 </style>
 
