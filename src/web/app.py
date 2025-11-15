@@ -3077,6 +3077,7 @@ class WebInterface:
 
                 # Verarbeite Außentemperaturen
                 import json
+                seen_weather = set()  # Dedupliziere identische Einträge
                 for row in weather_data:
                     timestamp = datetime.fromisoformat(row[0]) if isinstance(row[0], str) else row[0]
                     hour_key = timestamp.replace(minute=0, second=0, microsecond=0)
@@ -3085,7 +3086,11 @@ class WebInterface:
                     outdoor_temp = data_json.get('temperature')
 
                     if outdoor_temp is not None:
-                        hourly_data[hour_key]['outdoor_temps'].append(float(outdoor_temp))
+                        # Dedupliziere: Nur einzigartige (hour, temp) Kombinationen
+                        dedup_key = (hour_key, float(outdoor_temp))
+                        if dedup_key not in seen_weather:
+                            seen_weather.add(dedup_key)
+                            hourly_data[hour_key]['outdoor_temps'].append(float(outdoor_temp))
 
                 # Erstelle Zeitreihen-Arrays
                 timestamps = []
