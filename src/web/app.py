@@ -1439,10 +1439,25 @@ class WebInterface:
                                     'type': 'humidity'
                                 })
 
+                    # Filter für echte Räume (keine technischen Zonen, Geräte oder Szenen)
+                    excluded_patterns = [
+                        'wohnung',  # "1 - Wohnung", "2 - Wohnung", etc.
+                        'alle lampen',  # Szenen
+                        'steckdose',  # Einzelne Geräte
+                        'schalter',  # Schalter
+                        'sensor',  # Standalone Sensoren ohne Raum
+                        'homey',  # Homey-System
+                    ]
+
                     # Analysiere ALLE Räume (auch mit nur einem Sensor)
                     for room_name, sensors in room_sensors.items():
                         # Skip "Unbenannter Raum" mit leeren Daten
                         if room_name == "Unbenannter Raum" and not sensors['temperature'] and not sensors['humidity']:
+                            continue
+
+                        # Skip technische Zonen, Geräte und Szenen
+                        room_name_lower = room_name.lower()
+                        if any(pattern in room_name_lower for pattern in excluded_patterns):
                             continue
 
                         room_data = {
