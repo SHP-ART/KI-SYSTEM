@@ -1334,6 +1334,20 @@ class WebInterface:
                 try:
                     states = self.engine.platform.get_states()
 
+                    # Lade Raum-Zuordnungen aus rooms.json
+                    import json
+                    rooms_data = {'rooms': [], 'assignments': {}}
+                    rooms_file = Path('data/rooms.json')
+                    if rooms_file.exists():
+                        try:
+                            with open(rooms_file, 'r') as f:
+                                rooms_data = json.load(f)
+                        except Exception as e:
+                            logger.warning(f"Could not load rooms.json: {e}")
+
+                    # Erstelle Mapping: room_id -> room_name
+                    room_id_to_name = {room['id']: room['name'] for room in rooms_data.get('rooms', [])}
+
                     # Gruppiere Sensoren nach Raum - VERBESSERTE VERSION
                     room_sensors = {}
 
@@ -1348,8 +1362,15 @@ class WebInterface:
                         # Extrahiere Raum aus verschiedenen Quellen
                         room_name = None
 
-                        # 1. Für Homey: Nutze zoneName (höchste Priorität)
-                        if 'zoneName' in attrs and attrs['zoneName']:
+                        # 0. HÖCHSTE PRIORITÄT: Nutze manuelle Zuordnung aus rooms.json
+                        if device_id in rooms_data.get('assignments', {}):
+                            room_id = rooms_data['assignments'][device_id]
+                            if room_id in room_id_to_name:
+                                room_name = room_id_to_name[room_id]
+                                logger.debug(f"Using room assignment from rooms.json: {device_id} -> {room_name}")
+
+                        # 1. Für Homey: Nutze zoneName (zweite Priorität)
+                        if not room_name and 'zoneName' in attrs and attrs['zoneName']:
                             room_name = attrs['zoneName']
 
                         # 2. Für Homey: Nutze zone.name falls vorhanden (bei dict)
