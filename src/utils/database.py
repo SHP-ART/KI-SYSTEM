@@ -1739,6 +1739,24 @@ class Database:
 
         start_time = datetime.now() - timedelta(days=days_back)
 
+        # Lade Raum-Zuordnungen aus rooms.json
+        import json
+        from pathlib import Path
+        room_assignments = {}
+        room_names_map = {}
+
+        rooms_file = Path('data/rooms.json')
+        if rooms_file.exists():
+            try:
+                with open(rooms_file, 'r') as f:
+                    rooms_data = json.load(f)
+                    room_assignments = rooms_data.get('assignments', {})
+                    # Erstelle mapping von room_id zu room_name
+                    for room in rooms_data.get('rooms', []):
+                        room_names_map[room['id']] = room['name']
+            except Exception as e:
+                logger.warning(f"Could not load room assignments: {e}")
+
         # 1. Öffnungszeiten pro Fenster (für Balkendiagramm)
         cursor.execute("""
             WITH window_sessions AS (
@@ -1764,6 +1782,7 @@ class Database:
                 WHERE is_open = 1 AND prev_open = 0
             )
             SELECT
+                device_id,
                 device_name,
                 room_name,
                 CAST(SUM(CAST((julianday(COALESCE(closed_at, datetime('now'))) - julianday(opened_at)) * 24 * 60 AS INTEGER)) AS REAL) as total_minutes
@@ -1775,9 +1794,17 @@ class Database:
         duration_data = []
         for row in cursor.fetchall():
             total_minutes = row['total_minutes'] or 0
+            device_id = row['device_id']
+
+            # Hole Raumnamen aus room_assignments
+            room_name = row['room_name'] or 'Unbekannt'
+            if device_id in room_assignments:
+                room_id = room_assignments[device_id]
+                room_name = room_names_map.get(room_id, room_name)
+
             duration_data.append({
                 'device_name': row['device_name'],
-                'room_name': row['room_name'] or 'Unbekannt',
+                'room_name': room_name,
                 'total_hours': round(total_minutes / 60, 1),
                 'total_minutes': round(total_minutes, 0)
             })
@@ -1797,6 +1824,7 @@ class Database:
                     AND device_id IS NOT NULL
             )
             SELECT
+                device_id,
                 device_name,
                 room_name,
                 COUNT(*) as open_count
@@ -1808,9 +1836,17 @@ class Database:
 
         frequency_data = []
         for row in cursor.fetchall():
+            device_id = row['device_id']
+
+            # Hole Raumnamen aus room_assignments
+            room_name = row['room_name'] or 'Unbekannt'
+            if device_id in room_assignments:
+                room_id = room_assignments[device_id]
+                room_name = room_names_map.get(room_id, room_name)
+
             frequency_data.append({
                 'device_name': row['device_name'],
-                'room_name': row['room_name'] or 'Unbekannt',
+                'room_name': room_name,
                 'open_count': row['open_count']
             })
 

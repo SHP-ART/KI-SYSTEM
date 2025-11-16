@@ -390,8 +390,151 @@ function getDeviceIcon(domain) {
     return icons[domain] || '📱';
 }
 
+// ===== FENSTER-ZUORDNUNG =====
+
+// Lade und zeige Fenster-Zuordnung
+async function loadWindowAssignments() {
+    const loadingEl = document.getElementById('window-assignment-loading');
+    const containerEl = document.getElementById('window-assignment-container');
+    const emptyEl = document.getElementById('window-assignment-empty');
+
+    if (loadingEl) loadingEl.style.display = 'block';
+    if (containerEl) containerEl.innerHTML = '';
+    if (emptyEl) emptyEl.style.display = 'none';
+
+    try {
+        // Lade alle Geräte falls noch nicht geladen
+        if (allDevices.length === 0) {
+            await loadAllDevices();
+        }
+
+        // Filtere Fenster-Sensoren (binary_sensor mit window/door class)
+        const windows = allDevices.filter(d =>
+            (d.domain === 'binary_sensor' || d.domain === 'sensor') &&
+            (d.attributes?.device_class === 'window' ||
+             d.attributes?.device_class === 'door' ||
+             d.name.toLowerCase().includes('fenster') ||
+             d.name.toLowerCase().includes('window'))
+        );
+
+        if (loadingEl) loadingEl.style.display = 'none';
+
+        if (windows.length === 0) {
+            if (emptyEl) emptyEl.style.display = 'block';
+            return;
+        }
+
+        // Rendere Fenster-Liste
+        renderWindowAssignments(windows);
+
+    } catch (error) {
+        console.error('Error loading window assignments:', error);
+        if (loadingEl) loadingEl.style.display = 'none';
+    }
+}
+
+// Rendere Fenster-Zuordnungsliste
+function renderWindowAssignments(windows) {
+    const container = document.getElementById('window-assignment-container');
+    if (!container) return;
+
+    const html = `
+        <div style="overflow-x: auto;">
+            <table class="window-assignment-table" style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="background: #f9fafb; border-bottom: 2px solid #e5e7eb;">
+                        <th style="padding: 12px; text-align: left; font-weight: 600; color: #374151;">Fenster/Tür</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600; color: #374151;">Aktueller Raum</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600; color: #374151;">Zuordnen zu</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${windows.map(window => {
+                        const currentRoom = deviceRoomAssignments[window.id];
+                        const currentRoomObj = rooms.find(r => r.id === currentRoom);
+
+                        return `
+                            <tr style="border-bottom: 1px solid #e5e7eb;">
+                                <td style="padding: 12px;">
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <span style="font-size: 1.2em;">🪟</span>
+                                        <span style="font-weight: 500;">${window.name}</span>
+                                    </div>
+                                </td>
+                                <td style="padding: 12px;">
+                                    ${currentRoomObj ?
+                                        `<span style="background: #dbeafe; color: #1e40af; padding: 4px 10px; border-radius: 6px; font-size: 0.9em;">
+                                            ${currentRoomObj.icon || '🏠'} ${currentRoomObj.name}
+                                        </span>` :
+                                        `<span style="color: #9ca3af; font-style: italic;">Nicht zugeordnet</span>`
+                                    }
+                                </td>
+                                <td style="padding: 12px;">
+                                    <select
+                                        class="window-room-select"
+                                        data-window-id="${window.id}"
+                                        style="padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; background: white; min-width: 150px;"
+                                        onchange="assignWindowToRoom('${window.id}', this.value)"
+                                    >
+                                        <option value="">-- Raum wählen --</option>
+                                        ${rooms.map(room => `
+                                            <option value="${room.id}" ${currentRoom === room.id ? 'selected' : ''}>
+                                                ${room.icon || '🏠'} ${room.name}
+                                            </option>
+                                        `).join('')}
+                                    </select>
+                                </td>
+                            </tr>
+                        `;
+                    }).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    container.innerHTML = html;
+}
+
+// Ordne Fenster einem Raum zu
+async function assignWindowToRoom(windowId, roomId) {
+    try {
+        if (!roomId) {
+            // Entferne Zuordnung
+            const result = await postJSON('/api/rooms/unassign-device', {
+                device_id: windowId
+            });
+
+            if (result.success) {
+                delete deviceRoomAssignments[windowId];
+                loadWindowAssignments(); // Neu laden
+                renderRooms(); // Update room cards
+            }
+        } else {
+            // Setze neue Zuordnung
+            const result = await postJSON('/api/rooms/assign-device', {
+                device_id: windowId,
+                room_id: roomId
+            });
+
+            if (result.success) {
+                deviceRoomAssignments[windowId] = roomId;
+                loadWindowAssignments(); // Neu laden
+                renderRooms(); // Update room cards
+            }
+        }
+    } catch (error) {
+        console.error('Error assigning window to room:', error);
+        alert('Fehler beim Zuordnen des Fensters');
+    }
+}
+
 // Init
 document.addEventListener('DOMContentLoaded', () => {
     loadRooms();
     loadAllDevices();
+
+    // Warte kurz bis Räume geladen sind, dann lade Fenster
+    setTimeout(() => {
+        loadWindowAssignments();
+    }, 500);
 });
