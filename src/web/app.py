@@ -1108,24 +1108,39 @@ class WebInterface:
                 # 3. Collector Status
                 if log_type in ['all', 'collector']:
                     collectors_info = []
-                    if self.heating_collector:
-                        collectors_info.append(('Heating Collector', self.heating_collector.last_collection_time))
-                    if self.window_collector:
-                        collectors_info.append(('Window Collector', self.window_collector.last_collection_time))
-                    if self.lighting_collector:
-                        collectors_info.append(('Lighting Collector', self.lighting_collector.last_collection_time))
-                    if self.temperature_collector:
-                        collectors_info.append(('Temperature Collector', self.temperature_collector.last_collection_time))
+
+                    # Prüfe Collectors mit try-except, da nicht alle last_collection_time haben
+                    try:
+                        if self.heating_collector and hasattr(self.heating_collector, 'last_collection_time'):
+                            collectors_info.append(('Heating Collector', self.heating_collector.last_collection_time))
+                    except: pass
+
+                    try:
+                        if self.window_collector and hasattr(self.window_collector, 'last_collection_time'):
+                            collectors_info.append(('Window Collector', self.window_collector.last_collection_time))
+                    except: pass
+
+                    try:
+                        if self.lighting_collector and hasattr(self.lighting_collector, 'last_collection_time'):
+                            collectors_info.append(('Lighting Collector', self.lighting_collector.last_collection_time))
+                    except: pass
+
+                    try:
+                        if self.temperature_collector and hasattr(self.temperature_collector, 'last_collection_time'):
+                            collectors_info.append(('Temperature Collector', self.temperature_collector.last_collection_time))
+                    except: pass
 
                     for name, last_time in collectors_info:
                         if last_time:
-                            logs.append({
-                                'timestamp': last_time if isinstance(last_time, str) else datetime.now().isoformat(),
-                                'type': 'collector',
-                                'category': 'data_collection',
-                                'message': f"{name}: Daten gesammelt",
-                                'level': 'info'
-                            })
+                            try:
+                                logs.append({
+                                    'timestamp': last_time if isinstance(last_time, str) else datetime.now().isoformat(),
+                                    'type': 'collector',
+                                    'category': 'data_collection',
+                                    'message': f"{name}: Daten gesammelt",
+                                    'level': 'info'
+                                })
+                            except: pass
 
                 # Sortiere nach Timestamp (neueste zuerst)
                 logs.sort(key=lambda x: x['timestamp'], reverse=True)
