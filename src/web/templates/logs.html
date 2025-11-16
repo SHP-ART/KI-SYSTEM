@@ -1,0 +1,376 @@
+{% extends "base.html" %}
+
+{% block title %}System Logs & Activity - KI Smart Home{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>📝 System Logs & Activity Monitor</h2>
+    <p>Live-Überwachung von Datenbank-Aktivitäten, ML-Training und System-Ereignissen</p>
+</div>
+
+<!-- System Status Cards -->
+<div class="status-cards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+    <div class="card status-card" id="db-status">
+        <h3>📊 Datenbank</h3>
+        <div class="status-value" id="db-entries-count">-</div>
+        <div class="status-label">Gesamt-Einträge</div>
+        <div class="status-info" id="db-data-range">-</div>
+    </div>
+
+    <div class="card status-card" id="ml-status">
+        <h3>🤖 ML Training</h3>
+        <div class="status-value" id="ml-status-text">-</div>
+        <div class="status-label">Status</div>
+        <div class="progress-bar" style="display: none; margin-top: 10px;">
+            <div class="progress-fill" id="ml-progress" style="width: 0%; height: 20px; background: linear-gradient(90deg, #4CAF50, #8BC34A); border-radius: 10px; transition: width 0.5s;"></div>
+        </div>
+        <div class="status-info" id="ml-progress-text"></div>
+    </div>
+
+    <div class="card status-card" id="collectors-status">
+        <h3>🔄 Data Collectors</h3>
+        <div class="status-value" id="collectors-count">-</div>
+        <div class="status-label">Aktive Collectors</div>
+        <div class="status-info" id="collectors-last-run">-</div>
+    </div>
+
+    <div class="card status-card" id="engine-status">
+        <h3>⚙️ Engine</h3>
+        <div class="status-value" id="engine-mode">-</div>
+        <div class="status-label">Modus</div>
+        <div class="status-info" id="engine-platform">-</div>
+    </div>
+</div>
+
+<!-- Filter Controls -->
+<div class="card" style="margin-bottom: 1rem;">
+    <h3>🔍 Filter</h3>
+    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+        <button class="btn btn-filter active" data-filter="all" onclick="setLogFilter('all')">
+            📋 Alle
+        </button>
+        <button class="btn btn-filter" data-filter="database" onclick="setLogFilter('database')">
+            💾 Datenbank
+        </button>
+        <button class="btn btn-filter" data-filter="ml" onclick="setLogFilter('ml')">
+            🤖 ML Training
+        </button>
+        <button class="btn btn-filter" data-filter="decision" onclick="setLogFilter('decision')">
+            🎯 Entscheidungen
+        </button>
+        <button class="btn btn-filter" data-filter="collector" onclick="setLogFilter('collector')">
+            🔄 Collectors
+        </button>
+        <div style="flex-grow: 1;"></div>
+        <button class="btn btn-secondary" onclick="toggleAutoRefresh()">
+            <span id="auto-refresh-icon">⏸️</span> Auto-Refresh
+        </button>
+        <button class="btn btn-primary" onclick="refreshLogs()">
+            🔄 Aktualisieren
+        </button>
+    </div>
+</div>
+
+<!-- Logs Display -->
+<div class="card">
+    <h3>📋 Aktivitäts-Log</h3>
+    <div class="log-stats" style="margin-bottom: 1rem; display: flex; gap: 2rem; font-size: 0.9em; color: #666;">
+        <div>Einträge: <strong id="log-count">0</strong></div>
+        <div>Letztes Update: <strong id="last-update">-</strong></div>
+        <div>Filter: <strong id="current-filter">Alle</strong></div>
+    </div>
+
+    <div id="logs-container" style="max-height: 600px; overflow-y: auto; background: #f5f5f5; padding: 1rem; border-radius: 8px; font-family: 'Courier New', monospace; font-size: 0.9em;">
+        <div class="loading">Lade Logs...</div>
+    </div>
+</div>
+
+<style>
+.status-card {
+    text-align: center;
+    padding: 1.5rem;
+}
+
+.status-card h3 {
+    margin-top: 0;
+    font-size: 1.1em;
+    color: #333;
+}
+
+.status-value {
+    font-size: 2em;
+    font-weight: bold;
+    color: #4CAF50;
+    margin: 0.5rem 0;
+}
+
+.status-label {
+    font-size: 0.9em;
+    color: #666;
+    margin-bottom: 0.5rem;
+}
+
+.status-info {
+    font-size: 0.8em;
+    color: #999;
+}
+
+.btn-filter {
+    padding: 0.5rem 1rem;
+    border: 2px solid #ddd;
+    background: white;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.btn-filter:hover {
+    border-color: #4CAF50;
+    background: #f0f8f0;
+}
+
+.btn-filter.active {
+    border-color: #4CAF50;
+    background: #4CAF50;
+    color: white;
+}
+
+.log-entry {
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    background: white;
+    border-left: 4px solid #4CAF50;
+    border-radius: 4px;
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+}
+
+.log-entry.level-info {
+    border-left-color: #2196F3;
+}
+
+.log-entry.level-success {
+    border-left-color: #4CAF50;
+}
+
+.log-entry.level-warning {
+    border-left-color: #FF9800;
+}
+
+.log-entry.level-error {
+    border-left-color: #f44336;
+}
+
+.log-timestamp {
+    flex-shrink: 0;
+    font-weight: bold;
+    color: #666;
+    font-size: 0.85em;
+}
+
+.log-type {
+    flex-shrink: 0;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75em;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.log-type.type-database {
+    background: #E3F2FD;
+    color: #1976D2;
+}
+
+.log-type.type-ml_training {
+    background: #F3E5F5;
+    color: #7B1FA2;
+}
+
+.log-type.type-decision {
+    background: #E8F5E9;
+    color: #388E3C;
+}
+
+.log-type.type-collector {
+    background: #FFF3E0;
+    color: #F57C00;
+}
+
+.log-message {
+    flex-grow: 1;
+}
+
+.loading {
+    text-align: center;
+    padding: 2rem;
+    color: #666;
+}
+</style>
+
+<script>
+let currentFilter = 'all';
+let autoRefresh = true;
+let refreshInterval = null;
+
+function setLogFilter(filter) {
+    currentFilter = filter;
+    document.getElementById('current-filter').textContent =
+        filter === 'all' ? 'Alle' :
+        filter === 'database' ? 'Datenbank' :
+        filter === 'ml' ? 'ML Training' :
+        filter === 'decision' ? 'Entscheidungen' :
+        filter === 'collector' ? 'Collectors' : filter;
+
+    // Update button states
+    document.querySelectorAll('.btn-filter').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.filter === filter);
+    });
+
+    refreshLogs();
+}
+
+function toggleAutoRefresh() {
+    autoRefresh = !autoRefresh;
+    const icon = document.getElementById('auto-refresh-icon');
+    icon.textContent = autoRefresh ? '⏸️' : '▶️';
+
+    if (autoRefresh) {
+        startAutoRefresh();
+    } else {
+        stopAutoRefresh();
+    }
+}
+
+function startAutoRefresh() {
+    if (refreshInterval) return;
+    refreshInterval = setInterval(() => {
+        if (autoRefresh) {
+            refreshLogs();
+            refreshSystemStatus();
+        }
+    }, 5000); // Alle 5 Sekunden
+}
+
+function stopAutoRefresh() {
+    if (refreshInterval) {
+        clearInterval(refreshInterval);
+        refreshInterval = null;
+    }
+}
+
+async function refreshLogs() {
+    try {
+        const response = await fetch(`/api/logs/recent?type=${currentFilter}&limit=50`);
+        const data = await response.json();
+
+        if (data.success) {
+            displayLogs(data.logs);
+            document.getElementById('log-count').textContent = data.count;
+            document.getElementById('last-update').textContent = new Date().toLocaleTimeString('de-DE');
+        }
+    } catch (error) {
+        console.error('Error fetching logs:', error);
+        document.getElementById('logs-container').innerHTML = '<div class="loading">❌ Fehler beim Laden der Logs</div>';
+    }
+}
+
+function displayLogs(logs) {
+    const container = document.getElementById('logs-container');
+
+    if (logs.length === 0) {
+        container.innerHTML = '<div class="loading">Keine Logs verfügbar</div>';
+        return;
+    }
+
+    container.innerHTML = logs.map(log => {
+        const timestamp = new Date(log.timestamp).toLocaleString('de-DE');
+        return `
+            <div class="log-entry level-${log.level}">
+                <span class="log-timestamp">${timestamp}</span>
+                <span class="log-type type-${log.type}">${log.type}</span>
+                <span class="log-message">${log.message}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+async function refreshSystemStatus() {
+    try {
+        const response = await fetch('/api/system/status');
+        const data = await response.json();
+
+        // Datenbank Status
+        if (data.database && data.database.stats) {
+            const stats = data.database.stats;
+            const totalEntries = Object.values(stats).reduce((sum, val) => {
+                return typeof val === 'number' ? sum + val : sum;
+            }, 0);
+            document.getElementById('db-entries-count').textContent = totalEntries.toLocaleString('de-DE');
+
+            if (stats.data_range) {
+                const first = new Date(stats.data_range.first).toLocaleDateString('de-DE');
+                const last = new Date(stats.data_range.last).toLocaleDateString('de-DE');
+                document.getElementById('db-data-range').textContent = `${first} - ${last}`;
+            }
+        }
+
+        // ML Training Status
+        if (data.ml_training && data.ml_training.status) {
+            const mlStatus = data.ml_training.status;
+            const statusText = mlStatus.status === 'training' ? '🔄 Training läuft' :
+                              mlStatus.status === 'completed' ? '✅ Abgeschlossen' :
+                              mlStatus.status === 'error' ? '❌ Fehler' :
+                              '💤 Idle';
+            document.getElementById('ml-status-text').textContent = statusText;
+
+            if (mlStatus.status === 'training') {
+                document.querySelector('.progress-bar').style.display = 'block';
+                document.getElementById('ml-progress').style.width = mlStatus.progress + '%';
+                document.getElementById('ml-progress-text').textContent = mlStatus.step || '';
+            } else {
+                document.querySelector('.progress-bar').style.display = 'none';
+                document.getElementById('ml-progress-text').textContent = '';
+            }
+        }
+
+        // Collectors Status
+        if (data.collectors) {
+            const activeCollectors = Object.values(data.collectors).filter(c => c.running).length;
+            const totalCollectors = Object.keys(data.collectors).length;
+            document.getElementById('collectors-count').textContent = `${activeCollectors}/${totalCollectors}`;
+
+            // Finde letzten Collection-Zeitpunkt
+            const lastTimes = Object.values(data.collectors)
+                .map(c => c.last_collection)
+                .filter(t => t)
+                .sort()
+                .reverse();
+
+            if (lastTimes.length > 0) {
+                const lastTime = new Date(lastTimes[0]).toLocaleTimeString('de-DE');
+                document.getElementById('collectors-last-run').textContent = `Letzter Lauf: ${lastTime}`;
+            }
+        }
+
+        // Engine Status
+        if (data.engine) {
+            const mode = data.engine.mode || 'Unknown';
+            document.getElementById('engine-mode').textContent = mode.toUpperCase();
+            document.getElementById('engine-platform').textContent = data.engine.platform || 'Unknown';
+        }
+
+    } catch (error) {
+        console.error('Error fetching system status:', error);
+    }
+}
+
+// Initialisierung
+document.addEventListener('DOMContentLoaded', function() {
+    refreshLogs();
+    refreshSystemStatus();
+    startAutoRefresh();
+});
+</script>
+{% endblock %}

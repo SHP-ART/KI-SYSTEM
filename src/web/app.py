@@ -316,6 +316,11 @@ class WebInterface:
             """Badezimmer Automatisierung Seite"""
             return render_template('luftentfeuchten.html')
 
+        @self.app.route('/logs')
+        def logs_page():
+            """System Logs & Activity Monitor Seite"""
+            return render_template('logs.html')
+
         # === API Endpunkte ===
 
         @self.app.route('/api/status')
@@ -992,6 +997,233 @@ class WebInterface:
             except Exception as e:
                 logger.error(f"Error getting training status: {e}")
                 return jsonify({'error': str(e)}), 500
+
+        # === SYSTEM LOGS & MONITORING ===
+
+        @self.app.route('/api/logs/recent', methods=['GET'])
+        def api_get_recent_logs():
+            """API: Hole aktuelle System-Logs und Aktivitäten"""
+            try:
+                limit = request.args.get('limit', 100, type=int)
+                log_type = request.args.get('type', 'all')  # all, database, ml, decision, collector
+
+                logs = []
+
+                # 1. Datenbank-Aktivitäten (letzte Einträge)
+                if log_type in ['all', 'database']:
+                    try:
+                        # Hole letzte Sensor-Daten Einträge
+                        sensor_entries = self.db.execute(
+                            "SELECT timestamp, sensor_id, value FROM sensor_data ORDER BY timestamp DESC LIMIT ?",
+                            (min(20, limit),)
+                        )
+                        for entry in sensor_entries:
+                            logs.append({
+                                'timestamp': entry['timestamp'],
+                                'type': 'database',
+                                'category': 'sensor_data',
+                                'message': f"Sensor {entry['sensor_id']}: {entry['value']}",
+                                'level': 'info'
+                            })
+                    except Exception as e:
+                        logger.debug(f"Could not fetch sensor data: {e}")
+
+                    # Hole letzte Entscheidungen
+                    try:
+                        decisions = self.db.execute(
+                            "SELECT timestamp, device_id, action, confidence, executed FROM decisions ORDER BY timestamp DESC LIMIT ?",
+                            (min(20, limit),)
+                        )
+                        for decision in decisions:
+                            executed_str = "✓ Ausgeführt" if decision.get('executed') else "○ Vorgeschlagen"
+                            logs.append({
+                                'timestamp': decision['timestamp'],
+                                'type': 'decision',
+                                'category': 'action',
+                                'message': f"{executed_str}: {decision.get('action', 'Unknown')} auf {decision.get('device_id', 'Unknown')} (Confidence: {decision.get('confidence', 0):.0%})",
+                                'level': 'success' if decision.get('executed') else 'info'
+                            })
+                    except Exception as e:
+                        logger.debug(f"Could not fetch decisions: {e}")
+
+                # 2. ML-Training Status
+                if log_type in ['all', 'ml'] and self.ml_auto_trainer:
+                    try:
+                        training_progress = self.ml_auto_trainer.get_training_progress()
+                        if training_progress['status'] != 'idle':
+                            logs.append({
+                                'timestamp': training_progress.get('started_at', datetime.now().isoformat()),
+                                'type': 'ml_training',
+                                'category': 'training',
+                                'message': f"ML Training ({training_progress.get('model', 'unknown')}): {training_progress.get('step', 'Processing...')} - {training_progress.get('progress', 0)}%",
+                                'level': 'warning' if training_progress['status'] == 'training' else 'success'
+                            })
+                    except Exception as e:
+                        logger.debug(f"Could not fetch training progress: {e}")
+
+                    # Hole letzte Training-Historie
+                    try:
+                        training_history = self.db.execute(
+                            "SELECT timestamp, model_name, model_type, metrics FROM training_history ORDER BY timestamp DESC LIMIT ?",
+                            (min(5, limit),)
+                        )
+                        for history in training_history:
+                            metrics_str = ""
+                            if history.get('metrics'):
+                                import json
+                                try:
+                                    metrics = json.loads(history['metrics']) if isinstance(history['metrics'], str) else history['metrics']
+                                    if 'accuracy' in metrics:
+                                        metrics_str = f"Accuracy: {metrics['accuracy']:.2%}"
+                                    elif 'mae' in metrics:
+                                        metrics_str = f"MAE: {metrics['mae']:.2f}"
+                                except:
+                                    pass
+
+                            logs.append({
+                                'timestamp': history['timestamp'],
+                                'type': 'ml_training',
+                                'category': 'completed',
+                                'message': f"Model trainiert: {history.get('model_name', 'Unknown')} ({history.get('model_type', '')}) - {metrics_str}",
+                                'level': 'success'
+                            })
+                    except Exception as e:
+                        logger.debug(f"Could not fetch training history: {e}")
+
+                # 3. Collector Status
+                if log_type in ['all', 'collector']:
+                    collectors_info = []
+                    if self.heating_collector:
+                        collectors_info.append(('Heating Collector', self.heating_collector.last_collection_time))
+                    if self.window_collector:
+                        collectors_info.append(('Window Collector', self.window_collector.last_collection_time))
+                    if self.lighting_collector:
+                        collectors_info.append(('Lighting Collector', self.lighting_collector.last_collection_time))
+                    if self.temperature_collector:
+                        collectors_info.append(('Temperature Collector', self.temperature_collector.last_collection_time))
+
+                    for name, last_time in collectors_info:
+                        if last_time:
+                            logs.append({
+                                'timestamp': last_time if isinstance(last_time, str) else datetime.now().isoformat(),
+                                'type': 'collector',
+                                'category': 'data_collection',
+                                'message': f"{name}: Daten gesammelt",
+                                'level': 'info'
+                            })
+
+                # Sortiere nach Timestamp (neueste zuerst)
+                logs.sort(key=lambda x: x['timestamp'], reverse=True)
+
+                # Limitiere
+                logs = logs[:limit]
+
+                return jsonify({
+                    'success': True,
+                    'count': len(logs),
+                    'logs': logs
+                })
+
+            except Exception as e:
+                logger.error(f"Error getting recent logs: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @self.app.route('/api/system/status', methods=['GET'])
+        def api_get_system_status():
+            """API: Hole umfassenden System-Status"""
+            try:
+                status = {
+                    'timestamp': datetime.now().isoformat(),
+                    'engine': {
+                        'initialized': self.engine is not None,
+                        'platform': self.engine.platform.get_platform_name() if self.engine else None,
+                        'mode': self.engine.mode if self.engine else None
+                    },
+                    'collectors': {
+                        'heating': {
+                            'initialized': self.heating_collector is not None,
+                            'running': getattr(self.heating_collector, 'running', False) if self.heating_collector else False,
+                            'last_collection': getattr(self.heating_collector, 'last_collection_time', None) if self.heating_collector else None
+                        },
+                        'window': {
+                            'initialized': self.window_collector is not None,
+                            'running': getattr(self.window_collector, 'running', False) if self.window_collector else False,
+                            'last_collection': getattr(self.window_collector, 'last_collection_time', None) if self.window_collector else None
+                        },
+                        'lighting': {
+                            'initialized': self.lighting_collector is not None,
+                            'running': getattr(self.lighting_collector, 'running', False) if self.lighting_collector else False,
+                            'last_collection': getattr(self.lighting_collector, 'last_collection_time', None) if self.lighting_collector else None
+                        },
+                        'temperature': {
+                            'initialized': self.temperature_collector is not None,
+                            'running': getattr(self.temperature_collector, 'running', False) if self.temperature_collector else False,
+                            'last_collection': getattr(self.temperature_collector, 'last_collection_time', None) if self.temperature_collector else None
+                        },
+                        'bathroom': {
+                            'initialized': self.bathroom_collector is not None,
+                            'running': getattr(self.bathroom_collector, 'running', False) if self.bathroom_collector else False,
+                            'last_collection': getattr(self.bathroom_collector, 'last_collection_time', None) if self.bathroom_collector else None
+                        }
+                    },
+                    'ml_training': {
+                        'auto_trainer_initialized': self.ml_auto_trainer is not None,
+                        'status': self.ml_auto_trainer.get_training_progress() if self.ml_auto_trainer else {'status': 'unavailable'}
+                    },
+                    'database': {
+                        'connected': True,
+                        'stats': self._get_database_stats()
+                    },
+                    'specialized_systems': {}
+                }
+
+                # Füge Spezialisierte Systeme Status hinzu (wenn Engine verfügbar)
+                if self.engine:
+                    status['specialized_systems'] = {
+                        'heating_optimizer': getattr(self.engine, 'heating_optimizer_enabled', False),
+                        'mold_prevention': getattr(self.engine, 'mold_prevention_enabled', False),
+                        'ventilation_optimizer': getattr(self.engine, 'ventilation_optimizer_enabled', False),
+                        'room_learning': getattr(self.engine, 'room_learning_enabled', False),
+                        'bathroom_automation': getattr(self.engine, 'bathroom_automation_enabled', False)
+                    }
+
+                return jsonify(status)
+
+            except Exception as e:
+                logger.error(f"Error getting system status: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        def _get_database_stats(self):
+            """Hilfs-Methode: Hole Datenbank-Statistiken"""
+            try:
+                stats = {}
+
+                # Zähle Einträge pro Tabelle
+                tables = ['sensor_data', 'decisions', 'training_history', 'heating_observations']
+                for table in tables:
+                    try:
+                        result = self.db.execute(f"SELECT COUNT(*) as count FROM {table}")
+                        stats[table] = result[0]['count'] if result else 0
+                    except:
+                        stats[table] = 0
+
+                # Hole Zeitraum der Daten
+                try:
+                    result = self.db.execute(
+                        "SELECT MIN(timestamp) as first, MAX(timestamp) as last FROM sensor_data"
+                    )
+                    if result and result[0]['first']:
+                        stats['data_range'] = {
+                            'first': result[0]['first'],
+                            'last': result[0]['last']
+                        }
+                except:
+                    pass
+
+                return stats
+            except Exception as e:
+                logger.debug(f"Error getting database stats: {e}")
+                return {}
 
         @self.app.route('/api/sensors/available', methods=['GET'])
         def api_get_available_sensors():
