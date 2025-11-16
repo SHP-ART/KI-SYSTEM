@@ -3540,6 +3540,101 @@ class WebInterface:
                 logger.error(f"Error fetching bathroom data stats: {e}")
                 return jsonify({'error': str(e)}), 500
 
+        @self.app.route('/api/luftentfeuchten/weekly-overview')
+        def api_bathroom_weekly_overview():
+            """API: Wochenübersicht mit tatsächlichen und vorhergesagten Duschzeiten"""
+            try:
+                from src.decision_engine.bathroom_analyzer import BathroomAnalyzer
+                from datetime import datetime, timedelta
+
+                analyzer = BathroomAnalyzer(db=self.db)
+
+                # Hole tatsächliche Events der letzten 7 Tage
+                actual_events = self.db.get_bathroom_events(days_back=7)
+
+                # Analysiere Muster für Vorhersagen (nutze längeren Zeitraum für bessere Genauigkeit)
+                patterns = analyzer.analyze_patterns(days_back=30)
+
+                # Generiere Vorhersagen für jeden Tag der Woche
+                predictions_by_day = {}
+
+                if patterns.get('sufficient_data'):
+                    hourly_dist = patterns['hourly_pattern']['distribution']
+                    weekly_dist = patterns['weekly_pattern']['distribution']
+
+                    # Erstelle Vorhersagen für jeden Wochentag
+                    for day_info in weekly_dist:
+                        day = day_info['day']
+                        day_name = day_info['name']
+
+                        # Für diesen Wochentag: finde wahrscheinlichste Uhrzeiten
+                        # Filter Events für diesen Wochentag
+                        day_events = [e for e in actual_events if e.get('day_of_week') == day]
+
+                        # Berechne durchschnittliche Anzahl Events pro Tag
+                        avg_events_per_day = day_info['count'] / 4.3 if day_info['count'] > 0 else 0  # ~30 Tage / 7 Tage
+
+                        # Top 3 Uhrzeiten für diesen Wochentag aus historischen Daten
+                        hour_counts = {}
+                        for event in day_events:
+                            hour = event.get('hour_of_day')
+                            if hour is not None:
+                                hour_counts[hour] = hour_counts.get(hour, 0) + 1
+
+                        # Sortiere nach Häufigkeit
+                        top_hours = sorted(hour_counts.items(), key=lambda x: x[1], reverse=True)[:3]
+
+                        predictions_by_day[day] = {
+                            'day_name': day_name,
+                            'probability': day_info['percentage'] / 100,
+                            'avg_events_per_day': round(avg_events_per_day, 1),
+                            'predicted_times': [
+                                {
+                                    'hour': hour,
+                                    'probability': round((count / len(day_events)) * 100, 1) if day_events else 0
+                                }
+                                for hour, count in top_hours
+                            ]
+                        }
+
+                # Gruppiere tatsächliche Events nach Wochentag und Stunde
+                actual_by_day_hour = {}
+                for event in actual_events:
+                    day = event.get('day_of_week')
+                    hour = event.get('hour_of_day')
+
+                    if day is not None and hour is not None:
+                        key = f"{day}_{hour}"
+                        if key not in actual_by_day_hour:
+                            actual_by_day_hour[key] = []
+
+                        actual_by_day_hour[key].append({
+                            'timestamp': event.get('start_time'),
+                            'duration': event.get('duration_minutes'),
+                            'peak_humidity': event.get('peak_humidity')
+                        })
+
+                # Berechne Genauigkeit der Vorhersagen
+                accuracy_metrics = self._calculate_prediction_accuracy(
+                    actual_events,
+                    predictions_by_day
+                )
+
+                return jsonify({
+                    'success': True,
+                    'actual_events': actual_events,
+                    'predictions_by_day': predictions_by_day,
+                    'actual_by_day_hour': actual_by_day_hour,
+                    'accuracy_metrics': accuracy_metrics,
+                    'sufficient_data': patterns.get('sufficient_data', False),
+                    'events_count': len(actual_events),
+                    'period_days': 7
+                })
+
+            except Exception as e:
+                logger.error(f"Error fetching weekly overview: {e}")
+                return jsonify({'error': str(e)}), 500
+
         # ===== Heizungs-Optimierungs-Endpoints =====
 
         @self.app.route('/api/heating/mode', methods=['GET', 'POST'])
@@ -5059,6 +5154,90 @@ class WebInterface:
             })
 
         return trends
+
+    def _calculate_prediction_accuracy(self, actual_events, predictions_by_day):
+        """
+        Berechnet Genauigkeitsmetriken für Vorhersagen
+
+        Args:
+            actual_events: Liste der tatsächlichen Events
+            predictions_by_day: Dict mit Vorhersagen pro Wochentag
+
+        Returns:
+            Dict mit Genauigkeitsmetriken
+        """
+        if not actual_events or not predictions_by_day:
+            return {
+                'overall_accuracy': 0,
+                'day_accuracy': {},
+                'hour_accuracy': 0,
+                'message': 'Nicht genug Daten für Genauigkeitsberechnung'
+            }
+
+        from datetime import datetime
+
+        # Zähle korrekte Vorhersagen pro Wochentag
+        day_matches = {}
+        hour_matches = 0
+        total_predictions = 0
+
+        for event in actual_events:
+            day = event.get('day_of_week')
+            hour = event.get('hour_of_day')
+
+            if day is not None and day in predictions_by_day:
+                # Prüfe, ob dieser Wochentag vorhergesagt wurde
+                day_prediction = predictions_by_day[day]
+
+                if day not in day_matches:
+                    day_matches[day] = {'correct': 0, 'total': 0}
+
+                day_matches[day]['total'] += 1
+
+                # Wurde ein Event für diesen Tag vorhergesagt?
+                if day_prediction.get('avg_events_per_day', 0) > 0:
+                    day_matches[day]['correct'] += 1
+
+                # Prüfe Stunden-Genauigkeit
+                if hour is not None:
+                    predicted_hours = [p['hour'] for p in day_prediction.get('predicted_times', [])]
+
+                    # Match wenn innerhalb von ±1 Stunde
+                    for pred_hour in predicted_hours:
+                        if abs(hour - pred_hour) <= 1:
+                            hour_matches += 1
+                            break
+
+                    total_predictions += 1
+
+        # Berechne Gesamt-Genauigkeit
+        total_events = len(actual_events)
+        total_correct_days = sum(d['correct'] for d in day_matches.values())
+
+        overall_accuracy = (total_correct_days / total_events * 100) if total_events > 0 else 0
+        hour_accuracy = (hour_matches / total_predictions * 100) if total_predictions > 0 else 0
+
+        # Per-Day Genauigkeit
+        day_accuracy = {}
+        weekday_names = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag',
+                        'Freitag', 'Samstag', 'Sonntag']
+
+        for day, matches in day_matches.items():
+            day_accuracy[weekday_names[day]] = {
+                'accuracy': (matches['correct'] / matches['total'] * 100) if matches['total'] > 0 else 0,
+                'events': matches['total'],
+                'correct': matches['correct']
+            }
+
+        return {
+            'overall_accuracy': round(overall_accuracy, 1),
+            'day_accuracy': day_accuracy,
+            'hour_accuracy': round(hour_accuracy, 1),
+            'total_events': total_events,
+            'hour_matches': hour_matches,
+            'total_hour_predictions': total_predictions,
+            'message': f'{hour_matches} von {total_predictions} Vorhersagen korrekt (±1 Stunde)'
+        }
 
     def run(self, host='0.0.0.0', port=8080, debug=False):
         """Starte den Web-Server"""

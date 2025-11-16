@@ -145,6 +145,58 @@
         </div>
     </div>
 
+    <!-- Wochenübersicht: Tatsächlich vs. Vorhergesagt -->
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <div>
+                <h3>📊 Wochenübersicht: Tatsächlich vs. Vorhergesagt</h3>
+                <p style="color: #6b7280; font-size: 0.9em; margin-top: 5px;">
+                    Vergleich der tatsächlichen Duschzeiten mit den vorhergesagten Zeiten (letzte 7 Tage)
+                </p>
+            </div>
+        </div>
+
+        <!-- Genauigkeitsmetriken -->
+        <div id="accuracy-metrics" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+            <div style="background: #f0fdf4; border-left: 4px solid #10b981; padding: 15px; border-radius: 6px;">
+                <div style="font-size: 0.85em; color: #6b7280; margin-bottom: 5px;">Wochentag-Genauigkeit</div>
+                <div style="font-size: 1.8em; font-weight: bold; color: #1f2937;" id="day-accuracy">--%</div>
+            </div>
+            <div style="background: #eff6ff; border-left: 4px solid #3b82f6; padding: 15px; border-radius: 6px;">
+                <div style="font-size: 0.85em; color: #6b7280; margin-bottom: 5px;">Uhrzeiten-Genauigkeit (±1h)</div>
+                <div style="font-size: 1.8em; font-weight: bold; color: #1f2937;" id="hour-accuracy">--%</div>
+            </div>
+            <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; border-radius: 6px;">
+                <div style="font-size: 0.85em; color: #6b7280; margin-bottom: 5px;">Analysierte Events</div>
+                <div style="font-size: 1.8em; font-weight: bold; color: #1f2937;" id="analyzed-events">-</div>
+            </div>
+        </div>
+
+        <!-- Heatmap: Wochentag x Stunde -->
+        <div style="margin-top: 20px; overflow-x: auto;">
+            <h4 style="margin-bottom: 15px;">Duschzeiten-Heatmap (Wochentag × Stunde)</h4>
+            <div id="weekly-heatmap" style="min-width: 800px;">
+                <p style="color: #6b7280;">Lade Daten...</p>
+            </div>
+        </div>
+
+        <!-- Legende -->
+        <div style="display: flex; gap: 20px; margin-top: 15px; padding: 15px; background: #f9fafb; border-radius: 6px; flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="width: 20px; height: 20px; background: #3b82f6; border-radius: 4px;"></div>
+                <span style="font-size: 0.9em; color: #374151;">Tatsächliche Duschzeit</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="width: 20px; height: 20px; background: #fbbf24; border-radius: 4px;"></div>
+                <span style="font-size: 0.9em; color: #374151;">Vorhergesagte Zeit</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="width: 20px; height: 20px; background: #10b981; border-radius: 4px;"></div>
+                <span style="font-size: 0.9em; color: #374151;">Übereinstimmung (Vorhersage korrekt)</span>
+            </div>
+        </div>
+    </div>
+
     <!-- Datenstatistik Card -->
     <div class="card data-stats-card">
         <h3>📊 Datenstatistik</h3>

@@ -78,6 +78,9 @@ function renderDashboard() {
     renderPeakHours();
     renderWeekdayDistribution();
     renderEventHistory();
+
+    // Lade Wochenübersicht (separat, da es einen eigenen API-Call macht)
+    loadWeeklyOverview();
 }
 
 function renderLearningStatus() {
@@ -850,6 +853,165 @@ async function confirmSelection() {
     } finally {
         confirmBtn.disabled = false;
     }
+}
+
+// === Wochenübersicht: Tatsächlich vs. Vorhergesagt ===
+
+let weeklyOverviewData = null;
+
+async function loadWeeklyOverview() {
+    try {
+        const response = await fetchJSON('/api/luftentfeuchten/weekly-overview');
+        weeklyOverviewData = response;
+        renderWeeklyOverview();
+    } catch (error) {
+        console.error('Error loading weekly overview:', error);
+        document.getElementById('weekly-heatmap').innerHTML = `
+            <div style="color: #ef4444; padding: 20px; text-align: center;">
+                ⚠️ Fehler beim Laden der Wochenübersicht: ${error.message}
+            </div>
+        `;
+    }
+}
+
+function renderWeeklyOverview() {
+    if (!weeklyOverviewData || !weeklyOverviewData.success) {
+        document.getElementById('weekly-heatmap').innerHTML = `
+            <div style="color: #6b7280; padding: 20px; text-align: center;">
+                Keine Daten verfügbar
+            </div>
+        `;
+        return;
+    }
+
+    const { actual_events, predictions_by_day, actual_by_day_hour, accuracy_metrics, sufficient_data } = weeklyOverviewData;
+
+    // Aktualisiere Genauigkeitsmetriken
+    document.getElementById('day-accuracy').textContent =
+        sufficient_data ? `${accuracy_metrics.overall_accuracy}%` : 'N/A';
+    document.getElementById('hour-accuracy').textContent =
+        sufficient_data ? `${accuracy_metrics.hour_accuracy}%` : 'N/A';
+    document.getElementById('analyzed-events').textContent =
+        accuracy_metrics.total_events || 0;
+
+    // Erstelle Heatmap
+    renderWeeklyHeatmap(actual_by_day_hour, predictions_by_day);
+}
+
+function renderWeeklyHeatmap(actualByDayHour, predictionsByDay) {
+    const weekdayNames = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
+    const container = document.getElementById('weekly-heatmap');
+
+    // Erstelle Heatmap-HTML
+    let html = '<div style="display: grid; grid-template-columns: auto repeat(24, 1fr); gap: 2px; font-size: 0.8em;">';
+
+    // Header-Zeile (Stunden)
+    html += '<div style="padding: 5px; font-weight: bold;"></div>'; // Ecke oben links
+
+    for (let hour = 0; hour < 24; hour++) {
+        html += `<div style="padding: 5px; text-align: center; font-weight: bold; font-size: 0.75em; color: #6b7280;">
+            ${hour}
+        </div>`;
+    }
+
+    // Zeilen für jeden Wochentag
+    for (let day = 0; day < 7; day++) {
+        // Wochentagsname
+        html += `<div style="padding: 8px; font-weight: 600; color: #374151; display: flex; align-items: center;">
+            ${weekdayNames[day]}
+        </div>`;
+
+        // Stunden-Zellen
+        for (let hour = 0; hour < 24; hour++) {
+            const key = `${day}_${hour}`;
+            const hasActual = actualByDayHour[key] && actualByDayHour[key].length > 0;
+            const prediction = predictionsByDay[day];
+
+            // Prüfe ob diese Stunde vorhergesagt wurde
+            let hasPrediction = false;
+            if (prediction && prediction.predicted_times) {
+                hasPrediction = prediction.predicted_times.some(p =>
+                    Math.abs(p.hour - hour) <= 1  // ±1 Stunde Toleranz
+                );
+            }
+
+            // Farbe basierend auf Status
+            let bgColor = '#f3f4f6';  // Grau (leer)
+            let borderColor = '#e5e7eb';
+            let content = '';
+            let tooltip = `${weekdayNames[day]} ${hour}:00`;
+
+            if (hasActual && hasPrediction) {
+                // Beide: Übereinstimmung (Grün)
+                bgColor = '#10b981';
+                borderColor = '#059669';
+                content = '✓';
+                const events = actualByDayHour[key];
+                tooltip = `${weekdayNames[day]} ${hour}:00\n✓ Vorhersage korrekt!\n${events.length} Event(s)`;
+            } else if (hasActual) {
+                // Nur tatsächlich (Blau)
+                bgColor = '#3b82f6';
+                borderColor = '#2563eb';
+                content = '●';
+                const events = actualByDayHour[key];
+                tooltip = `${weekdayNames[day]} ${hour}:00\nTatsächlich: ${events.length} Event(s)\nØ Dauer: ${Math.round(events.reduce((sum, e) => sum + (e.duration || 0), 0) / events.length)} min`;
+            } else if (hasPrediction) {
+                // Nur vorhergesagt (Gelb/Orange)
+                bgColor = '#fbbf24';
+                borderColor = '#f59e0b';
+                content = '?';
+                const predTime = prediction.predicted_times.find(p => Math.abs(p.hour - hour) <= 1);
+                tooltip = `${weekdayNames[day]} ${hour}:00\nVorhergesagt (${predTime ? predTime.probability : 0}% Wahrscheinlichkeit)`;
+            }
+
+            html += `
+                <div
+                    style="
+                        background: ${bgColor};
+                        border: 1px solid ${borderColor};
+                        border-radius: 3px;
+                        height: 35px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        color: ${hasActual || hasPrediction ? 'white' : '#9ca3af'};
+                        font-weight: bold;
+                        cursor: pointer;
+                        transition: transform 0.1s ease;
+                    "
+                    title="${tooltip}"
+                    onmouseover="this.style.transform='scale(1.1)'; this.style.zIndex='10';"
+                    onmouseout="this.style.transform='scale(1)'; this.style.zIndex='1';"
+                >
+                    ${content}
+                </div>
+            `;
+        }
+    }
+
+    html += '</div>';
+
+    // Info-Box falls nicht genug Daten
+    if (!weeklyOverviewData.sufficient_data) {
+        html += `
+            <div style="margin-top: 15px; padding: 15px; background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 6px;">
+                <strong>⚠️ Nicht genug Daten</strong>
+                <p style="margin: 5px 0 0 0; font-size: 0.9em;">
+                    Mindestens 3 Events benötigt für zuverlässige Vorhersagen.
+                    Aktuell: ${weeklyOverviewData.events_count} Events.
+                </p>
+            </div>
+        `;
+    } else {
+        // Zeige Genauigkeitsnachricht
+        html += `
+            <div style="margin-top: 15px; padding: 12px; background: #eff6ff; border-left: 4px solid #3b82f6; border-radius: 6px; font-size: 0.9em;">
+                ${accuracy_metrics.message}
+            </div>
+        `;
+    }
+
+    container.innerHTML = html;
 }
 
 // Init
