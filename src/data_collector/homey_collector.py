@@ -256,6 +256,23 @@ class HomeyCollector(SmartHomeCollector):
 
         return False
 
+    def get_all_devices(self) -> List[Dict]:
+        """
+        Holt alle Geräte mit ihren vollständigen Informationen
+
+        Returns:
+            Liste von Device-Dictionaries mit allen Capabilities und States
+        """
+        self._refresh_device_cache()
+
+        devices_list = self._device_cache
+        if isinstance(devices_list, dict):
+            devices_list = list(devices_list.values())
+        elif not isinstance(devices_list, list):
+            devices_list = []
+
+        return devices_list
+
     def get_all_entities(self, domain: str = None) -> List[str]:
         """
         Holt alle Device-IDs
