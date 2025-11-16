@@ -266,13 +266,27 @@ class HomeyCollector(SmartHomeCollector):
         self._refresh_device_cache()
 
         devices_list = self._device_cache
+
+        # Debug: Log the structure we're getting
+        if devices_list:
+            logger.debug(f"Device cache type: {type(devices_list)}")
+            if isinstance(devices_list, dict) and devices_list:
+                first_key = list(devices_list.keys())[0]
+                first_value = devices_list[first_key]
+                logger.debug(f"First device - key type: {type(first_key)}, value type: {type(first_value)}")
+
         if isinstance(devices_list, dict):
             devices_list = list(devices_list.values())
         elif not isinstance(devices_list, list):
             devices_list = []
 
         # Filter out non-dict items (safety check)
+        original_count = len(devices_list)
         devices_list = [d for d in devices_list if isinstance(d, dict)]
+        filtered_count = original_count - len(devices_list)
+
+        if filtered_count > 0:
+            logger.warning(f"Filtered out {filtered_count} non-dict items from device list")
 
         return devices_list
 
