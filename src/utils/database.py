@@ -430,6 +430,32 @@ class Database:
             self.connection.row_factory = sqlite3.Row
         return self.connection
 
+    def execute(self, query: str, params: tuple = None) -> List[Dict]:
+        """
+        Führt eine SQL-Query aus und gibt Ergebnisse als Liste von Dictionaries zurück
+
+        Args:
+            query: SQL Query String
+            params: Optionale Parameter für prepared statements
+
+        Returns:
+            Liste von Dictionaries mit den Ergebnissen
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        if params:
+            cursor.execute(query, params)
+        else:
+            cursor.execute(query)
+
+        # Konvertiere sqlite3.Row Objekte zu Dictionaries
+        results = []
+        for row in cursor.fetchall():
+            results.append(dict(row))
+
+        return results
+
     def insert_sensor_data(self, sensor_id: str, sensor_type: str,
                           value: float, unit: str = None,
                           metadata: Dict = None, timestamp: datetime = None):
