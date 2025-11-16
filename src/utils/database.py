@@ -1326,10 +1326,9 @@ class Database:
 
         cursor.execute("""
             INSERT INTO heating_observations
-            (timestamp, device_id, room_name, current_temperature, target_temperature,
-             outdoor_temperature, is_heating, presence_detected, window_open,
-             energy_price_level, humidity, power_percentage, hour_of_day, day_of_week, is_weekend)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (timestamp, device_id, room_name, current_temp, target_temp,
+             outdoor_temp, is_heating, humidity, power_percentage, hour_of_day, day_of_week)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             now,
             device_id,
@@ -1338,14 +1337,10 @@ class Database:
             target_temp,
             outdoor_temp,
             1 if is_heating else 0,
-            1 if presence else 0 if presence is not None else None,
-            1 if window_open else 0 if window_open is not None else None,
-            energy_level,
             humidity,
             power_percentage,
             now.hour,
-            now.weekday(),
-            1 if now.weekday() >= 5 else 0
+            now.weekday()
         ))
 
         conn.commit()
