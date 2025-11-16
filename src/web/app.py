@@ -1348,40 +1348,63 @@ class WebInterface:
                         # Extrahiere Raum aus verschiedenen Quellen
                         room_name = None
 
-                        # 1. Versuche 'room' oder 'zone' aus attributes
-                        if 'room' in attrs:
-                            room_name = attrs['room']
-                        elif 'zone' in attrs:
-                            room_name = attrs['zone']
-                        elif 'zoneName' in attrs:
+                        # 1. Für Homey: Nutze zoneName (höchste Priorität)
+                        if 'zoneName' in attrs and attrs['zoneName']:
                             room_name = attrs['zoneName']
 
-                        # 2. Für Homey: Nutze zone.name falls vorhanden
-                        if not room_name and 'zone' in attrs and isinstance(attrs['zone'], dict):
-                            room_name = attrs['zone'].get('name')
+                        # 2. Für Homey: Nutze zone.name falls vorhanden (bei dict)
+                        if not room_name and 'zone' in attrs:
+                            if isinstance(attrs['zone'], dict) and 'name' in attrs['zone']:
+                                room_name = attrs['zone']['name']
+                            elif isinstance(attrs['zone'], str):
+                                # Prüfe ob zone ein UUID-String ist (Homey verwendet UUIDs)
+                                # UUIDs enthalten typischerweise '-' und sind 36 Zeichen lang
+                                if len(attrs['zone']) == 36 and attrs['zone'].count('-') == 4:
+                                    # Das ist eine UUID - nicht verwenden
+                                    pass
+                                else:
+                                    # Das ist ein echter Raum-Name
+                                    room_name = attrs['zone']
 
-                        # 3. Fallback: Extrahiere aus Namen
-                        if not room_name:
+                        # 3. Versuche 'room' aus attributes (Home Assistant)
+                        if not room_name and 'room' in attrs and attrs['room']:
+                            room_name = attrs['room']
+
+                        # 4. Nutze friendly_name wenn er sinnvoll ist
+                        if not room_name and friendly_name and friendly_name != device_id:
                             # Bessere Name-Extraktion mit häufigen Mustern
                             name_lower = friendly_name.lower()
 
-                            # Bekannte Raumnamen
+                            # Bekannte Raumnamen (deutsch und englisch)
                             known_rooms = ['wohnzimmer', 'schlafzimmer', 'küche', 'bad', 'badezimmer',
                                           'kinderzimmer', 'arbeitszimmer', 'flur', 'keller', 'dachboden',
-                                          'gästezimmer', 'esszimmer', 'wc', 'garage', 'balkon', 'terrasse']
+                                          'gästezimmer', 'esszimmer', 'wc', 'garage', 'balkon', 'terrasse',
+                                          'living', 'bedroom', 'kitchen', 'bathroom', 'hallway', 'office',
+                                          'basement', 'attic', 'dining']
 
                             for known_room in known_rooms:
                                 if known_room in name_lower:
                                     room_name = known_room.capitalize()
                                     break
 
-                            # Wenn immer noch nicht gefunden: letztes Wort (alter Fallback)
-                            if not room_name:
-                                parts = friendly_name.split()
-                                if len(parts) > 1:
-                                    room_name = parts[-1]
-                                else:
-                                    room_name = "Unbekannt"
+                        # 5. Fallback: Nutze friendly_name direkt (aber bereinigt)
+                        if not room_name and friendly_name and friendly_name != device_id:
+                            # Entferne Sensor-Präfixe
+                            clean_name = friendly_name
+                            for prefix in ['Temperature', 'Humidity', 'Temperatur', 'Luftfeuchtigkeit',
+                                         'Sensor', 'sensor', 'temperature', 'humidity']:
+                                clean_name = clean_name.replace(prefix, '').strip()
+
+                            # Verwende bereinigten Namen wenn er nicht leer und nicht zu kurz ist
+                            if clean_name and len(clean_name) > 2:
+                                room_name = clean_name
+                            elif len(friendly_name) > 2:
+                                # Verwende originalen friendly_name
+                                room_name = friendly_name
+
+                        # 6. Letzter Fallback
+                        if not room_name:
+                            room_name = "Unbenannter Raum"
 
                         # Initialisiere Raum-Eintrag
                         if room_name not in room_sensors:
@@ -1418,8 +1441,8 @@ class WebInterface:
 
                     # Analysiere ALLE Räume (auch mit nur einem Sensor)
                     for room_name, sensors in room_sensors.items():
-                        # Skip "Unbekannt" mit leeren Daten
-                        if room_name == "Unbekannt" and not sensors['temperature'] and not sensors['humidity']:
+                        # Skip "Unbenannter Raum" mit leeren Daten
+                        if room_name == "Unbenannter Raum" and not sensors['temperature'] and not sensors['humidity']:
                             continue
 
                         room_data = {
@@ -1468,6 +1491,52 @@ class WebInterface:
 
             except Exception as e:
                 logger.error(f"Error getting mold status: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @self.app.route('/api/mold/debug', methods=['GET'])
+        def api_get_mold_debug():
+            """API: Debug-Informationen für Raum-Erkennung"""
+            try:
+                if not self.engine:
+                    return jsonify({'error': 'Engine not initialized'}), 500
+
+                debug_info = []
+
+                try:
+                    states = self.engine.platform.get_states()
+
+                    for device_id, state in states.items():
+                        if not state:
+                            continue
+
+                        attrs = state.get('attributes', {})
+                        caps = attrs.get('capabilities', {})
+
+                        # Nur Geräte mit Temperatur oder Luftfeuchtigkeit
+                        if 'measure_temperature' in caps or 'measure_humidity' in caps:
+                            debug_info.append({
+                                'device_id': device_id,
+                                'friendly_name': attrs.get('friendly_name'),
+                                'zone': attrs.get('zone'),
+                                'zoneName': attrs.get('zoneName'),
+                                'room': attrs.get('room'),
+                                'has_temperature': 'measure_temperature' in caps,
+                                'has_humidity': 'measure_humidity' in caps,
+                                'temperature_value': caps.get('measure_temperature', {}).get('value') if 'measure_temperature' in caps else None,
+                                'humidity_value': caps.get('measure_humidity', {}).get('value') if 'measure_humidity' in caps else None
+                            })
+
+                except Exception as e:
+                    return jsonify({'error': str(e)}), 500
+
+                return jsonify({
+                    'success': True,
+                    'count': len(debug_info),
+                    'devices': debug_info
+                })
+
+            except Exception as e:
+                logger.error(f"Error getting mold debug info: {e}")
                 return jsonify({'error': str(e)}), 500
 
         @self.app.route('/api/mold/alerts', methods=['GET'])
