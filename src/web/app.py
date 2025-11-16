@@ -1027,17 +1027,51 @@ class WebInterface:
                 # 1. Datenbank-Aktivitäten (letzte Einträge)
                 if log_type in ['all', 'database']:
                     try:
-                        # Hole letzte Sensor-Daten Einträge
+                        # Hole letzte Sensor-Daten Einträge mit Details
                         sensor_entries = self.db.execute(
-                            "SELECT timestamp, sensor_id, value FROM sensor_data ORDER BY timestamp DESC LIMIT ?",
-                            (min(20, limit),)
+                            "SELECT timestamp, sensor_id, sensor_type, value, unit, metadata FROM sensor_data ORDER BY timestamp DESC LIMIT ?",
+                            (min(30, limit),)
                         )
+
+                        # Gruppiere nach Timestamp um Batch-Schreibvorgänge zu erkennen
+                        from collections import defaultdict
+                        import json
+
+                        batches = defaultdict(list)
                         for entry in sensor_entries:
+                            ts = entry['timestamp'][:19]  # Nur bis Sekunden
+                            batches[ts].append(entry)
+
+                        # Erstelle Log-Einträge für Batches
+                        for timestamp, entries in sorted(batches.items(), reverse=True):
+                            # Hole Namen aus metadata wenn verfügbar
+                            sensor_details = []
+                            for entry in entries[:5]:  # Max 5 Sensoren pro Batch anzeigen
+                                name = entry['sensor_id'][:8]  # Kurze ID
+                                if entry.get('metadata'):
+                                    try:
+                                        meta = json.loads(entry['metadata']) if isinstance(entry['metadata'], str) else entry['metadata']
+                                        if meta.get('name'):
+                                            name = meta['name']
+                                    except:
+                                        pass
+
+                                value_str = f"{entry['value']}{entry.get('unit', '')}" if entry.get('unit') else str(entry['value'])
+                                sensor_details.append(f"{name}: {value_str}")
+
+                            more_count = len(entries) - 5
+                            message = f"💾 {len(entries)} Sensor-Werte gespeichert"
+                            if sensor_details:
+                                message += f" ({', '.join(sensor_details)}"
+                                if more_count > 0:
+                                    message += f", +{more_count} weitere"
+                                message += ")"
+
                             logs.append({
-                                'timestamp': entry['timestamp'],
+                                'timestamp': timestamp,
                                 'type': 'database',
                                 'category': 'sensor_data',
-                                'message': f"Sensor {entry['sensor_id']}: {entry['value']}",
+                                'message': message,
                                 'level': 'info'
                             })
                     except Exception as e:
