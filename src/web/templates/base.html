@@ -8,12 +8,10 @@
 </head>
 <body>
     <nav class="navbar">
-        <div class="nav-header">
-            <div class="nav-brand">
-                <h1>🤖 KI Smart Home</h1>
-            </div>
-            <div class="version-badge">v{{ app_version }}</div>
+        <div class="nav-brand">
+            <h1>🤖 KI Smart Home</h1>
         </div>
+        <div class="version-badge">v{{ app_version }}</div>
         <ul class="nav-menu">
             <li><a href="/" class="nav-dashboard {% if request.path == '/' %}active{% endif %}">📊 Dashboard</a></li>
             <li><a href="/analytics" class="nav-analytics {% if request.path == '/analytics' %}active{% endif %}">📈 Analytics</a></li>
