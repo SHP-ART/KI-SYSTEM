@@ -4,18 +4,10 @@
 <div class="page-header">
     <h2>🍄 Schimmelprävention Dashboard</h2>
     <p>Überwachung von Schimmelrisiken in allen Räumen</p>
-    <button onclick="showDebugInfo()" style="margin-top: 1rem; padding: 0.5rem 1rem; background: #666; color: white; border: none; border-radius: 6px; cursor: pointer;">
-        🔍 Debug: Sensor-Daten anzeigen
-    </button>
 </div>
 
 <div id="rooms-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem;">
     <div class="loading">Lade Raum-Daten...</div>
-</div>
-
-<div class="card" style="margin-top: 2rem;">
-    <h3>📋 Schimmel-Alerts</h3>
-    <div id="alerts-container"></div>
 </div>
 
 <style>
@@ -36,12 +28,6 @@ async function loadData() {
     } catch (error) {
         document.getElementById('rooms-container').innerHTML = '<div class="loading">❌ Fehler beim Laden</div>';
     }
-
-    try {
-        const alertsResponse = await fetch('/api/mold/alerts?limit=10');
-        const alertsData = await alertsResponse.json();
-        if (alertsData.success) displayAlerts(alertsData.alerts);
-    } catch (error) {}
 }
 
 function displayRooms(rooms) {
@@ -115,74 +101,6 @@ function displayRooms(rooms) {
             </div>
         `;
     }).join('');
-}
-
-function displayAlerts(alerts) {
-    const container = document.getElementById('alerts-container');
-    if (alerts.length === 0) {
-        container.innerHTML = '<p>Keine Alerts vorhanden</p>';
-        return;
-    }
-
-    container.innerHTML = '<table style="width: 100%; border-collapse: collapse;">' +
-        '<tr><th>Zeit</th><th>Raum</th><th>Feuchtigkeit</th><th>Risiko</th><th>Empfehlung</th></tr>' +
-        alerts.map(alert => `
-            <tr style="border-bottom: 1px solid #eee;">
-                <td>${new Date(alert.timestamp).toLocaleString('de-DE')}</td>
-                <td>${alert.room_name}</td>
-                <td>${alert.humidity}%</td>
-                <td><span class="risk-badge risk-${alert.risk_level}">${alert.risk_level}</span></td>
-                <td>${alert.recommendation}</td>
-            </tr>
-        `).join('') +
-        '</table>';
-}
-
-async function showDebugInfo() {
-    try {
-        const response = await fetch('/api/mold/debug');
-        const data = await response.json();
-
-        if (data.success) {
-            // Zeige Debug-Info in neuem Fenster/Alert
-            const debugText = JSON.stringify(data.devices, null, 2);
-
-            // Erstelle Modal-Dialog
-            const modal = document.createElement('div');
-            modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 2rem;';
-
-            const content = document.createElement('div');
-            content.style.cssText = 'background: white; padding: 2rem; border-radius: 8px; max-width: 90%; max-height: 90%; overflow: auto;';
-
-            content.innerHTML = `
-                <h3>🔍 Sensor Debug-Informationen</h3>
-                <p>Gefundene Geräte mit Temperatur/Luftfeuchtigkeit: ${data.count}</p>
-                <pre style="background: #f5f5f5; padding: 1rem; border-radius: 6px; overflow: auto; max-height: 60vh; font-size: 0.85em;">${debugText}</pre>
-                <button onclick="this.closest('div').parentElement.remove()" style="margin-top: 1rem; padding: 0.5rem 1rem; background: #4CAF50; color: white; border: none; border-radius: 6px; cursor: pointer;">
-                    Schließen
-                </button>
-                <button onclick="copyToClipboard('${debugText.replace(/'/g, "\\'")}'); alert('In Zwischenablage kopiert!')" style="margin-left: 1rem; padding: 0.5rem 1rem; background: #2196F3; color: white; border: none; border-radius: 6px; cursor: pointer;">
-                    📋 Kopieren
-                </button>
-            `;
-
-            modal.appendChild(content);
-            document.body.appendChild(modal);
-        } else {
-            alert('Fehler beim Laden der Debug-Informationen: ' + data.error);
-        }
-    } catch (error) {
-        alert('Fehler: ' + error.message);
-    }
-}
-
-function copyToClipboard(text) {
-    const textarea = document.createElement('textarea');
-    textarea.value = text;
-    document.body.appendChild(textarea);
-    textarea.select();
-    document.execCommand('copy');
-    document.body.removeChild(textarea);
 }
 
 document.addEventListener('DOMContentLoaded', loadData);
