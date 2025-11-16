@@ -8,23 +8,25 @@
 </head>
 <body>
     <nav class="navbar">
-        <div class="nav-brand">
-            <h1>🤖 KI Smart Home</h1>
+        <div class="nav-header">
+            <div class="nav-brand">
+                <h1>🤖 KI Smart Home</h1>
+            </div>
+            <div class="version-badge">v{{ app_version }}</div>
         </div>
-        <div class="version-badge">v{{ app_version }}</div>
         <ul class="nav-menu">
-            <li><a href="/" class="{% if request.path == '/' %}active{% endif %}">📊 Dashboard</a></li>
-            <li><a href="/analytics" class="{% if request.path == '/analytics' %}active{% endif %}">📈 Analytics</a></li>
-            <li><a href="/heizung" class="{% if request.path == '/heizung' %}active{% endif %}">🔥 Heizung</a></li>
-            <li><a href="/luftentfeuchten" class="{% if request.path == '/luftentfeuchten' %}active{% endif %}">🚿 Badezimmer</a></li>
-            <li><a href="/rooms" class="{% if request.path == '/rooms' %}active{% endif %}">🏠 Räume</a></li>
-            <li><a href="/devices" class="{% if request.path == '/devices' %}active{% endif %}">🔌 Geräte</a></li>
-            <li><a href="/automations" class="{% if request.path == '/automations' %}active{% endif %}">🤖 Automatisierungen</a></li>
-            <li><a href="/logs" class="{% if request.path == '/logs' %}active{% endif %}">📝 Logs</a></li>
-            <li><a href="/ml-models" class="{% if request.path == '/ml-models' %}active{% endif %}">🤖 ML Models</a></li>
-            <li><a href="/mold-prevention" class="{% if request.path == '/mold-prevention' %}active{% endif %}">🍄 Schimmel</a></li>
-            <li><a href="/ventilation" class="{% if request.path == '/ventilation' %}active{% endif %}">💨 Lüftung</a></li>
-            <li><a href="/settings" class="{% if request.path == '/settings' %}active{% endif %}">⚙️ Einstellungen</a></li>
+            <li><a href="/" class="nav-dashboard {% if request.path == '/' %}active{% endif %}">📊 Dashboard</a></li>
+            <li><a href="/analytics" class="nav-analytics {% if request.path == '/analytics' %}active{% endif %}">📈 Analytics</a></li>
+            <li><a href="/heizung" class="nav-heating {% if request.path == '/heizung' %}active{% endif %}">🔥 Heizung</a></li>
+            <li><a href="/luftentfeuchten" class="nav-bathroom {% if request.path == '/luftentfeuchten' %}active{% endif %}">🚿 Badezimmer</a></li>
+            <li><a href="/rooms" class="nav-rooms {% if request.path == '/rooms' %}active{% endif %}">🏠 Räume</a></li>
+            <li><a href="/devices" class="nav-devices {% if request.path == '/devices' %}active{% endif %}">🔌 Geräte</a></li>
+            <li><a href="/automations" class="nav-automations {% if request.path == '/automations' %}active{% endif %}">🤖 Automatisierungen</a></li>
+            <li><a href="/logs" class="nav-logs {% if request.path == '/logs' %}active{% endif %}">📝 Logs</a></li>
+            <li><a href="/ml-models" class="nav-ml {% if request.path == '/ml-models' %}active{% endif %}">🤖 ML Models</a></li>
+            <li><a href="/mold-prevention" class="nav-mold {% if request.path == '/mold-prevention' %}active{% endif %}">🍄 Schimmel</a></li>
+            <li><a href="/ventilation" class="nav-ventilation {% if request.path == '/ventilation' %}active{% endif %}">💨 Lüftung</a></li>
+            <li><a href="/settings" class="nav-settings {% if request.path == '/settings' %}active{% endif %}">⚙️ Einstellungen</a></li>
         </ul>
     </nav>
 
