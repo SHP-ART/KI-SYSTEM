@@ -15,6 +15,13 @@ from ..data_collector.energy_price_collector import EnergyPriceCollector
 from ..utils.database import Database
 from ..utils.config_loader import ConfigLoader
 
+# Spezialisierte Optimierungs- und Automationssysteme
+from ..decision_engine.heating_optimizer import HeatingOptimizer
+from ..decision_engine.mold_prevention import MoldPreventionSystem
+from ..decision_engine.ventilation_optimizer import VentilationOptimizer
+from ..decision_engine.room_learning import RoomLearningSystem
+from ..decision_engine.bathroom_automation import BathroomAutomation
+
 
 class DecisionEngine:
     """
@@ -90,7 +97,59 @@ class DecisionEngine:
         # Lade existierende Modelle
         self._load_models()
 
-        logger.info("Decision Engine initialized")
+        # === SPEZIALISIERTE SYSTEME ===
+        # Diese werden optional aktiviert basierend auf Konfiguration
+
+        # Heizungsoptimierung (Insights & Analytics)
+        self.heating_optimizer_enabled = self.config.get('heating_optimizer.enabled', True)
+        if self.heating_optimizer_enabled:
+            self.heating_optimizer = HeatingOptimizer(db=self.db)
+            logger.info("Heating Optimizer enabled")
+        else:
+            self.heating_optimizer = None
+
+        # Schimmelprävention
+        self.mold_prevention_enabled = self.config.get('mold_prevention.enabled', True)
+        if self.mold_prevention_enabled:
+            self.mold_prevention = MoldPreventionSystem(db=self.db)
+            logger.info("Mold Prevention System enabled")
+        else:
+            self.mold_prevention = None
+
+        # Lüftungsoptimierung
+        self.ventilation_optimizer_enabled = self.config.get('ventilation_optimizer.enabled', True)
+        if self.ventilation_optimizer_enabled:
+            self.ventilation_optimizer = VentilationOptimizer(db=self.db)
+            logger.info("Ventilation Optimizer enabled")
+        else:
+            self.ventilation_optimizer = None
+
+        # Raumspezifisches Lernen
+        self.room_learning_enabled = self.config.get('room_learning.enabled', True)
+        if self.room_learning_enabled:
+            self.room_learning = RoomLearningSystem(db=self.db)
+            logger.info("Room Learning System enabled")
+        else:
+            self.room_learning = None
+
+        # Badezimmer-Automation
+        self.bathroom_automation_enabled = self.config.get('bathroom_automation.enabled', False)
+        if self.bathroom_automation_enabled:
+            # Lade Badezimmer-Konfiguration
+            bathroom_config = self._load_bathroom_config()
+            if bathroom_config:
+                self.bathroom_automation = BathroomAutomation(
+                    config=bathroom_config,
+                    enable_learning=True
+                )
+                logger.info("Bathroom Automation enabled")
+            else:
+                self.bathroom_automation = None
+                logger.warning("Bathroom Automation disabled: No config found")
+        else:
+            self.bathroom_automation = None
+
+        logger.info("Decision Engine initialized with specialized systems")
 
     def _load_sensor_config(self) -> Dict:
         """Lädt die Sensor-Konfiguration aus data/sensor_config.json"""
@@ -104,6 +163,21 @@ class DecisionEngine:
         except Exception as e:
             logger.debug(f"Could not load sensor config: {e}")
         return {}
+
+    def _load_bathroom_config(self) -> Optional[Dict]:
+        """Lädt die Badezimmer-Konfiguration aus data/bathroom_config.json"""
+        try:
+            import json
+            config_file = Path('data/bathroom_config.json')
+            if config_file.exists():
+                with open(config_file, 'r') as f:
+                    return json.load(f)
+            else:
+                logger.debug("Bathroom config file not found")
+                return None
+        except Exception as e:
+            logger.error(f"Could not load bathroom config: {e}")
+            return None
 
     def _get_indoor_temperature(self, sensor_config: Dict) -> Optional[float]:
         """
@@ -544,6 +618,7 @@ class DecisionEngine:
         - Sammelt Daten
         - Trifft Entscheidungen
         - Führt Aktionen aus
+        - Nutzt spezialisierte Optimierungssysteme
         """
         logger.info("=== Starting decision cycle ===")
 
@@ -552,9 +627,82 @@ class DecisionEngine:
             state = self.collect_current_state()
             logger.info(f"Current state collected: {len(state)} parameters")
 
-            # Entscheidungen treffen
+            # Basis-Entscheidungen treffen (Lighting & Heating)
             lighting_actions = self.decide_lighting()
             heating_actions = self.decide_heating()
+
+            # === SPEZIALISIERTE SYSTEME AUSFÜHREN ===
+
+            # 1. Heizungsoptimierung - Sammle Daten und generiere Insights
+            if self.heating_optimizer_enabled and self.heating_optimizer:
+                try:
+                    outdoor_temp = state.get('outdoor_temperature')
+                    self.heating_optimizer.collect_current_state(
+                        platform=self.platform,
+                        outdoor_temp=outdoor_temp
+                    )
+                    logger.debug("Heating data collected for optimization")
+                except Exception as e:
+                    logger.error(f"Error in heating optimizer: {e}")
+
+            # 2. Schimmelprävention - Prüfe kritische Räume
+            mold_alerts = []
+            if self.mold_prevention_enabled and self.mold_prevention:
+                try:
+                    # Hier könnten wir alle Räume mit hoher Luftfeuchtigkeit prüfen
+                    # Für jetzt: nur wenn Luftfeuchtigkeit im State verfügbar
+                    if state.get('humidity') and state.get('current_temperature'):
+                        room_name = "Hauptraum"  # TODO: Raum-spezifisch machen
+                        analysis = self.mold_prevention.analyze_room_humidity(
+                            room_name=room_name,
+                            temperature=state['current_temperature'],
+                            humidity=state['humidity'],
+                            outdoor_temp=state.get('outdoor_temperature')
+                        )
+                        if analysis.get('alert_required'):
+                            mold_alerts.append(analysis)
+                            logger.warning(f"Mold alert for {room_name}: {analysis.get('humidity_status', {}).get('level')}")
+                except Exception as e:
+                    logger.error(f"Error in mold prevention: {e}")
+
+            # 3. Lüftungsoptimierung - Generiere Empfehlungen
+            ventilation_recommendations = []
+            if self.ventilation_optimizer_enabled and self.ventilation_optimizer:
+                try:
+                    if (state.get('humidity') and state.get('current_temperature') and
+                        state.get('outdoor_temperature')):
+                        # Annahme: outdoor_humidity verfügbar oder aus Wetterdaten
+                        outdoor_humidity = state.get('outdoor_humidity', 70.0)
+
+                        recommendation = self.ventilation_optimizer.generate_ventilation_recommendation(
+                            room_name="Hauptraum",
+                            indoor_temp=state['current_temperature'],
+                            indoor_humidity=state['humidity'],
+                            outdoor_temp=state['outdoor_temperature'],
+                            outdoor_humidity=outdoor_humidity
+                        )
+                        ventilation_recommendations.append(recommendation)
+
+                        if recommendation['priority'] == 'HOCH':
+                            logger.info(f"Ventilation recommendation: {recommendation['action']}")
+                except Exception as e:
+                    logger.error(f"Error in ventilation optimizer: {e}")
+
+            # 4. Badezimmer-Automation
+            bathroom_actions = []
+            if self.bathroom_automation_enabled and self.bathroom_automation:
+                try:
+                    bathroom_actions = self.bathroom_automation.process(
+                        platform=self.platform,
+                        current_state=state
+                    )
+                    if bathroom_actions:
+                        logger.info(f"Bathroom automation: {len(bathroom_actions)} actions")
+                        # Führe Badezimmer-Aktionen aus
+                        for action in bathroom_actions:
+                            self._execute_action(action)
+                except Exception as e:
+                    logger.error(f"Error in bathroom automation: {e}")
 
             # Zusammenfassung
             summary = {
@@ -562,10 +710,23 @@ class DecisionEngine:
                 'state': state,
                 'lighting_actions': len(lighting_actions),
                 'heating_actions': len(heating_actions),
-                'total_actions': len(lighting_actions) + len(heating_actions)
+                'bathroom_actions': len(bathroom_actions),
+                'mold_alerts': len(mold_alerts),
+                'ventilation_recommendations': len(ventilation_recommendations),
+                'total_actions': len(lighting_actions) + len(heating_actions) + len(bathroom_actions),
+                'specialized_systems': {
+                    'heating_optimizer': self.heating_optimizer_enabled,
+                    'mold_prevention': self.mold_prevention_enabled,
+                    'ventilation_optimizer': self.ventilation_optimizer_enabled,
+                    'bathroom_automation': self.bathroom_automation_enabled,
+                    'room_learning': self.room_learning_enabled
+                }
             }
 
             logger.info(f"Cycle completed: {summary['total_actions']} actions taken")
+            logger.info(f"Specialized systems: Heating={self.heating_optimizer_enabled}, "
+                       f"Mold={self.mold_prevention_enabled}, Ventilation={self.ventilation_optimizer_enabled}, "
+                       f"Bathroom={self.bathroom_automation_enabled}, RoomLearning={self.room_learning_enabled}")
 
             return summary
 
@@ -603,3 +764,46 @@ class DecisionEngine:
             results['energy_prices'] = 'disabled'
 
         return results
+
+    def _execute_action(self, action: Dict) -> bool:
+        """
+        Führt eine generische Aktion aus (z.B. von Bathroom Automation)
+
+        Args:
+            action: Dict mit 'device_id', 'action', 'reason', optional 'temperature'
+
+        Returns:
+            True wenn erfolgreich
+        """
+        try:
+            device_id = action.get('device_id')
+            action_type = action.get('action')
+            reason = action.get('reason', 'Automated action')
+
+            if not device_id or not action_type:
+                logger.warning(f"Invalid action format: {action}")
+                return False
+
+            # Führe Aktion aus basierend auf Typ
+            if action_type == 'turn_on':
+                success = self.platform.turn_on(device_id)
+                logger.info(f"Turned ON {device_id}: {reason}")
+            elif action_type == 'turn_off':
+                success = self.platform.turn_off(device_id)
+                logger.info(f"Turned OFF {device_id}: {reason}")
+            elif action_type == 'set_temperature':
+                temperature = action.get('temperature')
+                if temperature is None:
+                    logger.warning(f"Missing temperature for set_temperature action")
+                    return False
+                success = self.platform.set_temperature(device_id, temperature)
+                logger.info(f"Set temperature {device_id} to {temperature}°C: {reason}")
+            else:
+                logger.warning(f"Unknown action type: {action_type}")
+                return False
+
+            return success
+
+        except Exception as e:
+            logger.error(f"Error executing action {action}: {e}")
+            return False

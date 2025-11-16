@@ -14,6 +14,7 @@ from typing import Dict, Optional
 from src.utils.database import Database
 from src.models.lighting_model import LightingModel
 from src.models.temperature_model import TemperatureModel
+from src.models.model_version_manager import ModelVersionManager
 
 
 class MLAutoTrainer:
@@ -42,6 +43,9 @@ class MLAutoTrainer:
         self.last_run = None
         self.db = Database()
         self.status_file = Path('data/ml_training_status.json')
+
+        # Model Version Manager für Versioning & Rollback
+        self.version_manager = ModelVersionManager(models_dir='models')
 
         # Progress Tracking für Live-Updates
         self.training_progress = {
@@ -330,17 +334,51 @@ class MLAutoTrainer:
             self._update_progress(progress=50, step=f'Trainiere Modell mit {len(X)} Samples...')
             metrics = model.train(X, y)
 
-            # Speichere Modell
+            # === MODEL VERSIONING & QUALITY CHECK ===
+
+            # 1. Backup des aktuellen Modells (falls vorhanden)
+            self._update_progress(progress=70, step='Erstelle Backup des alten Modells...')
+            self.version_manager.backup_current_model('lighting_model')
+
+            # 2. Vergleiche mit vorheriger Version
+            self._update_progress(progress=75, step='Vergleiche mit vorheriger Version...')
+            comparison = self.version_manager.compare_with_previous('lighting_model', metrics)
+
+            logger.info(f"Model comparison: {comparison['recommendation']}")
+            logger.info(f"Improved: {comparison['improved']}, "
+                       f"Better metrics: {comparison.get('improved_metrics', 0)}, "
+                       f"Worse metrics: {comparison.get('worse_metrics', 0)}")
+
+            # 3. Speichere neues Modell
             self._update_progress(progress=80, step='Speichere trainiertes Modell...')
             models_dir = Path('models')
             models_dir.mkdir(exist_ok=True)
             model.save_model(str(models_dir / 'lighting_model.pkl'))
 
-            # Speichere Metriken
+            # 4. Registriere neue Version
+            self._update_progress(progress=85, step='Registriere Model-Version...')
+            version_notes = f"Accuracy: {metrics.get('accuracy', 0):.3f}, Samples: {len(X)}"
+            if not comparison['improved']:
+                version_notes += " [Performance-Warnung]"
+
+            self.version_manager.register_model(
+                model_name='lighting_model',
+                metrics=metrics,
+                notes=version_notes
+            )
+
+            # 5. Speichere Metriken in DB
             self._update_progress(progress=90, step='Speichere Metriken...')
             self._save_training_metrics('lighting', metrics)
 
+            # 6. Cleanup alte Versionen
+            self._update_progress(progress=95, step='Cleanup alte Versionen...')
+            self.version_manager.cleanup_old_versions('lighting_model', keep_last_n=5)
+
             logger.info(f"Lighting Model trained with accuracy: {metrics.get('accuracy', 0):.2f}")
+            if not comparison['improved']:
+                logger.warning(f"⚠️ New model may be worse than previous version!")
+
             self._update_progress(progress=100, step='Lighting Model erfolgreich trainiert!')
             return True
 
@@ -392,17 +430,51 @@ class MLAutoTrainer:
             self._update_progress(progress=50, step=f'Trainiere Modell mit {len(X)} Samples...')
             metrics = model.train(X, y)
 
-            # Speichere Modell
+            # === MODEL VERSIONING & QUALITY CHECK ===
+
+            # 1. Backup des aktuellen Modells (falls vorhanden)
+            self._update_progress(progress=70, step='Erstelle Backup des alten Modells...')
+            self.version_manager.backup_current_model('temperature_model')
+
+            # 2. Vergleiche mit vorheriger Version
+            self._update_progress(progress=75, step='Vergleiche mit vorheriger Version...')
+            comparison = self.version_manager.compare_with_previous('temperature_model', metrics)
+
+            logger.info(f"Model comparison: {comparison['recommendation']}")
+            logger.info(f"Improved: {comparison['improved']}, "
+                       f"Better metrics: {comparison.get('improved_metrics', 0)}, "
+                       f"Worse metrics: {comparison.get('worse_metrics', 0)}")
+
+            # 3. Speichere neues Modell
             self._update_progress(progress=80, step='Speichere trainiertes Modell...')
             models_dir = Path('models')
             models_dir.mkdir(exist_ok=True)
             model.save_model(str(models_dir / 'temperature_model.pkl'))
 
-            # Speichere Metriken
+            # 4. Registriere neue Version
+            self._update_progress(progress=85, step='Registriere Model-Version...')
+            version_notes = f"R²: {metrics.get('r2_score', 0):.3f}, MAE: {metrics.get('mae', 0):.2f}, Samples: {len(X)}"
+            if not comparison['improved']:
+                version_notes += " [Performance-Warnung]"
+
+            self.version_manager.register_model(
+                model_name='temperature_model',
+                metrics=metrics,
+                notes=version_notes
+            )
+
+            # 5. Speichere Metriken in DB
             self._update_progress(progress=90, step='Speichere Metriken...')
             self._save_training_metrics('temperature', metrics)
 
-            logger.info(f"Temperature Model trained with R²: {metrics.get('r2_score', 0):.2f}")
+            # 6. Cleanup alte Versionen
+            self._update_progress(progress=95, step='Cleanup alte Versionen...')
+            self.version_manager.cleanup_old_versions('temperature_model', keep_last_n=5)
+
+            logger.info(f"Temperature Model trained with R²: {metrics.get('r2_score', 0):.2f}, MAE: {metrics.get('mae', 0):.2f}")
+            if not comparison['improved']:
+                logger.warning(f"⚠️ New model may be worse than previous version!")
+
             self._update_progress(progress=100, step='Temperature Model erfolgreich trainiert!')
             return True
 

@@ -1,0 +1,30 @@
+[Unit]
+Description=KI-SYSTEM Background Collector Manager
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/KI-SYSTEM
+Environment="PATH=/home/pi/KI-SYSTEM/venv/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/home/pi/KI-SYSTEM/venv/bin/python3 -m src.background.collector_manager --config config/config.yaml
+
+# Restart-Verhalten
+Restart=on-failure
+RestartSec=10s
+StartLimitInterval=5min
+StartLimitBurst=3
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ki-collector-manager
+
+# Sicherheit
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
