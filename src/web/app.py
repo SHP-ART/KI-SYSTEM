@@ -1328,65 +1328,142 @@ class WebInterface:
                 from src.decision_engine.mold_prevention import MoldPreventionSystem
                 mold_system = MoldPreventionSystem(db=self.db)
 
-                # Hole alle Räume mit Temperatur- und Luftfeuchtigkeit-Sensoren
                 rooms_status = []
 
                 # Versuche Raum-Daten aus Plattform zu holen
                 try:
                     states = self.engine.platform.get_states()
 
-                    # Gruppiere Sensoren nach Raum (vereinfacht)
+                    # Gruppiere Sensoren nach Raum - VERBESSERTE VERSION
                     room_sensors = {}
+
                     for device_id, state in states.items():
                         if not state:
                             continue
 
                         attrs = state.get('attributes', {})
+                        caps = attrs.get('capabilities', {})
                         friendly_name = attrs.get('friendly_name', device_id)
 
-                        # Extrahiere Raum aus Namen (z.B. "Temperature Wohnzimmer" -> "Wohnzimmer")
-                        room_name = "Unknown"
+                        # Extrahiere Raum aus verschiedenen Quellen
+                        room_name = None
+
+                        # 1. Versuche 'room' oder 'zone' aus attributes
                         if 'room' in attrs:
                             room_name = attrs['room']
-                        else:
-                            # Versuche aus Namen zu extrahieren
-                            parts = friendly_name.split()
-                            if len(parts) > 1:
-                                room_name = parts[-1]
+                        elif 'zone' in attrs:
+                            room_name = attrs['zone']
+                        elif 'zoneName' in attrs:
+                            room_name = attrs['zoneName']
 
+                        # 2. Für Homey: Nutze zone.name falls vorhanden
+                        if not room_name and 'zone' in attrs and isinstance(attrs['zone'], dict):
+                            room_name = attrs['zone'].get('name')
+
+                        # 3. Fallback: Extrahiere aus Namen
+                        if not room_name:
+                            # Bessere Name-Extraktion mit häufigen Mustern
+                            name_lower = friendly_name.lower()
+
+                            # Bekannte Raumnamen
+                            known_rooms = ['wohnzimmer', 'schlafzimmer', 'küche', 'bad', 'badezimmer',
+                                          'kinderzimmer', 'arbeitszimmer', 'flur', 'keller', 'dachboden',
+                                          'gästezimmer', 'esszimmer', 'wc', 'garage', 'balkon', 'terrasse']
+
+                            for known_room in known_rooms:
+                                if known_room in name_lower:
+                                    room_name = known_room.capitalize()
+                                    break
+
+                            # Wenn immer noch nicht gefunden: letztes Wort (alter Fallback)
+                            if not room_name:
+                                parts = friendly_name.split()
+                                if len(parts) > 1:
+                                    room_name = parts[-1]
+                                else:
+                                    room_name = "Unbekannt"
+
+                        # Initialisiere Raum-Eintrag
                         if room_name not in room_sensors:
-                            room_sensors[room_name] = {'temperature': None, 'humidity': None}
+                            room_sensors[room_name] = {
+                                'temperature': None,
+                                'humidity': None,
+                                'temp_sensor_id': None,
+                                'humidity_sensor_id': None,
+                                'devices': []
+                            }
 
-                        # Hole Werte
-                        caps = attrs.get('capabilities', {})
+                        # Sammle Sensor-Werte
                         if 'measure_temperature' in caps:
-                            room_sensors[room_name]['temperature'] = caps['measure_temperature'].get('value')
-                        if 'measure_humidity' in caps:
-                            room_sensors[room_name]['humidity'] = caps['measure_humidity'].get('value')
+                            temp_value = caps['measure_temperature'].get('value')
+                            if temp_value is not None:
+                                room_sensors[room_name]['temperature'] = temp_value
+                                room_sensors[room_name]['temp_sensor_id'] = device_id
+                                room_sensors[room_name]['devices'].append({
+                                    'id': device_id,
+                                    'name': friendly_name,
+                                    'type': 'temperature'
+                                })
 
-                    # Analysiere jeden Raum
+                        if 'measure_humidity' in caps:
+                            hum_value = caps['measure_humidity'].get('value')
+                            if hum_value is not None:
+                                room_sensors[room_name]['humidity'] = hum_value
+                                room_sensors[room_name]['humidity_sensor_id'] = device_id
+                                room_sensors[room_name]['devices'].append({
+                                    'id': device_id,
+                                    'name': friendly_name,
+                                    'type': 'humidity'
+                                })
+
+                    # Analysiere ALLE Räume (auch mit nur einem Sensor)
                     for room_name, sensors in room_sensors.items():
+                        # Skip "Unbekannt" mit leeren Daten
+                        if room_name == "Unbekannt" and not sensors['temperature'] and not sensors['humidity']:
+                            continue
+
+                        room_data = {
+                            'room_name': room_name,
+                            'temperature': sensors['temperature'],
+                            'humidity': sensors['humidity'],
+                            'temp_sensor_id': sensors['temp_sensor_id'],
+                            'humidity_sensor_id': sensors['humidity_sensor_id'],
+                            'devices_count': len(sensors['devices'])
+                        }
+
+                        # Führe Analyse nur durch wenn BEIDE Werte vorhanden
                         if sensors['temperature'] is not None and sensors['humidity'] is not None:
                             analysis = mold_system.analyze_room_humidity(
                                 room_name=room_name,
                                 temperature=sensors['temperature'],
                                 humidity=sensors['humidity']
                             )
+                            room_data['analysis'] = analysis
+                            room_data['status'] = 'complete'
+                        else:
+                            # Raum hat unvollständige Daten
+                            room_data['analysis'] = None
+                            room_data['status'] = 'incomplete'
+                            room_data['warning'] = f"Fehlende Sensoren: "
+                            if sensors['temperature'] is None:
+                                room_data['warning'] += "Temperatur "
+                            if sensors['humidity'] is None:
+                                room_data['warning'] += "Luftfeuchtigkeit"
 
-                            rooms_status.append({
-                                'room_name': room_name,
-                                'temperature': sensors['temperature'],
-                                'humidity': sensors['humidity'],
-                                'analysis': analysis
-                            })
+                        rooms_status.append(room_data)
 
                 except Exception as e:
-                    logger.debug(f"Could not get room data: {e}")
+                    logger.error(f"Could not get room data: {e}", exc_info=True)
+
+                # Sortiere nach Raum-Name
+                rooms_status.sort(key=lambda x: x['room_name'])
 
                 return jsonify({
                     'success': True,
                     'rooms': rooms_status,
-                    'count': len(rooms_status)
+                    'total_rooms': len(rooms_status),
+                    'complete_rooms': sum(1 for r in rooms_status if r.get('status') == 'complete'),
+                    'incomplete_rooms': sum(1 for r in rooms_status if r.get('status') == 'incomplete')
                 })
 
             except Exception as e:

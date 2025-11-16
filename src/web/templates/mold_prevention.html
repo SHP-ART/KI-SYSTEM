@@ -48,12 +48,53 @@ function displayRooms(rooms) {
         return;
     }
 
-    container.innerHTML = rooms.map(room => {
+    // Zeige Statistik oben
+    const total = rooms.length;
+    const complete = rooms.filter(r => r.status === 'complete').length;
+    const incomplete = rooms.filter(r => r.status === 'incomplete').length;
+
+    let statsHTML = `
+        <div style="grid-column: 1/-1; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem;">
+            <h3 style="margin: 0 0 0.5rem 0; color: white;">📊 Raum-Übersicht</h3>
+            <div style="display: flex; gap: 2rem; font-size: 1.1em;">
+                <div><strong>${total}</strong> Räume gesamt</div>
+                <div><strong>${complete}</strong> vollständig überwacht</div>
+                ${incomplete > 0 ? `<div style="opacity: 0.9;"><strong>${incomplete}</strong> unvollständig (fehlende Sensoren)</div>` : ''}
+            </div>
+        </div>
+    `;
+
+    container.innerHTML = statsHTML + rooms.map(room => {
         const analysis = room.analysis || {};
         const humidityStatus = analysis.humidity_status || {};
         const riskLevel = humidityStatus.level || 'UNBEKANNT';
         const dewPoint = analysis.dew_point || {};
 
+        // Handle incomplete rooms
+        if (room.status === 'incomplete') {
+            return `
+                <div class="room-card" style="border: 2px dashed #FFA726; background: #FFF3E0;">
+                    <h3>🏠 ${room.room_name}</h3>
+                    <div style="margin: 1rem 0; padding: 1rem; background: white; border-radius: 6px;">
+                        ${room.humidity !== null ? `
+                            <div style="font-size: 1.5em; font-weight: bold; color: #4CAF50;">${room.humidity}%</div>
+                            <div style="color: #666;">Luftfeuchtigkeit</div>
+                        ` : '<div style="color: #999;">❌ Keine Luftfeuchtigkeit</div>'}
+                        ${room.temperature !== null ? `
+                            <div style="font-size: 1.3em; margin: 0.5rem 0;">${room.temperature}°C</div>
+                        ` : '<div style="color: #999;">❌ Keine Temperatur</div>'}
+                    </div>
+                    <div style="padding: 0.8rem; background: white; border-radius: 6px; color: #E65100; font-weight: bold;">
+                        ⚠️ ${room.warning}
+                    </div>
+                    <div style="margin-top: 0.5rem; font-size: 0.85em; color: #666;">
+                        Schimmel-Analyse nicht möglich ohne beide Werte
+                    </div>
+                </div>
+            `;
+        }
+
+        // Complete rooms
         return `
             <div class="room-card">
                 <h3>🏠 ${room.room_name}</h3>
@@ -63,8 +104,11 @@ function displayRooms(rooms) {
                 </div>
                 <div style="font-size: 1.3em; margin: 0.5rem 0;">${room.temperature}°C</div>
                 <div class="risk-badge risk-${riskLevel}">${riskLevel}</div>
-                ${dewPoint.value ? `<div style="margin-top: 0.5rem; font-size: 0.9em; color: #666;">Taupunkt: ${dewPoint.value.toFixed(1)}°C</div>` : ''}
-                ${humidityStatus.recommendation ? `<div style="margin-top: 1rem; padding: 0.8rem; background: #f5f5f5; border-radius: 6px; font-size: 0.9em;">${humidityStatus.recommendation}</div>` : ''}
+                ${dewPoint.value ? `<div style="margin-top: 0.5rem; font-size: 0.9em; color: #666;">💧 Taupunkt: ${dewPoint.value.toFixed(1)}°C</div>` : ''}
+                ${humidityStatus.recommendation ? `<div style="margin-top: 1rem; padding: 0.8rem; background: #f5f5f5; border-radius: 6px; font-size: 0.9em;">💡 ${humidityStatus.recommendation}</div>` : ''}
+                <div style="margin-top: 0.5rem; font-size: 0.8em; color: #999;">
+                    ${room.devices_count} Sensor(en)
+                </div>
             </div>
         `;
     }).join('');
