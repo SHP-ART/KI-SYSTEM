@@ -271,6 +271,9 @@ class HomeyCollector(SmartHomeCollector):
         elif not isinstance(devices_list, list):
             devices_list = []
 
+        # Filter out non-dict items (safety check)
+        devices_list = [d for d in devices_list if isinstance(d, dict)]
+
         return devices_list
 
     def get_all_entities(self, domain: str = None) -> List[str]:
