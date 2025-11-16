@@ -1447,12 +1447,61 @@ class WebInterface:
                         'schalter',  # Schalter
                         'sensor',  # Standalone Sensoren ohne Raum
                         'homey',  # Homey-System
+                        'button',  # Buttons
+                        'fernbedienung',  # Fernbedienungen
+                        'leuchte',  # Lampen
+                        'licht',  # Lichter
+                        'lampe',  # Lampen
+                        'stehleuchte',  # Stehlampen
+                        'shelly',  # Shelly Geräte (oft ohne Raum)
+                        'thermometer',  # Standalone Thermometer
+                        'meter pro',  # Meter Pro Sensoren
+                        'deebot',  # Roboter
+                        'roboter',  # Roboter
+                        'konto',  # Accounts
+                        'user',  # User Accounts
+                        'dirigera',  # IKEA Hub
+                        'completionbot',  # Bot
+                        'couch',  # Möbel
+                        'wickeltisch',  # Möbel
+                        'rollo',  # Rollos
+                        'kamera',  # Kameras
+                        'kontakt',  # Kontaktsensoren
+                        'presence',  # Präsenzsensoren
+                        'außentemperatur',  # Außensensoren
+                        'wled',  # LED Controller
+                        'waschmaschine',  # Einzelgeräte
+                        'luftentfeuchter',  # Einzelgeräte
+                        'lüfter',  # Einzelgeräte
+                        'evaporative',  # Geräte
+                        'humidifier',  # Geräte
+                        'info',  # System Info
+                        'stadt',  # Wetter-Apps
+                        'blink',  # Blink Kameras
+                        'withings',  # Withings Geräte
+                        'fahrrad',  # Einzelsteckdosen
+                        'flaschenspüler',  # Einzelsteckdosen
+                        'schrank',  # Möbel
+                        'unterschrank',  # Möbel
+                        'haus-tür',  # Türen
+                        'haustür',  # Türen
+                        'türsperre',  # Türen
+                        'herdlicht',  # Einzellampen
+                        'nachtlicht',  # Einzellampen
+                        'unterlicht',  # Einzellampen
+                        'wall display',  # Displays
+                        'blu ht',  # Bluetooth Sensoren ohne Raum
+                        'plus 1pm',  # Shelly Relays
+                        ':',  # MAC-Adressen
+                        '192.168',  # IP-Adressen
+                        '📎',  # Gruppen/Icons
+                        'gruppe',  # Gruppen
                     ]
 
-                    # Analysiere ALLE Räume (auch mit nur einem Sensor)
+                    # Analysiere nur Räume mit BEIDEN Sensoren (Temperatur UND Luftfeuchtigkeit)
                     for room_name, sensors in room_sensors.items():
-                        # Skip "Unbenannter Raum" mit leeren Daten
-                        if room_name == "Unbenannter Raum" and not sensors['temperature'] and not sensors['humidity']:
+                        # Skip "Unbenannter Raum"
+                        if room_name == "Unbenannter Raum":
                             continue
 
                         # Skip technische Zonen, Geräte und Szenen
@@ -1460,33 +1509,27 @@ class WebInterface:
                         if any(pattern in room_name_lower for pattern in excluded_patterns):
                             continue
 
+                        # NUR Räume mit BEIDEN Sensoren anzeigen (für sinnvolle Schimmel-Analyse)
+                        if sensors['temperature'] is None or sensors['humidity'] is None:
+                            continue
+
+                        # Führe Analyse durch (beide Werte sind durch Filter garantiert vorhanden)
+                        analysis = mold_system.analyze_room_humidity(
+                            room_name=room_name,
+                            temperature=sensors['temperature'],
+                            humidity=sensors['humidity']
+                        )
+
                         room_data = {
                             'room_name': room_name,
                             'temperature': sensors['temperature'],
                             'humidity': sensors['humidity'],
                             'temp_sensor_id': sensors['temp_sensor_id'],
                             'humidity_sensor_id': sensors['humidity_sensor_id'],
-                            'devices_count': len(sensors['devices'])
+                            'devices_count': len(sensors['devices']),
+                            'analysis': analysis,
+                            'status': 'complete'
                         }
-
-                        # Führe Analyse nur durch wenn BEIDE Werte vorhanden
-                        if sensors['temperature'] is not None and sensors['humidity'] is not None:
-                            analysis = mold_system.analyze_room_humidity(
-                                room_name=room_name,
-                                temperature=sensors['temperature'],
-                                humidity=sensors['humidity']
-                            )
-                            room_data['analysis'] = analysis
-                            room_data['status'] = 'complete'
-                        else:
-                            # Raum hat unvollständige Daten
-                            room_data['analysis'] = None
-                            room_data['status'] = 'incomplete'
-                            room_data['warning'] = f"Fehlende Sensoren: "
-                            if sensors['temperature'] is None:
-                                room_data['warning'] += "Temperatur "
-                            if sensors['humidity'] is None:
-                                room_data['warning'] += "Luftfeuchtigkeit"
 
                         rooms_status.append(room_data)
 
