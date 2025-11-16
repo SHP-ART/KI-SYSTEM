@@ -35,33 +35,33 @@ class TemperatureDataCollector:
         self.thread = None
         self.sensor_helper = SensorHelper(engine) if engine else None
         
-        # Platform-spezifische Collector
+        # Platform-spezifische Collector basierend auf platform.type
         self.collectors = []
+        platform_type = self.config.get('platform', {}).get('type', '').lower()
+
         try:
-            if self.config.get('homey', {}).get('enabled'):
+            if platform_type == 'homey':
                 from src.data_collector.homey_collector import HomeyCollector
                 homey_config = self.config.get('homey', {})
                 homey = HomeyCollector(
-                    url=homey_config.get('url'),
-                    token=homey_config.get('token')
+                    url=homey_config.get('url', ''),
+                    token=homey_config.get('token', '')
                 )
                 self.collectors.append(('homey', homey))
                 logger.info("Homey collector initialized for temperature data")
-        except Exception as e:
-            logger.warning(f"Could not initialize Homey collector: {e}")
-            
-        try:
-            if self.config.get('homeassistant', {}).get('enabled'):
+            elif platform_type == 'homeassistant':
                 from src.data_collector.ha_collector import HomeAssistantCollector
                 ha_config = self.config.get('homeassistant', {})
                 ha = HomeAssistantCollector(
-                    url=ha_config.get('url'),
-                    token=ha_config.get('token')
+                    url=ha_config.get('url', ''),
+                    token=ha_config.get('token', '')
                 )
                 self.collectors.append(('homeassistant', ha))
                 logger.info("Home Assistant collector initialized for temperature data")
+            else:
+                logger.warning(f"Unknown or missing platform type: {platform_type}")
         except Exception as e:
-            logger.warning(f"Could not initialize Home Assistant collector: {e}")
+            logger.error(f"Could not initialize platform collector for temperature data: {e}")
     
     def start(self):
         """Startet Background-Collection"""
