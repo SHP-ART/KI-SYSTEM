@@ -111,7 +111,15 @@ class TemperatureDataCollector:
                     
                     device_id = device.get('id')
                     device_name = device.get('name', 'Unknown')
-                    room_name = device.get('zone', {}).get('name', 'Unknown')
+
+                    # Handle zone - can be string (ID) or dict
+                    zone = device.get('zone')
+                    if isinstance(zone, dict):
+                        room_name = zone.get('name', 'Unknown')
+                    elif isinstance(zone, str):
+                        room_name = zone  # Zone ID
+                    else:
+                        room_name = 'Unknown'
                     
                     # Temperaturen
                     caps = device.get('capabilitiesObj', {})
@@ -189,7 +197,15 @@ class TemperatureDataCollector:
     def _check_window_status(self, room_name: str, all_devices: list) -> bool:
         """Prüft ob Fenster in diesem Raum offen ist"""
         for device in all_devices:
-            device_room = device.get('zone', {}).get('name', '')
+            # Handle zone - can be string (ID) or dict
+            zone = device.get('zone')
+            if isinstance(zone, dict):
+                device_room = zone.get('name', '')
+            elif isinstance(zone, str):
+                device_room = zone  # Zone ID
+            else:
+                device_room = ''
+
             if device_room != room_name:
                 continue
             
