@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}Lüftungsempfehlungen - KI Smart Home{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h2>💨 Lüftungsempfehlungen</h2>
+    <p>Intelligente Lüftungsempfehlungen für optimales Raumklima</p>
+</div>
+
+<div class="card" style="margin-bottom: 1.5rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+    <h3 style="color: white;">🌤️ Außenbedingungen</h3>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-top: 1rem;">
+        <div>
+            <div style="font-size: 2.5em; font-weight: bold;" id="outdoor-temp">-</div>
+            <div style="opacity: 0.9;">Außentemperatur</div>
+        </div>
+        <div>
+            <div style="font-size: 2.5em; font-weight: bold;" id="outdoor-humidity">-</div>
+            <div style="opacity: 0.9;">Außen-Luftfeuchtigkeit</div>
+        </div>
+    </div>
+</div>
+
+<div id="recommendations-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1rem;">
+    <div class="loading">Lade Empfehlungen...</div>
+</div>
+
+<style>
+.recommendation-card { background: white; border-radius: 8px; padding: 1.5rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+.priority-badge { padding: 0.5rem 1rem; border-radius: 20px; font-weight: bold; display: inline-block; margin: 0.5rem 0; }
+.priority-HOCH { background: #FFEBEE; color: #C62828; }
+.priority-MITTEL { background: #FFF3E0; color: #E65100; }
+.priority-NIEDRIG { background: #E8F5E9; color: #2E7D32; }
+.action-icon { font-size: 3em; margin: 1rem 0; }
+</style>
+
+<script>
+async function loadRecommendations() {
+    try {
+        const response = await fetch('/api/ventilation/recommendations');
+        const data = await response.json();
+
+        if (data.success) {
+            displayOutdoorConditions(data.outdoor_conditions);
+            displayRecommendations(data.recommendations);
+        }
+    } catch (error) {
+        document.getElementById('recommendations-container').innerHTML = '<div class="loading">❌ Fehler beim Laden</div>';
+    }
+}
+
+function displayOutdoorConditions(conditions) {
+    document.getElementById('outdoor-temp').textContent = conditions.temperature ? `${conditions.temperature.toFixed(1)}°C` : '-';
+    document.getElementById('outdoor-humidity').textContent = conditions.humidity ? `${conditions.humidity.toFixed(0)}%` : '-';
+}
+
+function displayRecommendations(recommendations) {
+    const container = document.getElementById('recommendations-container');
+
+    if (recommendations.length === 0) {
+        container.innerHTML = '<div class="loading">Keine Empfehlungen verfügbar</div>';
+        return;
+    }
+
+    container.innerHTML = recommendations.map(rec => {
+        const r = rec.recommendation || {};
+        const icon = r.action === 'Lüften empfohlen' ? '✅' :
+                    r.action === 'Lüften NICHT empfohlen' ? '⛔' :
+                    r.action === 'Kurz lüften' ? '⏱️' : '💨';
+
+        return `
+            <div class="recommendation-card">
+                <h3 style="margin-top: 0;">🏠 ${rec.room_name}</h3>
+                <div class="action-icon">${icon}</div>
+                <div style="font-size: 1.2em; font-weight: bold; margin: 1rem 0;">${r.action}</div>
+                <div class="priority-badge priority-${r.priority}">${r.priority}</div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0; font-size: 0.9em;">
+                    <div>
+                        <div style="color: #666;">Innen</div>
+                        <div style="font-weight: bold;">${rec.indoor_temp}°C | ${rec.indoor_humidity}%</div>
+                    </div>
+                    <div>
+                        <div style="color: #666;">Außen</div>
+                        <div style="font-weight: bold;">${rec.outdoor_temp}°C | ${rec.outdoor_humidity}%</div>
+                    </div>
+                </div>
+
+                <div style="background: #f5f5f5; padding: 1rem; border-radius: 6px; margin-top: 1rem;">
+                    <strong>Grund:</strong> ${r.reason}
+                </div>
+
+                ${r.duration_minutes ? `<div style="margin-top: 0.5rem; color: #666; font-size: 0.9em;">⏱️ Empfohlene Dauer: ${r.duration_minutes} Minuten</div>` : ''}
+            </div>
+        `;
+    }).join('');
+}
+
+document.addEventListener('DOMContentLoaded', loadRecommendations);
+setInterval(loadRecommendations, 300000); // Alle 5 Minuten
+</script>
+{% endblock %}

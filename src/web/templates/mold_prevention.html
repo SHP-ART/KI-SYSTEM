@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Schimmelprävention - KI Smart Home{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h2>🍄 Schimmelprävention Dashboard</h2>
+    <p>Überwachung von Schimmelrisiken in allen Räumen</p>
+</div>
+
+<div id="rooms-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem;">
+    <div class="loading">Lade Raum-Daten...</div>
+</div>
+
+<div class="card" style="margin-top: 2rem;">
+    <h3>📋 Schimmel-Alerts</h3>
+    <div id="alerts-container"></div>
+</div>
+
+<style>
+.room-card { background: white; border-radius: 8px; padding: 1.5rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+.risk-badge { padding: 0.5rem 1rem; border-radius: 20px; font-weight: bold; display: inline-block; margin: 0.5rem 0; }
+.risk-NIEDRIG { background: #E8F5E9; color: #2E7D32; }
+.risk-MITTEL { background: #FFF3E0; color: #E65100; }
+.risk-HOCH { background: #FFEBEE; color: #C62828; }
+.risk-KRITISCH { background: #F44336; color: white; }
+</style>
+
+<script>
+async function loadData() {
+    try {
+        const response = await fetch('/api/mold/status');
+        const data = await response.json();
+        if (data.success) displayRooms(data.rooms);
+    } catch (error) {
+        document.getElementById('rooms-container').innerHTML = '<div class="loading">❌ Fehler beim Laden</div>';
+    }
+
+    try {
+        const alertsResponse = await fetch('/api/mold/alerts?limit=10');
+        const alertsData = await alertsResponse.json();
+        if (alertsData.success) displayAlerts(alertsData.alerts);
+    } catch (error) {}
+}
+
+function displayRooms(rooms) {
+    const container = document.getElementById('rooms-container');
+    if (rooms.length === 0) {
+        container.innerHTML = '<div class="loading">Keine Raum-Daten verfügbar</div>';
+        return;
+    }
+
+    container.innerHTML = rooms.map(room => {
+        const analysis = room.analysis || {};
+        const humidityStatus = analysis.humidity_status || {};
+        const riskLevel = humidityStatus.level || 'UNBEKANNT';
+        const dewPoint = analysis.dew_point || {};
+
+        return `
+            <div class="room-card">
+                <h3>🏠 ${room.room_name}</h3>
+                <div style="margin: 1rem 0;">
+                    <div style="font-size: 2em; font-weight: bold; color: #4CAF50;">${room.humidity}%</div>
+                    <div style="color: #666;">Luftfeuchtigkeit</div>
+                </div>
+                <div style="font-size: 1.3em; margin: 0.5rem 0;">${room.temperature}°C</div>
+                <div class="risk-badge risk-${riskLevel}">${riskLevel}</div>
+                ${dewPoint.value ? `<div style="margin-top: 0.5rem; font-size: 0.9em; color: #666;">Taupunkt: ${dewPoint.value.toFixed(1)}°C</div>` : ''}
+                ${humidityStatus.recommendation ? `<div style="margin-top: 1rem; padding: 0.8rem; background: #f5f5f5; border-radius: 6px; font-size: 0.9em;">${humidityStatus.recommendation}</div>` : ''}
+            </div>
+        `;
+    }).join('');
+}
+
+function displayAlerts(alerts) {
+    const container = document.getElementById('alerts-container');
+    if (alerts.length === 0) {
+        container.innerHTML = '<p>Keine Alerts vorhanden</p>';
+        return;
+    }
+
+    container.innerHTML = '<table style="width: 100%; border-collapse: collapse;">' +
+        '<tr><th>Zeit</th><th>Raum</th><th>Feuchtigkeit</th><th>Risiko</th><th>Empfehlung</th></tr>' +
+        alerts.map(alert => `
+            <tr style="border-bottom: 1px solid #eee;">
+                <td>${new Date(alert.timestamp).toLocaleString('de-DE')}</td>
+                <td>${alert.room_name}</td>
+                <td>${alert.humidity}%</td>
+                <td><span class="risk-badge risk-${alert.risk_level}">${alert.risk_level}</span></td>
+                <td>${alert.recommendation}</td>
+            </tr>
+        `).join('') +
+        '</table>';
+}
+
+document.addEventListener('DOMContentLoaded', loadData);
+setInterval(loadData, 60000); // Alle 60 Sekunden
+</script>
+{% endblock %}

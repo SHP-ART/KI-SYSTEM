@@ -321,6 +321,21 @@ class WebInterface:
             """System Logs & Activity Monitor Seite"""
             return render_template('logs.html')
 
+        @self.app.route('/ml-models')
+        def ml_models_page():
+            """ML Model Management Seite"""
+            return render_template('ml_models.html')
+
+        @self.app.route('/mold-prevention')
+        def mold_prevention_page():
+            """Schimmelprävention Dashboard Seite"""
+            return render_template('mold_prevention.html')
+
+        @self.app.route('/ventilation')
+        def ventilation_page():
+            """Lüftungsempfehlungen Seite"""
+            return render_template('ventilation.html')
+
         # === API Endpunkte ===
 
         @self.app.route('/api/status')
@@ -1224,6 +1239,293 @@ class WebInterface:
             except Exception as e:
                 logger.debug(f"Error getting database stats: {e}")
                 return {}
+
+        # === ML MODEL MANAGEMENT ===
+
+        @self.app.route('/api/models/versions', methods=['GET'])
+        def api_get_model_versions():
+            """API: Hole alle Model-Versionen"""
+            try:
+                from src.models.model_version_manager import ModelVersionManager
+                version_manager = ModelVersionManager()
+
+                summary = version_manager.get_summary()
+
+                # Füge Details für jedes Modell hinzu
+                result = {}
+                for model_name, model_info in summary.items():
+                    history = version_manager.get_version_history(model_name, limit=10)
+                    result[model_name] = {
+                        **model_info,
+                        'history': history
+                    }
+
+                return jsonify({
+                    'success': True,
+                    'models': result
+                })
+
+            except Exception as e:
+                logger.error(f"Error getting model versions: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @self.app.route('/api/models/<model_name>/rollback', methods=['POST'])
+        def api_rollback_model(model_name):
+            """API: Rollback zu vorheriger Model-Version"""
+            try:
+                from src.models.model_version_manager import ModelVersionManager
+                version_manager = ModelVersionManager()
+
+                success = version_manager.rollback_to_previous(model_name)
+
+                if success:
+                    return jsonify({
+                        'success': True,
+                        'message': f'Successfully rolled back {model_name} to previous version'
+                    })
+                else:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Rollback failed - check logs'
+                    }), 400
+
+            except Exception as e:
+                logger.error(f"Error rolling back model: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @self.app.route('/api/models/<model_name>/history', methods=['GET'])
+        def api_get_model_history(model_name):
+            """API: Hole Version-History eines Models"""
+            try:
+                from src.models.model_version_manager import ModelVersionManager
+                version_manager = ModelVersionManager()
+
+                limit = request.args.get('limit', 20, type=int)
+                history = version_manager.get_version_history(model_name, limit=limit)
+
+                return jsonify({
+                    'success': True,
+                    'model_name': model_name,
+                    'history': history
+                })
+
+            except Exception as e:
+                logger.error(f"Error getting model history: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        # === MOLD PREVENTION ===
+
+        @self.app.route('/api/mold/status', methods=['GET'])
+        def api_get_mold_status():
+            """API: Hole Schimmelprävention Status aller Räume"""
+            try:
+                if not self.engine or not self.engine.mold_prevention_enabled:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Mold prevention not enabled'
+                    }), 503
+
+                from src.decision_engine.mold_prevention import MoldPreventionSystem
+                mold_system = MoldPreventionSystem(db=self.db)
+
+                # Hole alle Räume mit Temperatur- und Luftfeuchtigkeit-Sensoren
+                rooms_status = []
+
+                # Versuche Raum-Daten aus Plattform zu holen
+                try:
+                    states = self.engine.platform.get_states()
+
+                    # Gruppiere Sensoren nach Raum (vereinfacht)
+                    room_sensors = {}
+                    for device_id, state in states.items():
+                        if not state:
+                            continue
+
+                        attrs = state.get('attributes', {})
+                        friendly_name = attrs.get('friendly_name', device_id)
+
+                        # Extrahiere Raum aus Namen (z.B. "Temperature Wohnzimmer" -> "Wohnzimmer")
+                        room_name = "Unknown"
+                        if 'room' in attrs:
+                            room_name = attrs['room']
+                        else:
+                            # Versuche aus Namen zu extrahieren
+                            parts = friendly_name.split()
+                            if len(parts) > 1:
+                                room_name = parts[-1]
+
+                        if room_name not in room_sensors:
+                            room_sensors[room_name] = {'temperature': None, 'humidity': None}
+
+                        # Hole Werte
+                        caps = attrs.get('capabilities', {})
+                        if 'measure_temperature' in caps:
+                            room_sensors[room_name]['temperature'] = caps['measure_temperature'].get('value')
+                        if 'measure_humidity' in caps:
+                            room_sensors[room_name]['humidity'] = caps['measure_humidity'].get('value')
+
+                    # Analysiere jeden Raum
+                    for room_name, sensors in room_sensors.items():
+                        if sensors['temperature'] is not None and sensors['humidity'] is not None:
+                            analysis = mold_system.analyze_room_humidity(
+                                room_name=room_name,
+                                temperature=sensors['temperature'],
+                                humidity=sensors['humidity']
+                            )
+
+                            rooms_status.append({
+                                'room_name': room_name,
+                                'temperature': sensors['temperature'],
+                                'humidity': sensors['humidity'],
+                                'analysis': analysis
+                            })
+
+                except Exception as e:
+                    logger.debug(f"Could not get room data: {e}")
+
+                return jsonify({
+                    'success': True,
+                    'rooms': rooms_status,
+                    'count': len(rooms_status)
+                })
+
+            except Exception as e:
+                logger.error(f"Error getting mold status: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        @self.app.route('/api/mold/alerts', methods=['GET'])
+        def api_get_mold_alerts():
+            """API: Hole Schimmel-Alerts aus der Datenbank"""
+            try:
+                limit = request.args.get('limit', 50, type=int)
+
+                # Hole Mold-Alerts aus Datenbank (falls vorhanden)
+                alerts = []
+
+                # Prüfe ob mold_alerts Tabelle existiert
+                try:
+                    result = self.db.execute(
+                        "SELECT timestamp, room_name, humidity, temperature, risk_level, recommendation FROM mold_alerts ORDER BY timestamp DESC LIMIT ?",
+                        (limit,)
+                    )
+                    for row in result:
+                        alerts.append({
+                            'timestamp': row['timestamp'],
+                            'room_name': row['room_name'],
+                            'humidity': row['humidity'],
+                            'temperature': row['temperature'],
+                            'risk_level': row['risk_level'],
+                            'recommendation': row['recommendation']
+                        })
+                except:
+                    # Tabelle existiert nicht - leere Liste zurückgeben
+                    pass
+
+                return jsonify({
+                    'success': True,
+                    'alerts': alerts,
+                    'count': len(alerts)
+                })
+
+            except Exception as e:
+                logger.error(f"Error getting mold alerts: {e}")
+                return jsonify({'error': str(e)}), 500
+
+        # === VENTILATION RECOMMENDATIONS ===
+
+        @self.app.route('/api/ventilation/recommendations', methods=['GET'])
+        def api_get_ventilation_recommendations():
+            """API: Hole aktuelle Lüftungsempfehlungen für alle Räume"""
+            try:
+                if not self.engine or not self.engine.ventilation_optimizer_enabled:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Ventilation optimizer not enabled'
+                    }), 503
+
+                from src.decision_engine.ventilation_optimizer import VentilationOptimizer
+                vent_optimizer = VentilationOptimizer(db=self.db)
+
+                recommendations = []
+
+                # Hole Wetterdaten
+                outdoor_temp = None
+                outdoor_humidity = 70.0  # Default
+
+                try:
+                    weather_data = self.engine.weather.get_weather_data(self.engine.platform)
+                    if weather_data:
+                        outdoor_temp = weather_data.get('temperature')
+                        outdoor_humidity = weather_data.get('humidity', 70.0)
+                except:
+                    pass
+
+                # Hole Raum-Daten (ähnlich wie bei Mold Prevention)
+                if outdoor_temp is not None:
+                    try:
+                        states = self.engine.platform.get_states()
+
+                        room_sensors = {}
+                        for device_id, state in states.items():
+                            if not state:
+                                continue
+
+                            attrs = state.get('attributes', {})
+                            friendly_name = attrs.get('friendly_name', device_id)
+
+                            room_name = "Unknown"
+                            if 'room' in attrs:
+                                room_name = attrs['room']
+                            else:
+                                parts = friendly_name.split()
+                                if len(parts) > 1:
+                                    room_name = parts[-1]
+
+                            if room_name not in room_sensors:
+                                room_sensors[room_name] = {'temperature': None, 'humidity': None}
+
+                            caps = attrs.get('capabilities', {})
+                            if 'measure_temperature' in caps:
+                                room_sensors[room_name]['temperature'] = caps['measure_temperature'].get('value')
+                            if 'measure_humidity' in caps:
+                                room_sensors[room_name]['humidity'] = caps['measure_humidity'].get('value')
+
+                        # Generiere Empfehlungen für jeden Raum
+                        for room_name, sensors in room_sensors.items():
+                            if sensors['temperature'] is not None and sensors['humidity'] is not None:
+                                recommendation = vent_optimizer.generate_ventilation_recommendation(
+                                    room_name=room_name,
+                                    indoor_temp=sensors['temperature'],
+                                    indoor_humidity=sensors['humidity'],
+                                    outdoor_temp=outdoor_temp,
+                                    outdoor_humidity=outdoor_humidity
+                                )
+
+                                recommendations.append({
+                                    'room_name': room_name,
+                                    'indoor_temp': sensors['temperature'],
+                                    'indoor_humidity': sensors['humidity'],
+                                    'outdoor_temp': outdoor_temp,
+                                    'outdoor_humidity': outdoor_humidity,
+                                    'recommendation': recommendation
+                                })
+
+                    except Exception as e:
+                        logger.debug(f"Could not get room data: {e}")
+
+                return jsonify({
+                    'success': True,
+                    'recommendations': recommendations,
+                    'count': len(recommendations),
+                    'outdoor_conditions': {
+                        'temperature': outdoor_temp,
+                        'humidity': outdoor_humidity
+                    }
+                })
+
+            except Exception as e:
+                logger.error(f"Error getting ventilation recommendations: {e}")
+                return jsonify({'error': str(e)}), 500
 
         @self.app.route('/api/sensors/available', methods=['GET'])
         def api_get_available_sensors():
