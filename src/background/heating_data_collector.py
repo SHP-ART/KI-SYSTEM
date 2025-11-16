@@ -1,7 +1,7 @@
 """
 Heating Data Collector - Kontinuierliche Heizungsdaten-Sammlung
 
-Sammelt alle 15 Minuten Daten von allen Heizgeräten für Analytics:
+Sammelt jede Minute Daten von allen Heizgeräten für Analytics:
 - Aktuelle/Zieltemperatur
 - Heizstatus
 - Außentemperatur
@@ -20,11 +20,11 @@ from src.utils.sensor_helper import SensorHelper
 class HeatingDataCollector:
     """Sammelt kontinuierlich Heizungsdaten für Analytics"""
 
-    def __init__(self, engine=None, interval_seconds: int = 900):  # 15 Minuten = 900 Sekunden
+    def __init__(self, engine=None, interval_seconds: int = 60):  # 1 Minute = 60 Sekunden
         """
         Args:
             engine: DecisionEngine Instanz für Zugriff auf Platform
-            interval_seconds: Sammel-Intervall in Sekunden (default: 900 = 15 Min)
+            interval_seconds: Sammel-Intervall in Sekunden (default: 60 = 1 Min)
         """
         self.engine = engine
         self.interval_seconds = interval_seconds

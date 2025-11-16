@@ -30,7 +30,7 @@ class TemperatureDataCollector:
         self.db = db or Database()
         self.config = config or {}
         self.engine = engine
-        self.interval = self.config.get('data_collection', {}).get('temperature_interval', 300)  # 5 Minuten
+        self.interval = self.config.get('data_collection', {}).get('temperature_interval', 60)  # 1 Minute
         self.running = False
         self.thread = None
         self.sensor_helper = SensorHelper(engine) if engine else None

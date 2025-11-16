@@ -1,4 +1,18 @@
-"""Background Service für kontinuierliche Datensammlung"""
+"""
+Background Service für kontinuierliche Datensammlung
+
+Sammelt verschiedene Sensortypen mit unterschiedlichen Strategien:
+
+IMMER SPEICHERN (alle 5 Min):
+- Temperatur (measure_temperature)
+- Luftfeuchtigkeit (measure_humidity)
+- Zieltemperatur (target_temperature)
+
+NUR BEI ÄNDERUNG SPEICHERN:
+- Bewegung (alarm_motion) - bei Status-Wechsel
+- Lichter (onoff) - bei an/aus Wechsel
+- Helligkeit (measure_luminance) - bei Änderung > 10 Lux
+"""
 
 import time
 import threading
@@ -30,7 +44,41 @@ class BackgroundDataCollector:
         self.running = False
         self.thread: Optional[threading.Thread] = None
 
+        # State tracking für Change Detection
+        self.last_states = {}  # device_id -> {sensor_type -> value}
+
         logger.info(f"Background Collector initialized (interval: {interval_seconds}s)")
+
+    def _has_changed(self, device_id: str, sensor_type: str, value: float, threshold: float = 0.01) -> bool:
+        """
+        Prüft ob sich ein Sensorwert geändert hat
+
+        Args:
+            device_id: Device ID
+            sensor_type: Typ des Sensors
+            value: Neuer Wert
+            threshold: Schwellwert für signifikante Änderung
+
+        Returns:
+            True wenn Wert sich geändert hat oder neu ist
+        """
+        if device_id not in self.last_states:
+            self.last_states[device_id] = {}
+
+        last_value = self.last_states[device_id].get(sensor_type)
+
+        # Erster Wert für diesen Sensor
+        if last_value is None:
+            self.last_states[device_id][sensor_type] = value
+            return True
+
+        # Prüfe auf signifikante Änderung
+        changed = abs(value - last_value) >= threshold
+
+        if changed:
+            self.last_states[device_id][sensor_type] = value
+
+        return changed
 
     def _collect_sensor_data(self):
         """Sammelt alle Sensor-Daten und speichert sie"""
@@ -81,10 +129,10 @@ class BackgroundDataCollector:
                         )
                         collected_count += 1
 
-                # Helligkeit
+                # Helligkeit (nur bei signifikanter Änderung > 10 Lux)
                 if 'measure_luminance' in capabilities:
                     lux_value = capabilities['measure_luminance'].get('value')
-                    if lux_value is not None:
+                    if lux_value is not None and self._has_changed(device_id, 'brightness', float(lux_value), threshold=10.0):
                         self.db.insert_sensor_data(
                             timestamp=timestamp,
                             sensor_id=device_id,
@@ -95,21 +143,23 @@ class BackgroundDataCollector:
                         )
                         collected_count += 1
 
-                # Bewegung (Binary Sensor)
+                # Bewegung (Binary Sensor - nur bei Änderung)
                 if 'alarm_motion' in capabilities:
                     motion_value = capabilities['alarm_motion'].get('value')
                     if motion_value is not None:
-                        self.db.insert_sensor_data(
-                            timestamp=timestamp,
-                            sensor_id=device_id,
-                            sensor_type='motion',
-                            value=1.0 if motion_value else 0.0,
-                            unit='binary',
-                            metadata={'zone': attributes.get('zone'), 'name': attributes.get('friendly_name')}
-                        )
-                        collected_count += 1
+                        motion_float = 1.0 if motion_value else 0.0
+                        if self._has_changed(device_id, 'motion', motion_float, threshold=0.1):
+                            self.db.insert_sensor_data(
+                                timestamp=timestamp,
+                                sensor_id=device_id,
+                                sensor_type='motion',
+                                value=motion_float,
+                                unit='binary',
+                                metadata={'zone': attributes.get('zone'), 'name': attributes.get('friendly_name')}
+                            )
+                            collected_count += 1
 
-                # Lichter (für ML-Training)
+                # Lichter (für ML-Training - nur bei Änderung)
                 if 'onoff' in capabilities:
                     device_class = attributes.get('device_class', '').lower()
                     if device_class == 'light' or 'light' in device_id.lower():
@@ -120,19 +170,23 @@ class BackgroundDataCollector:
                         if 'dim' in capabilities:
                             brightness = capabilities['dim'].get('value', 0) * 255  # Homey: 0-1, Standard: 0-255
 
-                        self.db.insert_sensor_data(
-                            timestamp=timestamp,
-                            sensor_id=device_id,
-                            sensor_type='light_state',
-                            value=1.0 if light_state else 0.0,
-                            unit='binary',
-                            metadata={
-                                'zone': attributes.get('zone'),
-                                'name': attributes.get('friendly_name'),
-                                'brightness': brightness
-                            }
-                        )
-                        collected_count += 1
+                        light_float = 1.0 if light_state else 0.0
+
+                        # Speichere nur bei Änderung (on/off Wechsel)
+                        if self._has_changed(device_id, 'light_state', light_float, threshold=0.1):
+                            self.db.insert_sensor_data(
+                                timestamp=timestamp,
+                                sensor_id=device_id,
+                                sensor_type='light_state',
+                                value=light_float,
+                                unit='binary',
+                                metadata={
+                                    'zone': attributes.get('zone'),
+                                    'name': attributes.get('friendly_name'),
+                                    'brightness': brightness
+                                }
+                            )
+                            collected_count += 1
 
                 # Heizung (für ML-Training)
                 if 'target_temperature' in capabilities:
