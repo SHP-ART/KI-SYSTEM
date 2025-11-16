@@ -504,6 +504,33 @@ class Database:
         cursor.execute("SELECT COUNT(*) as count FROM external_data")
         return cursor.fetchone()['count']
 
+    def get_latest_external_data(self, data_type: str) -> Optional[Dict]:
+        """Holt die neuesten externen Daten eines bestimmten Typs
+
+        Args:
+            data_type: Typ der Daten (z.B. 'energy_price', 'weather')
+
+        Returns:
+            Dictionary mit den neuesten Daten oder None
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT timestamp, data FROM external_data
+            WHERE data_type = ?
+            ORDER BY timestamp DESC
+            LIMIT 1
+        """, (data_type,))
+
+        result = cursor.fetchone()
+        if result:
+            return {
+                'timestamp': result['timestamp'],
+                'data': json.loads(result['data']) if isinstance(result['data'], str) else result['data']
+            }
+        return None
+
     def get_latest_sensor_timestamp(self) -> Optional[datetime]:
         """Gibt den Zeitstempel der letzten Sensor-Messung zurück"""
         conn = self._get_connection()

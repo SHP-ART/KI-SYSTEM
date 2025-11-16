@@ -1257,38 +1257,6 @@ class WebInterface:
                 logger.error(f"Error getting system status: {e}")
                 return jsonify({'error': str(e)}), 500
 
-        def _get_database_stats(self):
-            """Hilfs-Methode: Hole Datenbank-Statistiken"""
-            try:
-                stats = {}
-
-                # Zähle Einträge pro Tabelle
-                tables = ['sensor_data', 'decisions', 'training_history', 'heating_observations']
-                for table in tables:
-                    try:
-                        result = self.db.execute(f"SELECT COUNT(*) as count FROM {table}")
-                        stats[table] = result[0]['count'] if result else 0
-                    except:
-                        stats[table] = 0
-
-                # Hole Zeitraum der Daten
-                try:
-                    result = self.db.execute(
-                        "SELECT MIN(timestamp) as first, MAX(timestamp) as last FROM sensor_data"
-                    )
-                    if result and result[0]['first']:
-                        stats['data_range'] = {
-                            'first': result[0]['first'],
-                            'last': result[0]['last']
-                        }
-                except:
-                    pass
-
-                return stats
-            except Exception as e:
-                logger.debug(f"Error getting database stats: {e}")
-                return {}
-
         # === ML MODEL MANAGEMENT ===
 
         @self.app.route('/api/models/versions', methods=['GET'])
@@ -4548,6 +4516,38 @@ class WebInterface:
             except Exception as e:
                 logger.error(f"Error clearing training data: {e}")
                 return jsonify({'success': False, 'error': str(e)}), 500
+
+    def _get_database_stats(self):
+        """Hilfs-Methode: Hole Datenbank-Statistiken"""
+        try:
+            stats = {}
+
+            # Zähle Einträge pro Tabelle
+            tables = ['sensor_data', 'decisions', 'training_history', 'heating_observations']
+            for table in tables:
+                try:
+                    result = self.db.execute(f"SELECT COUNT(*) as count FROM {table}")
+                    stats[table] = result[0]['count'] if result else 0
+                except:
+                    stats[table] = 0
+
+            # Hole Zeitraum der Daten
+            try:
+                result = self.db.execute(
+                    "SELECT MIN(timestamp) as first, MAX(timestamp) as last FROM sensor_data"
+                )
+                if result and result[0]['first']:
+                    stats['data_range'] = {
+                        'first': result[0]['first'],
+                        'last': result[0]['last']
+                    }
+            except:
+                pass
+
+            return stats
+        except Exception as e:
+            logger.debug(f"Error getting database stats: {e}")
+            return {}
 
     def _calculate_heating_analytics(self, days_back: int) -> dict:
         """Berechnet umfassende Heizungs-Analytics"""
