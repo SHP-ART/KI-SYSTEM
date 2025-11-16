@@ -58,8 +58,8 @@ class DatabaseMaintenanceJob:
             try:
                 current_time = datetime.now()
 
-                # Prüfe ob es Zeit für Cleanup ist (täglich um run_hour Uhr)
-                if current_time.hour == self.run_hour and current_time.minute < 5:
+                # Prüfe ob es Zeit für Cleanup ist (täglich um run_hour Uhr, 30 Min Fenster)
+                if current_time.hour == self.run_hour and current_time.minute < 30:
                     # Nur ausführen wenn heute noch nicht gelaufen
                     if not self.last_cleanup or self.last_cleanup.date() < current_time.date():
                         self.run_maintenance()
