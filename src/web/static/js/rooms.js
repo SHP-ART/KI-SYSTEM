@@ -408,13 +408,15 @@ async function loadWindowAssignments() {
             await loadAllDevices();
         }
 
-        // Filtere Fenster-Sensoren (binary_sensor mit window/door class)
+        // Filtere Fenster- und Tür-Sensoren (binary_sensor mit window/door class)
         const windows = allDevices.filter(d =>
             (d.domain === 'binary_sensor' || d.domain === 'sensor') &&
             (d.attributes?.device_class === 'window' ||
              d.attributes?.device_class === 'door' ||
              d.name.toLowerCase().includes('fenster') ||
-             d.name.toLowerCase().includes('window'))
+             d.name.toLowerCase().includes('window') ||
+             d.name.toLowerCase().includes('tür') ||
+             d.name.toLowerCase().includes('door'))
         );
 
         if (loadingEl) loadingEl.style.display = 'none';
@@ -433,6 +435,15 @@ async function loadWindowAssignments() {
     }
 }
 
+// Lade Fenster/Tür-Typen aus localStorage
+let windowTypes = {};
+try {
+    const stored = localStorage.getItem('window_types');
+    if (stored) windowTypes = JSON.parse(stored);
+} catch (e) {
+    console.error('Error loading window types:', e);
+}
+
 // Rendere Fenster-Zuordnungsliste
 function renderWindowAssignments(windows) {
     const container = document.getElementById('window-assignment-container');
@@ -443,9 +454,10 @@ function renderWindowAssignments(windows) {
             <table class="window-assignment-table" style="width: 100%; border-collapse: collapse;">
                 <thead>
                     <tr style="background: #f9fafb; border-bottom: 2px solid #e5e7eb;">
-                        <th style="padding: 12px; text-align: left; font-weight: 600; color: #374151;">Fenster/Tür</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600; color: #374151;">Name</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600; color: #374151;">Typ</th>
                         <th style="padding: 12px; text-align: left; font-weight: 600; color: #374151;">Aktueller Raum</th>
-                        <th style="padding: 12px; text-align: left; font-weight: 600; color: #374151;">Zuordnen zu</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600; color: #374151;">Raum zuordnen</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -453,13 +465,32 @@ function renderWindowAssignments(windows) {
                         const currentRoom = deviceRoomAssignments[window.id];
                         const currentRoomObj = rooms.find(r => r.id === currentRoom);
 
+                        // Hole gespeicherten Typ oder rate basierend auf Name
+                        let currentType = windowTypes[window.id];
+                        if (!currentType) {
+                            currentType = (window.name.toLowerCase().includes('tür') ||
+                                          window.name.toLowerCase().includes('door')) ? 'door' : 'window';
+                        }
+                        const icon = currentType === 'door' ? '🚪' : '🪟';
+
                         return `
                             <tr style="border-bottom: 1px solid #e5e7eb;">
                                 <td style="padding: 12px;">
                                     <div style="display: flex; align-items: center; gap: 8px;">
-                                        <span style="font-size: 1.2em;">🪟</span>
+                                        <span style="font-size: 1.2em;" id="icon-${window.id}">${icon}</span>
                                         <span style="font-weight: 500;">${window.name}</span>
                                     </div>
+                                </td>
+                                <td style="padding: 12px;">
+                                    <select
+                                        class="window-type-select"
+                                        data-window-id="${window.id}"
+                                        style="padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; background: white; min-width: 120px;"
+                                        onchange="setWindowType('${window.id}', this.value)"
+                                    >
+                                        <option value="window" ${currentType === 'window' ? 'selected' : ''}>🪟 Fenster</option>
+                                        <option value="door" ${currentType === 'door' ? 'selected' : ''}>🚪 Tür</option>
+                                    </select>
                                 </td>
                                 <td style="padding: 12px;">
                                     ${currentRoomObj ?
@@ -493,6 +524,18 @@ function renderWindowAssignments(windows) {
     `;
 
     container.innerHTML = html;
+}
+
+// Setze Fenster/Tür-Typ
+function setWindowType(windowId, type) {
+    windowTypes[windowId] = type;
+    localStorage.setItem('window_types', JSON.stringify(windowTypes));
+
+    // Update Icon
+    const iconEl = document.getElementById(`icon-${windowId}`);
+    if (iconEl) {
+        iconEl.textContent = type === 'door' ? '🚪' : '🪟';
+    }
 }
 
 // Ordne Fenster einem Raum zu
